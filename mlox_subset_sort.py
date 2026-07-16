@@ -110,12 +110,36 @@ import argparse
 import fnmatch
 import os
 import re
+import struct
 import sys
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
 PLUGIN_EXTS = (".esp", ".esm", ".omwaddon", ".omwgame", ".omwscripts")
+
+# --- lightweight trace log ---------------------------------------------------
+# Appends timestamped lines to a file with an immediate flush, so if a heavy
+# operation OOMs/hangs and the process dies, the last steps are still on disk.
+# Off unless set_trace_file() is called (the GUI turns it on at startup).
+_TRACE_PATH = None
+
+
+def set_trace_file(path):
+    global _TRACE_PATH
+    _TRACE_PATH = str(path) if path else None
+    if _TRACE_PATH:
+        trace("=== trace start ===")
+
+
+def trace(msg):
+    if not _TRACE_PATH:
+        return
+    try:
+        with open(_TRACE_PATH, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  {msg}\n")
+    except OSError:
+        pass
 
 # ---------------------------------------------------------------------------
 # mlox-exact plugin filename matching (ported from mlox's
@@ -275,6 +299,915 @@ def _plugin_version(plugin_name: str, index: "PluginFileIndex"):
     if m:
         return _format_version(m.group(1))
     return None
+
+
+# ---------------------------------------------------------------------------
+# TES3 record-level conflict detection (a la TES3View / tes3cmd / TESPCD).
+# Parses each active plugin's records and reports where two or more plugins
+# define/override the SAME record -- the last one in the load order wins. This
+# is read-only and diagnostic: it never changes the sort or the cfg. Depth is
+# record-level (record type + editor id), which catches the vast majority of
+# real conflicts; it does not diff individual fields (that's xEdit territory).
+#
+# TES3 binary layout (little-endian):
+#   record  = type[4] + dataSize[4] + header1[4] + flags[4] + data[dataSize]
+#   subrec  = tag[4]  + dataSize[4] + data[dataSize]
+# The editor id is the NAME subrecord for most record types; CELL is special
+# (interior = its NAME, exterior = its DATA grid coords). A DELE subrecord marks
+# a deletion. Strings are cp1252, null-terminated.
+# ---------------------------------------------------------------------------
+
+# record types with no meaningful "editor id" to compare on -- skipped
+_TES3_SKIP_TYPES = frozenset({"TES3"})
+
+
+def _tes3_decode(b: bytes) -> str:
+    return b.split(b"\x00", 1)[0].decode("cp1252", "replace").strip()
+
+
+def _tes3_record_key(rectype: str, blob: bytes):
+    """Return (record_id, deleted) for one record's subrecord blob, or
+    (None, deleted) if it has no id worth comparing on."""
+    name = None
+    cell_data = None
+    schd = None      # SCPT script header (name in first 32 bytes)
+    intv = None      # LAND grid coords
+    deleted = False
+    i, n = 0, len(blob)
+    while i + 8 <= n:
+        tag = blob[i:i + 4]
+        sz = struct.unpack_from("<I", blob, i + 4)[0]
+        data = blob[i + 8:i + 8 + sz]
+        i += 8 + sz
+        if tag == b"NAME" and name is None:
+            name = data
+        elif tag == b"INAM" and rectype == "INFO" and name is None:
+            name = data          # dialogue response id
+        elif tag == b"DELE":
+            deleted = True
+        elif tag == b"DATA" and rectype == "CELL" and cell_data is None:
+            cell_data = data
+        elif tag == b"SCHD" and rectype == "SCPT" and schd is None:
+            schd = data          # script: name is the first 32 bytes
+        elif tag == b"INTV" and rectype == "LAND" and intv is None:
+            intv = data          # landscape: keyed by exterior grid coords
+    if rectype == "CELL":
+        cname = _tes3_decode(name) if name else ""
+        if cell_data is not None and len(cell_data) >= 12:
+            flags, gx, gy = struct.unpack_from("<iii", cell_data, 0)
+            if flags & 0x01:     # interior
+                return (f"Interior: {cname}", deleted)
+            return (f"Exterior ({gx}, {gy})" + (f" [{cname}]" if cname else ""), deleted)
+        return (f"Interior: {cname}", deleted)
+    if rectype == "SCPT" and schd is not None:
+        return (_tes3_decode(schd[:32]) or None, deleted)
+    if rectype == "LAND" and intv is not None and len(intv) >= 8:
+        gx, gy = struct.unpack_from("<ii", intv, 0)
+        return (f"Land ({gx}, {gy})", deleted)
+    if name is not None:
+        rid = _tes3_decode(name)
+        return (rid or None, deleted)
+    return (None, deleted)
+
+
+def parse_tes3_records(path):
+    """Yield (record_type, record_id, deleted) for each game record in a TES3
+    plugin (.esp/.esm/.omwaddon). Best-effort and fully guarded: a truncated or
+    non-TES3 file just yields nothing rather than raising."""
+    try:
+        fh = open(path, "rb")
+    except (OSError, PermissionError):
+        return
+    with fh:
+        head = fh.read(16)
+        if len(head) < 16 or head[:4] != b"TES3":
+            return
+        fh.seek(struct.unpack_from("<I", head, 4)[0], 1)  # skip TES3 header record
+        while True:
+            rh = fh.read(16)
+            if len(rh) < 16:
+                break
+            rectype = rh[:4].decode("ascii", "replace")
+            size = struct.unpack_from("<I", rh, 4)[0]
+            blob = fh.read(size)
+            if len(blob) < size:
+                break
+            if rectype in _TES3_SKIP_TYPES:
+                continue
+            if rectype == "LUAL":
+                # OpenMW LuaScriptsCfg record (in .omwaddon/.omwgame): one entry
+                # per LUAS subrecord (a Lua script path). Surface each as a
+                # LuaScript record so it lines up with .omwscripts declarations.
+                for sp in _lual_script_paths(blob):
+                    yield "LuaScript", sp, False
+                continue
+            rid, deleted = _tes3_record_key(rectype, blob)
+            if rid is not None:
+                yield rectype, rid, deleted
+
+
+def _lual_script_paths(blob):
+    """Yield the normalized Lua script path from each LUAS subrecord of a LUAL
+    (LuaScriptsCfg) record."""
+    i, n = 0, len(blob)
+    while i + 8 <= n:
+        tag = blob[i:i + 4]
+        sz = struct.unpack_from("<I", blob, i + 4)[0]
+        data = blob[i + 8:i + 8 + sz]
+        i += 8 + sz
+        if tag == b"LUAS":
+            p = data.split(b"\x00", 1)[0].decode("cp1252", "replace").strip()
+            if p:
+                yield p.replace("\\", "/").lower().lstrip("/")
+
+
+def parse_omwscripts(path):
+    """Yield ('LuaScript', normalized_path, False) for each declaration in an
+    OpenMW .omwscripts file. Text format (per OpenMW's parseOMWScripts): one
+    'TAGS: script/path.lua' per line, '#' comments and blank lines skipped."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        pos = line.find(":")
+        if pos == -1:
+            continue
+        spath = line[pos + 1:].strip().strip('"').strip("'")
+        if not spath.lower().endswith(".lua"):
+            continue
+        yield "LuaScript", spath.replace("\\", "/").lower().lstrip("/"), False
+
+
+def parse_plugin_records(path):
+    """Dispatch to the right record reader by extension: .omwscripts is OpenMW's
+    text Lua-attach config; everything else (.esp/.esm/.omwaddon/.omwgame) is the
+    TES3 binary format."""
+    if str(path).lower().endswith(".omwscripts"):
+        yield from parse_omwscripts(path)
+    else:
+        yield from parse_tes3_records(path)
+
+
+# --- optional tes3conv backend (enables field-level diffing) ----------------
+# tes3conv (the tes3 ecosystem's plugin<->JSON converter, also used by TES3
+# Conflictsolver) gives clean JSON for every record type. With it we can key
+# records exactly and, crucially, DIFF individual fields between conflicting
+# plugins. Without it, the built-in binary parser still does record-level
+# detection -- just no field-level breakdown.
+
+def find_tes3conv(explicit=None, extra_dirs=None):
+    """Locate a tes3conv executable. Order: explicit path, $MLOX_TES3CONV, PATH,
+    then alongside this script / any extra dirs given. Returns a path or None."""
+    import shutil
+    names = ["tes3conv", "tes3conv.exe"]
+    cands = []
+    if explicit:
+        cands.append(str(explicit))
+    env = os.environ.get("MLOX_TES3CONV")
+    if env:
+        cands.append(env)
+    for nm in names:
+        found = shutil.which(nm)
+        if found:
+            cands.append(found)
+    search_dirs = [Path(__file__).resolve().parent]
+    for d in (extra_dirs or []):
+        if d:
+            search_dirs.append(Path(d))
+    for d in search_dirs:
+        for nm in names:
+            cands.append(str(d / nm))
+    for c in cands:
+        try:
+            if c and Path(c).is_file():
+                return c
+        except OSError:
+            continue
+    return None
+
+
+def flatten_dict(d, parent_key="", sep="."):
+    """Flatten a nested record dict into dotted keys (lists kept as whole
+    values) -- ported from TES3 Conflictsolver so field comparison matches it."""
+    items = []
+    for k, v in d.items():
+        nk = f"{parent_key}{sep}{k}" if parent_key else str(k)
+        if isinstance(v, dict):
+            items.extend(flatten_dict(v, nk, sep=sep).items())
+        else:
+            items.append((nk, v))
+    return dict(items)
+
+
+def _rec_deleted(rec) -> bool:
+    if not isinstance(rec, dict):
+        return False
+    flags = rec.get("flags")
+    if isinstance(flags, (list, tuple)):
+        return any("delet" in str(f).lower() for f in flags)
+    if isinstance(flags, str):
+        return "delet" in flags.lower()
+    if isinstance(flags, int):
+        return bool(flags & 0x20)     # TES3 deleted flag
+    return bool(rec.get("deleted"))
+
+
+def _tes3conv_record_key(rec):
+    """(type, id) for a tes3conv JSON record. tes3conv (via the tes3 crate)
+    emits internally-tagged JSON: {"type": "Npc", "id": ...}. Most records carry
+    an 'id' (or 'name'); id-less ones -- exterior cells, Landscape, path grids --
+    carry a 'grid' instead, so we key those by their coords (which TES3
+    Conflictsolver's plain 'id or name' misses, collapsing them all together).
+    Returns None for the file header / anything with no usable id."""
+    if not isinstance(rec, dict):
+        return None
+    rtype = rec.get("type")
+    if not rtype or str(rtype).lower() in ("header", "tes3"):
+        return None
+    rid = rec.get("id") or rec.get("name")
+    if rid is None or str(rid) == "":
+        grid = rec.get("grid")
+        if grid is None and isinstance(rec.get("data"), dict):
+            grid = rec["data"].get("grid")
+        gx, gy = (grid[0], grid[1]) if isinstance(grid, (list, tuple)) and len(grid) >= 2 else (None, None)
+        cell = rec.get("cell") or rec.get("cell_name")
+        if cell:
+            # Cell-scoped records (e.g. PathGrid): INTERIOR pathgrids all carry
+            # grid (0,0) and no id, so keying by grid alone collapses every
+            # interior's pathgrid across every plugin into one bogus "(0, 0)"
+            # conflict. Key by the CELL name instead (plus coords for exteriors).
+            rid = f"{cell} ({gx}, {gy})" if (gx or gy) else str(cell)
+        elif gx is not None:
+            rid = f"({gx}, {gy})"
+    if rid is None or str(rid) == "":
+        return None
+    return (str(rtype), str(rid))
+
+
+def _no_window_kwargs():
+    """subprocess kwargs that stop a console window from flashing up on Windows
+    when a windowed (GUI / auto-py-to-exe) build shells out to a console program
+    like tes3conv -- otherwise you get one popup per plugin. No-op elsewhere."""
+    import subprocess
+    if os.name != "nt":
+        return {}
+    kw = {"creationflags": 0x08000000}          # CREATE_NO_WINDOW
+    try:
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0                       # SW_HIDE
+        kw["startupinfo"] = si
+    except Exception:
+        pass
+    return kw
+
+
+class Tes3ConvSession:
+    """DISK-BACKED tes3conv wrapper. Converts each plugin to a JSON file in a
+    dump folder ONCE, and reads it back per-plugin on demand -- it does NOT keep
+    every plugin's records in memory (that was multi-GB / OOM on a big list).
+    Only the small map of plugin -> json-file-path is held. Peak memory is now
+    bounded by a single plugin's JSON, not the whole load order.
+
+    dump_dir: where to write the .json files (a temp dir if None). keep: if True
+    (or an explicit dump_dir is given) the files are left in place; otherwise a
+    temp dump is removed by cleanup()."""
+
+    # Bump when the sidecar key/cell extraction changes so stale caches are
+    # rebuilt (v2: pathgrids keyed by cell, not the shared "(0,0)" grid).
+    _SIDECAR_VER = 2
+
+    def __init__(self, exe, dump_dir=None, keep=False):
+        import tempfile
+        self.exe = exe
+        # keep = leave the dump on disk when cleanup() runs. Location and lifetime
+        # are independent: a session can dump to a STABLE folder (so its JSON is
+        # reused by later scans in the same run) yet still be cleaned up on close
+        # when keep is False.
+        self.keep = bool(keep)
+        self._temp = dump_dir is None
+        self.dump_dir = Path(dump_dir) if dump_dir else Path(tempfile.mkdtemp(prefix="mlox_tes3conv_"))
+        try:
+            self.dump_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        self._json_paths = {}   # plugin path(str) -> json file path on disk
+
+    def _json_for(self, path):
+        import subprocess
+        key = str(path)
+        jp = self._json_paths.get(key)
+        if jp and Path(jp).exists():
+            return jp
+        out = self.dump_dir / (Path(path).stem + ".json")
+        if out.exists():
+            if not self._stale(out, path):     # reuse existing JSON -- don't re-run tes3conv
+                self._json_paths[key] = str(out)
+                trace(f"tes3conv: REUSE {out.name}")
+                return str(out)
+            trace(f"tes3conv: STALE, re-convert {out.name} (plugin newer than json)")
+        try:
+            trace(f"tes3conv: CONVERT {Path(path).name} -> {out.name}")
+            subprocess.run([self.exe, str(path), str(out)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           timeout=600, check=True, **_no_window_kwargs())
+            self._json_paths[key] = str(out)
+            return str(out)
+        except Exception:
+            return None
+
+    def _records(self, path):
+        import json
+        jp = self._json_for(path)
+        if not jp:
+            return []
+        try:
+            with open(jp, "r", encoding="utf-8", errors="replace") as fh:
+                data = json.load(fh)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def record_map(self, path):
+        # Built fresh each call and NOT cached, so only one plugin's records are
+        # ever in memory at a time.
+        m = {}
+        for rec in self._records(path):
+            k = _tes3conv_record_key(rec)
+            if k and k not in m:
+                m[k] = rec
+        return m
+
+    @staticmethod
+    def _stale(json_path, plugin_path):
+        """A cached JSON is stale if the plugin was modified after it was written,
+        so a changed plugin re-converts. If either mtime can't be read, treat the
+        cache as good (reuse) rather than needlessly re-running tes3conv."""
+        try:
+            return json_path.stat().st_mtime < Path(plugin_path).stat().st_mtime
+        except OSError:
+            return False
+
+    def _load_sidecar(self, side, path):
+        import json
+        if side.exists() and not self._stale(side, path):
+            try:
+                with open(side, "r", encoding="utf-8", errors="replace") as fh:
+                    obj = json.load(fh)
+                if isinstance(obj, dict) and obj.get("v") == self._SIDECAR_VER:
+                    return [tuple(x) for x in obj.get("d", [])]
+                # older/mismatched cache format -> rebuild
+            except Exception:
+                pass
+        return None
+
+    def _build_sidecars(self, path):
+        """Read a plugin's full JSON ONCE and extract BOTH the compact record-key
+        list (conflicts) and the cell list (map), writing both sidecars. Whichever
+        of record_keys()/cells() is called first pays this single read; the other
+        then hits its fresh sidecar -- so Check Conflicts + Cell Map together read
+        each big JSON once per run, not twice."""
+        import json
+        keys, cells, seen = [], [], set()
+        for rec in self._records(path):          # the single big-JSON read
+            if not isinstance(rec, dict):
+                continue
+            # Lua scripts declared by an .omwaddon LuaScriptsCfg (keyless record)
+            if str(rec.get("type", "")).lower().replace("_", "") in ("luascriptscfg", "lual"):
+                for s in (rec.get("scripts") or rec.get("mScripts") or []):
+                    sp = s.get("script_path") or s.get("path") or s.get("mScriptPath") if isinstance(s, dict) else (s if isinstance(s, str) else None)
+                    if sp:
+                        lk = ("LuaScript", str(sp).replace("\\", "/").lower().lstrip("/"))
+                        if lk not in seen:
+                            seen.add(lk)
+                            keys.append([lk[0], lk[1], False])
+            k = _tes3conv_record_key(rec)
+            if not k or k in seen:
+                continue
+            seen.add(k)
+            rtype, rid = k
+            keys.append([rtype, rid, _rec_deleted(rec)])
+            if str(rtype).lower() == "cell":
+                data = rec.get("data") if isinstance(rec.get("data"), dict) else {}
+                flags = data.get("flags")
+                interior = bool(flags & 0x01) if isinstance(flags, int) else (
+                    flags is not None and "INTERIOR" in str(flags).upper())
+                if interior:
+                    cells.append(["int", str(rec.get("id") or rec.get("name") or rid), None])
+                else:
+                    grid = data.get("grid") or rec.get("grid")
+                    if isinstance(grid, (list, tuple)) and len(grid) >= 2:
+                        cells.append(["ext", int(grid[0]), int(grid[1])])
+                    else:
+                        mm = re.match(r"^\((-?\d+), (-?\d+)\)$", str(rid))
+                        if mm:
+                            cells.append(["ext", int(mm.group(1)), int(mm.group(2))])
+        stem = Path(path).stem
+        for name, payload in ((stem + ".keys.json", keys), (stem + ".cells.json", cells)):
+            try:
+                with open(self.dump_dir / name, "w", encoding="utf-8") as fh:
+                    json.dump({"v": self._SIDECAR_VER, "d": payload}, fh)
+            except OSError:
+                pass
+        return [tuple(x) for x in keys], [tuple(x) for x in cells]
+
+    def record_keys(self, path):
+        """Compact (rectype, rid, deleted) list for every record in a plugin
+        (deduped, first-wins, plus .omwaddon Lua scripts as ('LuaScript', p)) --
+        all conflict DETECTION needs, a few hundred KB vs the multi-MB JSON. Served
+        from a '<stem>.keys.json' sidecar; rebuilt (with the cells sidecar) only if
+        the plugin changed. The on-click field diff still reads the full record."""
+        cached = self._load_sidecar(self.dump_dir / (Path(path).stem + ".keys.json"), path)
+        return cached if cached is not None else self._build_sidecars(path)[0]
+
+    def cells(self, path):
+        """Compact ('ext', gx, gy) / ('int', name, None) list of the CELLs a plugin
+        touches -- all the cell map needs. Served from a '<stem>.cells.json'
+        sidecar; rebuilt (with the keys sidecar) only if the plugin changed."""
+        cached = self._load_sidecar(self.dump_dir / (Path(path).stem + ".cells.json"), path)
+        return cached if cached is not None else self._build_sidecars(path)[1]
+
+    def dumped_dir(self):
+        return str(self.dump_dir)
+
+    def cleanup(self):
+        """Remove the dump unless keep is set. Honors keep regardless of whether the
+        dump is a temp dir or a stable folder, so 'don't keep' still cleans up a
+        stable dump on close."""
+        if not self.keep:
+            import shutil
+            shutil.rmtree(self.dump_dir, ignore_errors=True)
+
+    def lua_scripts(self, path):
+        """Lua script paths declared by a LuaScriptsCfg record inside an
+        .omwaddon/.omwgame (tes3conv's JSON for the LUAL record), so tes3conv
+        mode matches the built-in parser. Field names are probed defensively."""
+        out = []
+        for rec in self._records(path):
+            if not isinstance(rec, dict):
+                continue
+            if str(rec.get("type", "")).lower().replace("_", "") not in ("luascriptscfg", "lual"):
+                continue
+            for s in (rec.get("scripts") or rec.get("mScripts") or []):
+                sp = None
+                if isinstance(s, dict):
+                    sp = s.get("script_path") or s.get("path") or s.get("mScriptPath")
+                elif isinstance(s, str):
+                    sp = s
+                if sp:
+                    out.append(str(sp).replace("\\", "/").lower().lstrip("/"))
+        return out
+
+
+def diff_record_fields(session, conflict, paths):
+    """Field-level comparison for one conflicting record across the plugins that
+    touch it. Returns (ordered_keys, per_plugin, differing_keys):
+      ordered_keys  -- dotted field keys, in first-seen order
+      per_plugin    -- {plugin: {key: value}}
+      differing_keys-- the subset of keys whose value differs between plugins
+                       (the actual field-level conflicts). Empty if identical.
+    Needs a Tes3ConvSession; returns ([], {}, set()) without one."""
+    if session is None:
+        return [], {}, set()
+    key = (conflict["type"], conflict["id"])
+    per = {}
+    for p in conflict["plugins"]:
+        rec = session.record_map(paths.get(p, "")).get(key) if paths.get(p) else None
+        per[p] = flatten_dict(rec) if isinstance(rec, dict) else {}
+    ordered, seen = [], set()
+    for p in conflict["plugins"]:
+        for k in per[p]:
+            if k not in seen:
+                seen.add(k)
+                ordered.append(k)
+    differing = set()
+    for k in ordered:
+        vals = {repr(per[p].get(k)) for p in conflict["plugins"] if k in per[p]}
+        present = sum(1 for p in conflict["plugins"] if k in per[p])
+        if len(vals) > 1 or present != len(conflict["plugins"]):
+            differing.add(k)
+    return ordered, per, differing
+
+
+def detect_conflicts(active_order, index, subset_names=None, session=None):
+    """Scan the active load order for record-level conflicts.
+
+    active_order : plugin filenames in load order (winner last).
+    index        : a PluginFileIndex to locate the files on disk.
+    subset_names : your custom plugins, so conflicts involving them can be flagged.
+
+    session : an optional Tes3ConvSession. When given, records are read from
+    tes3conv JSON (exact ids for every record type, and field-level diffing is
+    then possible via diff_record_fields); when None, the built-in binary parser
+    is used (record-level only).
+
+    Returns (conflicts, stats). conflicts is a list of dicts sorted with your
+    custom-involved ones first:
+      {type, id, plugins:[load order], winner, involves_subset, deleted_by:[...]}
+    stats = {"scanned", "unreadable":[...], "records", "conflicts",
+             "engine": "tes3conv"|"builtin", "paths": {plugin: path}}.
+    """
+    subset_lower = {s.lower() for s in (subset_names or [])}
+    touch = {}          # (type, id) -> list of (plugin, deleted)
+    unreadable, scanned, rec_count = [], 0, 0
+    paths = {}
+    for plugin in active_order:
+        path = index.find(plugin) if index else None
+        if path is None:
+            unreadable.append(plugin)
+            continue
+        scanned += 1
+        paths[plugin] = str(path)
+        is_omwscripts = str(path).lower().endswith(".omwscripts")
+        seen_here = set()   # collapse a record the same plugin defines twice
+        if session is not None and not is_omwscripts:
+            # tes3conv for TES3 records, plus any Lua scripts declared in an
+            # .omwaddon's LuaScriptsCfg (so they line up with .omwscripts).
+            # record_keys() is sidecar-cached (compact keys, not full records),
+            # so re-scans don't re-read the whole tes3conv dump.
+            for rectype, rid, deleted in session.record_keys(path):
+                key = (rectype, rid)
+                if key in seen_here:
+                    continue
+                seen_here.add(key)
+                rec_count += 1
+                touch.setdefault(key, []).append((plugin, deleted))
+        else:
+            # built-in engine: handles .omwscripts (text) AND TES3 records incl.
+            # .omwaddon LUAL scripts, all via parse_plugin_records.
+            for rectype, rid, deleted in parse_plugin_records(path):
+                rec_count += 1
+                key = (rectype, rid)
+                if key in seen_here:
+                    continue
+                seen_here.add(key)
+                touch.setdefault(key, []).append((plugin, deleted))
+
+    conflicts = []
+    for (rectype, rid), plugs in touch.items():
+        if len(plugs) < 2:
+            continue
+        names = [p for p, _ in plugs]
+        conflicts.append({
+            "type": rectype,
+            "id": rid,
+            "plugins": names,
+            "winner": names[-1],
+            "involves_subset": any(p.lower() in subset_lower for p in names),
+            "deleted_by": [p for p, d in plugs if d],
+        })
+    conflicts.sort(key=lambda c: (not c["involves_subset"], c["type"], c["id"].lower()))
+    stats = {"scanned": scanned, "unreadable": unreadable,
+             "records": rec_count, "conflicts": len(conflicts),
+             "engine": "tes3conv" if session is not None else "builtin",
+             "paths": paths}
+    return conflicts, stats
+
+
+def format_conflict_report(conflicts, stats, subset_only=False, limit=None) -> str:
+    """Render conflicts as a readable text report. subset_only shows just the
+    ones that involve your custom mods; limit caps how many are listed."""
+    shown = [c for c in conflicts if c["involves_subset"] or not subset_only]
+    lines = []
+    n_sub = sum(1 for c in conflicts if c["involves_subset"])
+    lines.append(f"Scanned {stats['scanned']} plugin(s), {stats['records']} record(s): "
+                 f"{stats['conflicts']} conflicting record(s), {n_sub} involving your custom mods.")
+    if stats["unreadable"]:
+        lines.append(f"NOTE: {len(stats['unreadable'])} plugin(s) could not be read "
+                     f"(not found on disk / unreadable): {', '.join(stats['unreadable'][:8])}"
+                     + (" ..." if len(stats['unreadable']) > 8 else ""))
+    capped = shown if not limit else shown[:limit]
+    for c in capped:
+        star = "* " if c["involves_subset"] else "  "
+        lines.append(f"{star}[{c['type']}] {c['id']}")
+        lines.append(f"      {'  ->  '.join(c['plugins'])}   (wins: {c['winner']})")
+        if c["deleted_by"]:
+            lines.append(f"      deleted by: {', '.join(c['deleted_by'])}")
+    if limit and len(shown) > limit:
+        lines.append(f"  ... and {len(shown) - limit} more (raise the limit or save the full report).")
+    if not capped:
+        lines.append("  No conflicts to show.")
+    return "\n".join(lines)
+
+
+def write_conflict_csv(path, conflicts):
+    """Write the full conflict list to a CSV (type, id, winner, involves_custom,
+    deleted_by, plugins-in-load-order)."""
+    import csv
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(["record_type", "record_id", "winner", "involves_custom",
+                    "deleted_by", "plugins_load_order"])
+        for c in conflicts:
+            w.writerow([c["type"], c["id"], c["winner"],
+                        "yes" if c["involves_subset"] else "no",
+                        "; ".join(c["deleted_by"]), " -> ".join(c["plugins"])])
+
+
+def filter_plugins(active_order, patterns):
+    """Return (kept, excluded) filtering plugin names by case-insensitive glob
+    patterns (fnmatch); a pattern with no glob chars also matches as a substring.
+    Lets you drop 'touches-everything' mods (light fixes, groundcover/grass
+    generators, delta/merged patches) from a conflict/cell scan."""
+    pats = [p.strip().lower() for p in (patterns or []) if p and p.strip()]
+    if not pats:
+        return list(active_order), []
+    kept, excl = [], []
+    for name in active_order:
+        low = name.lower()
+        hit = any(fnmatch.fnmatch(low, p) or (("*" not in p and "?" not in p) and p in low)
+                  for p in pats)
+        (excl if hit else kept).append(name)
+    return kept, excl
+
+
+def dump_tes3conv_json(session, plugins, paths, outdir):
+    """Write each plugin's tes3conv JSON (read back from the session's on-disk
+    spool) to outdir/<plugin>.json. Returns the number written. Creates outdir if
+    needed. Needs a Tes3ConvSession."""
+    import json
+    if session is None:
+        return 0
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    n = 0
+    for p in plugins:
+        path = paths.get(p)
+        if not path:
+            continue
+        try:
+            recs = session._records(path)
+            (outdir / (Path(p).stem + ".json")).write_text(
+                json.dumps(recs, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+            n += 1
+        except OSError:
+            continue
+    return n
+
+
+# ---------------------------------------------------------------------------
+# data-path resource (VFS) conflicts: the same loose file (relative path) living
+# in two or more data= folders. In OpenMW's VFS the LATER data= folder wins, so
+# these overlaps are decided by data-path order -- reorder the data panel to
+# change the winner. This is what MO2's "Data" conflicts show for a mod list.
+# ---------------------------------------------------------------------------
+
+def detect_resource_conflicts(data_dirs, subset_dirs=None, exclude_exts=None):
+    """data_dirs: the data= folders in load order (winner last). Returns
+    (conflicts, stats). conflicts: [{path, providers:[dirs in order], winner,
+    involves_subset}] for every relative file path present in 2+ folders. Plugin
+    files are skipped (they're ordered by content=, not the VFS)."""
+    subset_norm = {str(s).replace("\\", "/").rstrip("/").lower() for s in (subset_dirs or [])}
+    exclude_exts = {e.lower() for e in (exclude_exts or [])}
+    providers = {}     # rel_path -> [dir_index in order]
+    dirs = []
+    for d in data_dirs:
+        try:
+            p = Path(d)
+            if not p.is_dir():
+                continue
+        except OSError:
+            continue
+        dirs.append(str(d))
+        di = len(dirs) - 1
+        try:
+            for root, _sub, files in os.walk(p):
+                for fn in files:
+                    ext = os.path.splitext(fn)[1].lower()
+                    if ext in PLUGIN_EXTS or ext in exclude_exts:
+                        continue
+                    rel = os.path.relpath(os.path.join(root, fn), p).replace("\\", "/").lower()
+                    lst = providers.get(rel)
+                    if lst is None:
+                        providers[rel] = [di]
+                    elif lst[-1] != di:
+                        lst.append(di)
+        except (OSError, PermissionError):
+            continue
+    conflicts = []
+    for rel, idxs in providers.items():
+        if len(idxs) < 2:
+            continue
+        prov = [dirs[i] for i in idxs]
+        involves = any(pv.replace("\\", "/").rstrip("/").lower() in subset_norm for pv in prov)
+        conflicts.append({"path": rel, "providers": prov, "winner": prov[-1],
+                          "involves_subset": involves})
+    conflicts.sort(key=lambda c: (not c["involves_subset"], c["path"]))
+    return conflicts, {"dirs": len(dirs), "files": len(providers), "conflicts": len(conflicts)}
+
+
+def format_resource_report(conflicts, stats, subset_only=False, limit=200):
+    shown = [c for c in conflicts if c["involves_subset"] or not subset_only]
+    n_sub = sum(1 for c in conflicts if c["involves_subset"])
+    lines = [f"Scanned {stats['dirs']} data folder(s), {stats['files']} loose file(s): "
+             f"{stats['conflicts']} conflicting file(s), {n_sub} involving your custom data paths."]
+    for c in (shown[:limit] if limit else shown):
+        star = "* " if c["involves_subset"] else "  "
+        lines.append(f"{star}{c['path']}   ({len(c['providers'])} providers, wins: {c['winner']})")
+    if limit and len(shown) > limit:
+        lines.append(f"  ... and {len(shown) - limit} more (save the full report).")
+    return "\n".join(lines)
+
+
+def write_resource_csv(path, conflicts):
+    import csv
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(["file_path", "providers", "winner", "involves_custom", "provider_folders"])
+        for c in conflicts:
+            w.writerow([c["path"], len(c["providers"]), c["winner"],
+                        "yes" if c["involves_subset"] else "no", " -> ".join(c["providers"])])
+
+
+# ---------------------------------------------------------------------------
+# cell coverage map ("modmapper"): which mods touch which cells. Exterior cells
+# are keyed by grid coords (for a heatmap), interior by name (for a list). Reads
+# via either engine; interior/exterior is told apart the way modmapper does
+# (interior = the cell's flags bit 0x01, or "INTERIOR" in the flags).
+# ---------------------------------------------------------------------------
+
+def _iter_cells(path, session=None):
+    """Yield ('ext', gx, gy) or ('int', name, None) for each CELL in a plugin."""
+    if session is not None:
+        # session.cells() is sidecar-cached, so map rebuilds skip the big JSON.
+        yield from session.cells(path)
+    else:
+        for rtype, rid, _deleted in parse_tes3_records(path):
+            if rtype != "CELL":
+                continue
+            mm = re.match(r"^Exterior \((-?\d+), (-?\d+)\)", rid)
+            if mm:
+                yield ("ext", int(mm.group(1)), int(mm.group(2)))
+            elif rid.startswith("Interior: "):
+                yield ("int", rid[len("Interior: "):], None)
+
+
+def build_cell_coverage(active_order, index, subset_names=None, session=None):
+    """Returns {"exterior": {(gx,gy):[mods]}, "interior": {name:[mods]},
+    "scanned", "unreadable":[...], "subset_lower": set}. Mods are in load order."""
+    subset_lower = {s.lower() for s in (subset_names or [])}
+    ext, inte, unreadable, scanned = {}, {}, [], 0
+    for plugin in active_order:
+        path = index.find(plugin) if index else None
+        if path is None:
+            unreadable.append(plugin)
+            continue
+        scanned += 1
+        se, si = set(), set()
+        for cell in _iter_cells(path, session):
+            if cell[0] == "ext":
+                key = (cell[1], cell[2])
+                if key not in se:
+                    se.add(key)
+                    ext.setdefault(key, []).append(plugin)
+            else:
+                nm = cell[1]
+                if nm not in si:
+                    si.add(nm)
+                    inte.setdefault(nm, []).append(plugin)
+    return {"exterior": ext, "interior": inte, "scanned": scanned,
+            "unreadable": unreadable, "subset_lower": subset_lower}
+
+
+def _cell_heat(count):
+    """Heatmap fill: one mod = cool (coverage), 2+ = warmer/hotter (conflict)."""
+    if count <= 1:
+        return "#2f4a63"
+    return {2: "#7a5a1e", 3: "#9c4a16", 4: "#b83a1a"}.get(count, "#d8342a")
+
+
+def _html_escape(s):
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
+    """Self-contained HTML with three tabs: a colour-coded exterior heatmap drawn
+    as a compact SVG grid (uniform squares, one per touched cell; brighter/hotter
+    = more mods; click a cell to jump to its list entry), an exterior-cell list,
+    and an interior-cell list. Cells your custom mods touch get a gold outline. A
+    port of modmapper, fed by this tool's load order."""
+    ext = coverage["exterior"]
+    inte = coverage["interior"]
+    subl = coverage.get("subset_lower", set())
+
+    # Exterior grid coords can be bogus/huge (an interior cell whose grid field
+    # is garbage, a mis-parse). Drop anything outside sane Morrowind+add-on
+    # bounds. The map is drawn as an SVG that only emits a <rect> for each TOUCHED
+    # cell (sparse -- bounded by plugin count), so absolute placement gives uniform
+    # squares in every column, and there's no dense billion-cell table to OOM on.
+    SANE = 4096
+    ext_ok = {k: v for k, v in ext.items() if -SANE <= k[0] <= SANE and -SANE <= k[1] <= SANE}
+    dropped = len(ext) - len(ext_ok)
+
+    def anchor(gx, gy):
+        return f"e_{gx}_{gy}".replace("-", "m")
+
+    grid = '<p class="sub">No exterior cells touched.</p>'
+    if ext_ok:
+        xs = [k[0] for k in ext_ok]
+        ys = [k[1] for k in ext_ok]
+        minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
+        w, h = (maxx - minx + 1), (maxy - miny + 1)
+        trace(f"cell map: {len(ext_ok)} ext cells, bbox {w}x{h}, dropped {dropped}")
+        STEP, SIZE = 13, 12                     # 12px square + 1px gutter
+        rects = []
+        for (gx, gy), mods in ext_ok.items():
+            px = (gx - minx) * STEP
+            py = (maxy - gy) * STEP             # north (max y) at the top
+            custom = any(m.lower() in subl for m in mods)
+            tip = f"({gx}, {gy}) — {len(mods)} mod(s): " + ", ".join(mods)
+            stroke = ' stroke="#ffd24a" stroke-width="1.4"' if custom else ""
+            rects.append(
+                f'<rect x="{px}" y="{py}" width="{SIZE}" height="{SIZE}" '
+                f'fill="{_cell_heat(len(mods))}"{stroke} class="cell" '
+                f'data-t="{_html_escape(tip)}" onclick="jump(\'{anchor(gx, gy)}\')"></rect>')
+        svg = (f'<svg width="{w*STEP}" height="{h*STEP}" viewBox="0 0 {w*STEP} {h*STEP}" '
+               f'xmlns="http://www.w3.org/2000/svg">' + "".join(rects) + "</svg>")
+        grid = f'<div class="mapwrap">{svg}</div>'
+
+    ext_rows = []
+    for (gx, gy), mods in sorted(ext_ok.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        custom = any(m.lower() in subl for m in mods)
+        cls = ' class="cust"' if custom else ""
+        ext_rows.append(f'<tr id="{anchor(gx,gy)}"{cls}><td>({gx}, {gy})</td><td>{len(mods)}</td>'
+                        f'<td>{_html_escape(", ".join(mods))}</td></tr>')
+    int_rows = []
+    for name, mods in sorted(inte.items(), key=lambda kv: (-len(kv[1]), kv[0].lower())):
+        custom = any(m.lower() in subl for m in mods)
+        cls = ' class="cust"' if custom else ""
+        int_rows.append(f'<tr{cls}><td>{_html_escape(name)}</td><td>{len(mods)}</td>'
+                        f'<td>{_html_escape(", ".join(mods))}</td></tr>')
+    ext = ext_ok
+    n_ext_conf = sum(1 for m in ext.values() if len(m) > 1)
+    n_int_conf = sum(1 for m in inte.values() if len(m) > 1)
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>{_html_escape(title)}</title>
+<style>
+ body{{background:#101013;color:#c8c8c8;font-family:Segoe UI,Arial,sans-serif;margin:16px;}}
+ h1{{color:#e8905a;font-size:20px;}} .sub{{color:#8f8f8f;font-size:13px;}}
+ .legend{{margin-top:12px;line-height:1.7;}}
+ .tabs{{margin-top:24px;margin-bottom:4px;}}
+ .tabs button{{background:#20242a;color:#ddd;border:1px solid #3a3a3a;padding:6px 14px;margin-right:4px;cursor:pointer;}}
+ .tabs button.on{{background:#8a3a12;color:#fff;}}
+ .tab{{display:none;margin-top:10px;}} .tab.on{{display:block;}}
+ .legend span{{display:inline-block;padding:2px 8px;margin-right:6px;border-radius:3px;color:#111;font-size:12px;}}
+ .mapwrap{{overflow:auto;max-height:74vh;border:1px solid #333;background:#06111c;display:inline-block;max-width:100%;}}
+ .mapwrap svg{{display:block;}}
+ rect.cell{{cursor:pointer;}} rect.cell:hover{{stroke:#fff;stroke-width:1.4;}}
+ #tt{{position:fixed;pointer-events:none;display:none;z-index:99;max-width:440px;
+   background:#000;color:#eee;border:1px solid #555;border-radius:3px;padding:3px 7px;font-size:12px;}}
+ table.list{{border-collapse:collapse;width:100%;font-size:13px;}}
+ .list td,.list th{{border-bottom:1px solid #262626;padding:4px 8px;text-align:left;vertical-align:top;}}
+ .list th{{color:#9a9a9a;position:sticky;top:0;background:#101013;}} tr.cust td{{color:#ff9b6b;}}
+ tr.hl td{{background:#3a2a10;}}
+ input.f{{background:#1c1c22;color:#ddd;border:1px solid #3a3a3a;padding:6px;width:320px;margin:6px 0;}}
+</style></head><body>
+<div id="tt"></div>
+<h1>{_html_escape(title)}</h1>
+<p class="sub">Scanned {coverage['scanned']} plugin(s). Exterior: {len(ext)} cell(s) touched
+ ({n_ext_conf} by 2+ mods). Interior: {len(inte)} cell(s) touched ({n_int_conf} by 2+ mods).
+ Cells your custom mods touch are highlighted (gold outline / orange text).</p>
+<div class="legend">Mods per cell:
+ <span style="background:#2f4a63;color:#fff;">1</span><span style="background:#7a5a1e;">2</span>
+ <span style="background:#9c4a16;">3</span><span style="background:#b83a1a;color:#fff;">4</span>
+ <span style="background:#d8342a;color:#fff;">5+</span> &nbsp;(north up; hover a cell for its mods, click it to jump to the list)</div>
+<div class="tabs">
+ <button id="b0" class="on" onclick="show(0)">Map</button>
+ <button id="b1" onclick="show(1)">Exterior list ({len(ext)})</button>
+ <button id="b2" onclick="show(2)">Interior list ({len(inte)})</button>
+</div>
+<div id="t0" class="tab on">{grid}</div>
+<div id="t1" class="tab"><input class="f" placeholder="Filter exterior cells / mods..." onkeyup="ff('xt')">
+ <table class="list" id="xt"><thead><tr><th>Cell (x, y)</th><th>#</th><th>Mods (load order, last wins)</th></tr></thead>
+ <tbody>{''.join(ext_rows) or '<tr><td colspan=3 class=sub>None.</td></tr>'}</tbody></table></div>
+<div id="t2" class="tab"><input class="f" placeholder="Filter interior cells / mods..." onkeyup="ff('it')">
+ <table class="list" id="it"><thead><tr><th>Cell</th><th>#</th><th>Mods (load order, last wins)</th></tr></thead>
+ <tbody>{''.join(int_rows) or '<tr><td colspan=3 class=sub>None.</td></tr>'}</tbody></table></div>
+<script>
+ function show(n){{for(var i=0;i<3;i++){{document.getElementById('t'+i).className=i==n?'tab on':'tab';
+  document.getElementById('b'+i).className=i==n?'on':'';}}}}
+ function jump(a){{show(1);var el=document.getElementById(a);
+  if(el){{el.scrollIntoView({{block:'center'}});el.classList.add('hl');
+   setTimeout(function(){{el.classList.remove('hl');}},2200);}}}}
+ (function(){{var tt=document.getElementById('tt');
+  document.addEventListener('mouseover',function(e){{var r=e.target;
+   if(r&&r.classList&&r.classList.contains('cell')){{tt.textContent=r.getAttribute('data-t');tt.style.display='block';}}}});
+  document.addEventListener('mousemove',function(e){{if(tt.style.display=='block'){{
+   tt.style.left=(e.clientX+12)+'px';tt.style.top=(e.clientY+12)+'px';}}}});
+  document.addEventListener('mouseout',function(e){{var r=e.target;
+   if(r&&r.classList&&r.classList.contains('cell')){{tt.style.display='none';}}}});}})();
+ function ff(id){{var q=event.target.value.toLowerCase();
+  document.querySelectorAll('#'+id+' tbody tr').forEach(function(r){{
+   r.style.display=r.innerText.toLowerCase().indexOf(q)>-1?'':'none';}});}}
+</script>
+</body></html>
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -1724,6 +2657,43 @@ def build_arg_parser() -> argparse.ArgumentParser:
                      help="Skip evaluating [Requires]/[Conflict]/[Note] rules against the final "
                           "plugin list. On by default; this is read-only and never changes the "
                           "computed sort or what gets written, only what gets printed.")
+    ap.add_argument("--check-conflicts", action="store_true",
+                     help="After sorting, scan the active plugins for TES3 record-level conflicts "
+                          "(where 2+ plugins define/override the same record -- the last in the load "
+                          "order wins), like TES3View/tes3cmd. Read-only; needs the plugin files "
+                          "reachable via the cfg's data= folders. Can be slow on big lists.")
+    ap.add_argument("--conflicts-out", type=Path,
+                     help="Write the full conflict list to this CSV (use with --check-conflicts).")
+    ap.add_argument("--tes3conv", type=Path,
+                     help="Path to a tes3conv executable. With --check-conflicts this switches the "
+                          "conflict engine to tes3conv (exact record ids for every type; enables the "
+                          "GUI's field-level diffs). Auto-detected from PATH / $MLOX_TES3CONV / next to "
+                          "this script if not given; the built-in parser is used if none is found.")
+    ap.add_argument("--cell-map", type=Path,
+                     help="Write a self-contained HTML 'modmapper'-style cell map here: an exterior-cell "
+                          "heatmap (brighter = more mods) plus an interior-cell list, showing which mods "
+                          "touch which cells (cells your custom mods touch are highlighted). Read-only; "
+                          "open the file in any browser.")
+    ap.add_argument("--resource-conflicts", action="store_true",
+                     help="Scan the cfg's data= folders for loose-file (VFS) conflicts: the same relative "
+                          "path in 2+ folders (later wins), like MO2's Data conflicts. Read-only.")
+    ap.add_argument("--resources-out", type=Path,
+                     help="Write the full resource-conflict list to this CSV (with --resource-conflicts).")
+    ap.add_argument("--exclude", nargs="*", default=[],
+                     help="Name patterns (glob) to skip in --check-conflicts/--cell-map/"
+                          "--resource-conflicts scans, e.g. 's3lightfixes*' '*delta*' '*grass*'.")
+    ap.add_argument("--conflicts-subset-only", action="store_true",
+                     help="With --check-conflicts, report only conflicts that involve YOUR custom "
+                          "mods (skip base-list vs base-list conflicts).")
+    ap.add_argument("--trace", nargs="?", const=True, default=None, metavar="LOGFILE",
+                     help="Write a debug trace log for troubleshooting (off by default). Use --trace "
+                          "for the default log (mlox_subset_sort_trace.log), or --trace PATH to choose "
+                          "the file.")
+    ap.add_argument("--json-dump-dir", type=Path,
+                     help="When using tes3conv for --check-conflicts/--cell-map, write (and KEEP) the "
+                          "per-plugin JSON conversions in this folder. tes3conv output is always spooled "
+                          "to disk and read one plugin at a time (bounded memory); by default that spool "
+                          "is a temp dir removed on exit -- give this to keep it (or to reuse it).")
     return ap
 
 
@@ -1917,6 +2887,68 @@ def compute_plan(args) -> dict:
         else:
             print("\n  No plugin-order.yml warnings.")
 
+    # --- TES3 record-level conflict scan (opt-in, read-only) ----------------
+    conflicts = []
+    want_conflicts = getattr(args, "check_conflicts", False)
+    cell_map_out = getattr(args, "cell_map", None)
+    want_resources = getattr(args, "resource_conflicts", False)
+    conf_dirs = [v for v in (extract_data_path_value(l) for l in data_order) if v]
+    if want_conflicts or cell_map_out:
+        active = final_order if final_order else base_order_names
+        active, _excl = filter_plugins(active, getattr(args, "exclude", None))
+        if _excl:
+            print(f"  (excluded {len(_excl)} plugin(s) by --exclude)")
+        cindex = PluginFileIndex(conf_dirs)
+        conv = find_tes3conv(explicit=getattr(args, "tes3conv", None),
+                             extra_dirs=[str(args.cfg.parent) if args.cfg else None])
+        _dump = getattr(args, "json_dump_dir", None)
+        csession = (Tes3ConvSession(conv, dump_dir=str(_dump) if _dump else None, keep=bool(_dump))
+                    if conv else None)          # disk-backed, shared across both scans
+        if csession and _dump:
+            print(f"  Keeping tes3conv JSON dump in: {csession.dumped_dir()}")
+
+        if want_conflicts:
+            _section("TES3 RECORD CONFLICTS (read-only)")
+            print(f"  Engine: {'tes3conv (' + conv + ')' if conv else 'built-in parser (record-level)'}")
+            conflicts, cstats = detect_conflicts(active, cindex, subset_names=subset, session=csession)
+            print(format_conflict_report(conflicts, cstats,
+                                         subset_only=getattr(args, "conflicts_subset_only", False),
+                                         limit=200))
+            out = getattr(args, "conflicts_out", None)
+            if out and conflicts:
+                try:
+                    write_conflict_csv(out, conflicts)
+                    print(f"\n  Wrote conflict report: {out}")
+                except OSError as e:
+                    print(f"  WARNING: could not write conflict CSV: {e}", file=sys.stderr)
+
+        if cell_map_out:
+            _section("CELL MAP (which mods touch which cells)")
+            cov = build_cell_coverage(active, cindex, subset_names=subset, session=csession)
+            try:
+                Path(cell_map_out).write_text(generate_cell_map_html(cov), encoding="utf-8")
+                print(f"  Scanned {cov['scanned']} plugin(s): {len(cov['exterior'])} exterior + "
+                      f"{len(cov['interior'])} interior cell(s) touched.")
+                print(f"  Wrote cell map: {cell_map_out}  (open it in a browser)")
+            except OSError as e:
+                print(f"  WARNING: could not write cell map: {e}", file=sys.stderr)
+
+        if csession is not None:
+            csession.cleanup()   # drop the temp JSON spool (no-op if --json-dump-dir kept it)
+
+    if want_resources:
+        _section("DATA-PATH RESOURCE (VFS) CONFLICTS (read-only)")
+        subset_dirs = [d["value"] for d in (data_inserts or raw_toml_data_inserts or [])]
+        rconf, rstats = detect_resource_conflicts(conf_dirs, subset_dirs=subset_dirs)
+        print(format_resource_report(rconf, rstats, limit=200))
+        rout = getattr(args, "resources_out", None)
+        if rout and rconf:
+            try:
+                write_resource_csv(rout, rconf)
+                print(f"\n  Wrote resource report: {rout}")
+            except OSError as e:
+                print(f"  WARNING: could not write resource CSV: {e}", file=sys.stderr)
+
     if data_inserts and not args.sort_data_paths:
         _section(f"{len(data_inserts)} DATA PATH(S) FOUND BUT NOT SORTED")
         print("  Pass --sort-data-paths to enable:")
@@ -1951,6 +2983,7 @@ def compute_plan(args) -> dict:
         "raw_toml_data_inserts": raw_toml_data_inserts,
         "data_inserts": data_inserts,
         "base_order_names": base_order_names,
+        "conflicts": conflicts,
     }
 
 
@@ -2099,6 +3132,10 @@ def run_from_args(args) -> dict:
 
 def main():
     args = build_arg_parser().parse_args()
+    tr = getattr(args, "trace", None)
+    if tr:
+        set_trace_file(tr if isinstance(tr, str) else "mlox_subset_sort_trace.log")
+        trace("CLI started")
     run_from_args(args)
 
 

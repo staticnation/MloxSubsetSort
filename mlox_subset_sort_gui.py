@@ -50,10 +50,12 @@ rather than shelling out, so results, exceptions, etc. all stay in-process).
 import io
 import os
 import queue
+import subprocess
 import sys
 import threading
 import traceback
 import types
+import webbrowser
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
@@ -66,6 +68,69 @@ except ImportError:
         "On Debian/Ubuntu: sudo apt install python3-tk\n"
         "On Windows/Mac's python.org installers, tkinter is included by default."
     )
+
+# Inline HTML rendering for the cell map is optional. tkinterweb is PREFERRED --
+# its HtmlFrame.load_file reads the map from disk (bounded memory) and renders the
+# SVG grid; tkhtmlview only takes an in-memory string and can't draw SVG, so it's
+# a last resort. Without either, the map is written to a file and opened in a
+# browser. (pip install tkinterweb  -- recommended for the in-app window.)
+HTMLViewer = None
+try:
+    from tkinterweb import HtmlFrame as HTMLViewer   # supports load_file + SVG
+except Exception:
+    try:
+        from tkhtmlview import HTMLScrolledText as HTMLViewer
+    except Exception:
+        HTMLViewer = None
+
+# pywebview is the BEST in-app option: it hosts the OS webview (Edge WebView2 /
+# WebKit), so it renders the SVG map + tabs exactly like a browser. It's launched
+# in a separate process (webview.start() wants the main thread), so it doesn't
+# fight tkinter's mainloop. Detected here; used first if present.
+try:
+    import webview as _webview_probe   # real import: reliable under PyInstaller, unlike find_spec
+    HAVE_PYWEBVIEW = True
+    del _webview_probe
+except Exception:
+    HAVE_PYWEBVIEW = False
+
+
+_APP_DIR = None
+_TRACE_REQUEST = None   # set by main() from --trace; None = use env var / off
+
+
+def app_base_dir():
+    """A writable folder for everything the app persists (settings, trace log,
+    cell_map.html, the tes3conv_json spool). This MUST NOT be derived from
+    __file__: under PyInstaller / auto-py-to-exe, __file__ lives in a temp
+    extraction dir that's wiped on exit (onefile) or a read-only install dir.
+    Prefer the folder next to the .exe (frozen) or next to the script (source);
+    if that isn't writable, fall back to a per-user data dir. Cached."""
+    global _APP_DIR
+    if _APP_DIR is not None:
+        return _APP_DIR
+    if getattr(sys, "frozen", False):
+        base = Path(sys.executable).resolve().parent      # next to the built .exe
+    else:
+        base = Path(__file__).resolve().parent
+    try:
+        probe = base / ".mlox_write_test"
+        probe.write_text("x", encoding="utf-8")
+        probe.unlink()
+    except Exception:
+        if os.name == "nt":
+            root = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
+        elif sys.platform == "darwin":
+            root = Path.home() / "Library" / "Application Support"
+        else:
+            root = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+        base = root / "MloxSubsetSort"
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            base = Path.home()
+    _APP_DIR = base
+    return base
 
 # Drag-and-drop is optional -- degrade gracefully to Browse-only if missing.
 try:
@@ -123,6 +188,18 @@ def apply_dark_theme(root):
     style.configure("TEntry", fieldbackground=DARK["field_bg"], foreground=DARK["fg"],
                      insertcolor=DARK["fg"], bordercolor=DARK["border"])
     style.map("TEntry", fieldbackground=[("readonly", DARK["field_bg"])])
+    style.configure("Conf.Treeview", background=DARK["field_bg"], fieldbackground=DARK["field_bg"],
+                     foreground=DARK["fg"], bordercolor=DARK["border"], rowheight=22)
+    style.map("Conf.Treeview", background=[("selected", DARK["select"])],
+              foreground=[("selected", DARK["fg"])])
+    style.configure("Conf.Treeview.Heading", background=DARK["btn_bg"], foreground=DARK["fg"],
+                     relief="flat")
+    style.map("Conf.Treeview.Heading", background=[("active", DARK["btn_bg_active"])])
+    style.configure("TNotebook", background=DARK["bg"], borderwidth=0, bordercolor=DARK["border"])
+    style.configure("TNotebook.Tab", background=DARK["btn_bg"], foreground=DARK["fg"],
+                     padding=(12, 4), borderwidth=0)
+    style.map("TNotebook.Tab", background=[("selected", DARK["select"]), ("active", DARK["btn_bg_active"])],
+              foreground=[("selected", "#ffffff")])
     style.configure("TButton", background=DARK["btn_bg"], foreground=DARK["fg"],
                      bordercolor=DARK["border"], focuscolor=DARK["bg"])
     style.map("TButton", background=[("active", DARK["btn_bg_active"]), ("disabled", DARK["bg2"])],
@@ -711,9 +788,104 @@ class App:
         self._log_group_tag = None
         self._current_plan = None
         self._scanned_subset_lines = None  # in-memory scan result (when not saved to a file)
+        self._tes3conv_override = None     # user-set path to tes3conv (for field-level diffs)
+        self._conf_session = None
+        self._conf_paths = {}
+        self._session = None               # reused disk-backed Tes3ConvSession
+        self._keep_json = False
 
         self._build_widgets()
+        self._load_settings()
+        # Trace is OFF by default. It's turned on by the --trace flag (set by main()
+        # into _TRACE_REQUEST) or the MLOX_SUBSET_TRACE env var -- either can name a
+        # log file; otherwise mlox_subset_sort_trace.log is written next to the app.
+        try:
+            req = _TRACE_REQUEST if _TRACE_REQUEST is not None else os.environ.get("MLOX_SUBSET_TRACE")
+            if req:
+                if isinstance(req, str) and req.lower() not in ("1", "true", "yes", "on", ""):
+                    path = req
+                else:
+                    path = app_base_dir() / "mlox_subset_sort_trace.log"
+                core.set_trace_file(path)
+                core.trace("GUI started")
+                core.trace(f"viewers: frozen={bool(getattr(sys, 'frozen', False))} "
+                           f"pywebview={HAVE_PYWEBVIEW} "
+                           f"HTMLViewer={HTMLViewer.__module__ + '.' + HTMLViewer.__name__ if HTMLViewer else None} "
+                           f"load_file={HTMLViewer is not None and hasattr(HTMLViewer, 'load_file')}")
+                self.log_queue.put(f"[trace] writing debug trace to: {path}\n")
+        except Exception:
+            pass
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(80, self._poll_log_queue)
+
+    # -- settings persistence ----------------------------------------------
+
+    def _settings_file(self):
+        return app_base_dir() / "mlox_subset_sort_settings.json"
+
+    def _gather_settings(self):
+        return {
+            "cfg": self.cfg_var.get(), "customizations": self.customizations_var.get(),
+            "subset_file": self.subset_file_var.get(), "emit_toml": self.emit_toml_var.get(),
+            "list_name": self.list_name_var.get(), "plugin_order_yml": self.plugin_order_yml_var.get(),
+            "tes3conv": self._tes3conv_override or "", "exclude": self.exclude_var.get(),
+            "rules": [str(p) for p in self.rules_panel.get_paths()],
+            "write_toml_inplace": self.write_toml_inplace_var.get(),
+            "dry_run": self.dry_run_var.get(), "write_cfg": self.write_cfg_var.get(),
+            "sort_data_paths": self.sort_data_paths_var.get(), "no_backup": self.no_backup_var.get(),
+            "no_predicate_warnings": self.no_predicate_warnings_var.get(),
+            "create_subset_doc": self.create_subset_doc_var.get(),
+            "keep_json": self.keep_json_var.get(),
+        }
+
+    def _load_settings(self):
+        import json
+        try:
+            d = json.loads(self._settings_file().read_text(encoding="utf-8"))
+        except Exception:
+            return
+        setters = {
+            "cfg": self.cfg_var, "customizations": self.customizations_var,
+            "subset_file": self.subset_file_var, "emit_toml": self.emit_toml_var,
+            "list_name": self.list_name_var, "plugin_order_yml": self.plugin_order_yml_var,
+            "exclude": self.exclude_var,
+        }
+        for k, var in setters.items():
+            if isinstance(d.get(k), str):
+                var.set(d[k])
+        for k, var in (("write_toml_inplace", self.write_toml_inplace_var),
+                       ("dry_run", self.dry_run_var), ("write_cfg", self.write_cfg_var),
+                       ("sort_data_paths", self.sort_data_paths_var), ("no_backup", self.no_backup_var),
+                       ("no_predicate_warnings", self.no_predicate_warnings_var),
+                       ("create_subset_doc", self.create_subset_doc_var),
+                       ("keep_json", self.keep_json_var)):
+            if isinstance(d.get(k), bool):
+                var.set(d[k])
+        if d.get("tes3conv"):
+            self._tes3conv_override = d["tes3conv"]
+        for p in (d.get("rules") or []):
+            try:
+                self.rules_panel.listbox.insert("end", p)
+            except Exception:
+                pass
+        self._on_toggle_inplace()
+
+    def _save_settings(self):
+        import json
+        try:
+            self._settings_file().write_text(json.dumps(self._gather_settings(), indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+    def _on_close(self):
+        self._save_settings()
+        s = getattr(self, "_session", None)
+        if s is not None:
+            try:
+                s.cleanup()   # removes the temp JSON dump (no-op if 'keep' was set)
+            except Exception:
+                pass
+        self.root.destroy()
 
     # -- layout ------------------------------------------------------------
 
@@ -929,6 +1101,8 @@ class App:
         self.no_predicate_warnings_var = tk.BooleanVar(value=False)
         self.dry_run_var = tk.BooleanVar(value=True)
         self.create_subset_doc_var = tk.BooleanVar(value=True)
+        self.exclude_var = tk.StringVar()
+        self.keep_json_var = tk.BooleanVar(value=False)
 
         dry_chk = ttk.Checkbutton(opts, text="Dry run (preview only, don't write files)",
                                     variable=self.dry_run_var)
@@ -969,6 +1143,27 @@ class App:
         create_doc_chk = ttk.Checkbutton(opts, text="Create subset text document (on Scan)",
                                           variable=self.create_subset_doc_var)
         create_doc_chk.grid(row=1, column=2, sticky="w", padx=8, pady=4)
+
+        excl_lbl = ttk.Label(opts, text="Exclude from conflict / cell scans:")
+        excl_lbl.grid(row=2, column=0, sticky="w", padx=8, pady=4)
+        excl_entry = ttk.Entry(opts, textvariable=self.exclude_var)
+        excl_entry.grid(row=2, column=1, columnspan=2, sticky="ew", padx=8, pady=4)
+        excl_tip = ("Comma-separated name patterns (glob: * ?, case-insensitive) to skip in the "
+                    "Conflict/Cell-map/Resource scans -- e.g. 's3lightfixes*, *delta*, *groundcover*, "
+                    "*grass*'. Handy for 'touches-everything' mods (light fixes, grass/ground "
+                    "generators, delta/merged patches) that swamp the results. Saved with your settings.")
+        add_tooltip(excl_lbl, excl_tip)
+        add_tooltip(excl_entry, excl_tip)
+        keep_json_chk = ttk.Checkbutton(opts, text="Keep tes3conv JSON dump", variable=self.keep_json_var,
+                                        command=self._on_keep_json_toggle)
+        keep_json_chk.grid(row=3, column=1, columnspan=2, sticky="w", padx=8, pady=4)
+        add_tooltip(keep_json_chk,
+                     "tes3conv conversions are written to disk (not held in RAM) and read per-plugin, "
+                     "so big load orders don't blow up memory. They always go to a 'tes3conv_json' "
+                     "folder next to the app and are reused within a run -- so Check Conflicts then Cell "
+                     "Map won't re-run tes3conv (a plugin is only re-converted if it changed). This box "
+                     "just decides what happens on exit: checked = keep that folder (reused next launch "
+                     "too); unchecked = delete it when you close the app.")
         add_tooltip(create_doc_chk,
                      "Controls what 'Scan...' does with its result. Checked: write the scanned list "
                      "to a .txt subset file you choose, and load it (the file stays on disk for reuse). "
@@ -982,7 +1177,7 @@ class App:
         # Sort succeeds
         action_row = ttk.Frame(top)
         action_row.grid(row=start_row + 9, column=0, columnspan=3, sticky="ew", pady=(8, 0))
-        action_row.columnconfigure(2, weight=1)
+        action_row.columnconfigure(5, weight=1)
 
         self.sort_button = ttk.Button(action_row, text="1. Sort", command=self.on_sort)
         self.sort_button.grid(row=0, column=0, sticky="w")
@@ -997,9 +1192,37 @@ class App:
                      "rows). Rows you disabled are left out -- new customs aren't inserted, and items "
                      "already in your cfg get a removeContent/removeData. Respects 'Dry run'. "
                      "Disabled until a Sort succeeds.")
+        self.conflicts_button = ttk.Button(action_row, text="Check Conflicts",
+                                            command=self.on_check_conflicts, state="disabled")
+        self.conflicts_button.grid(row=0, column=2, sticky="w", padx=(8, 0))
+        add_tooltip(self.conflicts_button,
+                     "Scan the sorted, enabled plugins for TES3 record-level conflicts -- where two or "
+                     "more plugins edit the same record (the last in the load order wins), like "
+                     "TES3View. Prints a report in the log and opens a conflicts window; point that "
+                     "window at a tes3conv binary for a field-by-field diff of each conflicting record. "
+                     "Read-only; needs the plugin files reachable via your cfg's data= folders. Runs "
+                     "after a Sort.")
+        self.cellmap_button = ttk.Button(action_row, text="Cell Map",
+                                          command=self.on_cell_map, state="disabled")
+        self.cellmap_button.grid(row=0, column=3, sticky="w", padx=(8, 0))
+        add_tooltip(self.cellmap_button,
+                     "Build a 'modmapper'-style cell map from the sorted, enabled plugins: an "
+                     "exterior-cell SVG heatmap (brighter = more mods; click a cell to jump to its "
+                     "list entry) plus exterior/interior cell lists, showing which mods touch which "
+                     "cells (your custom ones get a gold outline). The map is written to cell_map.html "
+                     "and shown in an in-app window if pywebview or tkinterweb is installed, otherwise "
+                     "in your browser. Read-only.")
+        self.resource_button = ttk.Button(action_row, text="Resource Conflicts",
+                                           command=self.on_resource_conflicts, state="disabled")
+        self.resource_button.grid(row=0, column=4, sticky="w", padx=(8, 0))
+        add_tooltip(self.resource_button,
+                     "Scan the data= folders for loose-file (VFS) conflicts: the same relative path "
+                     "(meshes/textures/scripts/...) provided by two or more mod folders. In OpenMW the "
+                     "LATER data folder wins, so reorder the data-path panel to change the winner "
+                     "(like MO2's Data conflicts). Read-only; can be slow on a big install.")
 
         self.status_var = tk.StringVar(value="Ready.")
-        ttk.Label(action_row, textvariable=self.status_var, foreground=DARK["fg_dim"]).grid(row=0, column=2, sticky="e")
+        ttk.Label(action_row, textvariable=self.status_var, foreground=DARK["fg_dim"]).grid(row=0, column=5, sticky="e")
 
     def _build_log(self, log_container):
         log_container.columnconfigure(0, weight=1)
@@ -1053,6 +1276,8 @@ class App:
                                     "[REDUNDANT]", "[ORPHAN]", "[NEEDS CLEANING]", "[LIST ORDER]",
                                     # skipped-rule summary (mlox order overridden by the curated cfg)
                                     "ordering rule(s) not applied", "mlox wanted")):
+            return "warn"
+        if line.startswith("* ["):      # conflict report line involving your custom mods
             return "warn"
         if "<-- inserted" in line:      # 'content=X  <-- inserted/moved' / 'data=...  <-- inserted'
             return "inserted"
@@ -1287,6 +1512,9 @@ class App:
         self.data_order_panel.load(data_lines, highlight_lines, disabled_items=prev_disabled_d)
 
         self.export_button.configure(state="normal" if (final_order or data_lines) else "disabled")
+        self.conflicts_button.configure(state="normal" if final_order else "disabled")
+        self.cellmap_button.configure(state="normal" if final_order else "disabled")
+        self.resource_button.configure(state="normal" if final_order else "disabled")
 
     def on_export(self):
         if self.worker_running or not self._current_plan:
@@ -1343,10 +1571,751 @@ class App:
         self.worker_running = False
         self.sort_button.configure(state="normal")
         self.export_button.configure(state="normal" if self._current_plan else "disabled")
+        self.conflicts_button.configure(state="normal" if self._current_plan else "disabled")
+        self.cellmap_button.configure(state="normal" if self._current_plan else "disabled")
+        self.resource_button.configure(state="normal" if self._current_plan else "disabled")
         self.status_var.set(status)
+
+    # -- conflict detection --------------------------------------------------
+
+    def _apply_exclusions(self, order):
+        """Drop plugins matching the user's exclude patterns (Options field);
+        logs what was skipped."""
+        import re as _re
+        pats = [p for p in _re.split(r"[,\n]", self.exclude_var.get()) if p.strip()]
+        kept, excl = core.filter_plugins(order, pats)
+        if excl:
+            self.log_queue.put(f"\n  Excluded {len(excl)} plugin(s) by your filter: "
+                               + ", ".join(excl[:12]) + (" ..." if len(excl) > 12 else "") + "\n")
+        return kept
+
+    def _tes3conv_json_dir(self):
+        return app_base_dir() / "tes3conv_json"
+
+    def _on_keep_json_toggle(self):
+        """The JSON dump always lives in the same 'tes3conv_json' folder so it's
+        reused within a run; this checkbox only decides whether it's KEPT on close
+        or removed. Flipping it just updates the live session's keep flag."""
+        keep = bool(self.keep_json_var.get())
+        self._keep_json = keep
+        s = getattr(self, "_session", None)
+        if s is not None:
+            s.keep = keep
+        dest = self._tes3conv_json_dir()
+        self.status_var.set((f"Keeping tes3conv JSON dump in: {dest}" if keep
+                             else f"tes3conv JSON dump ({dest}) will be removed on close."))
+
+    def _get_session(self, conv):
+        """Reuse ONE disk-backed tes3conv session across scans, ALWAYS dumping to the
+        same 'tes3conv_json' folder -- so every plugin is converted at most once per
+        run (Check Conflicts then Cell Map reuse the JSON, no re-running tes3conv).
+        A cached JSON is re-used only if it's newer than its plugin (mtime check in
+        core), so an edited plugin still re-converts. The 'Keep tes3conv JSON dump'
+        option only controls whether that folder is removed on close. Called from a
+        worker thread; self._keep_json is snapshotted on the main thread."""
+        if not conv:
+            return None
+        keep = bool(getattr(self, "_keep_json", False))
+        s = getattr(self, "_session", None)
+        if s is not None and getattr(s, "exe", None) == conv:
+            s.keep = keep                        # same dump folder -> just track keep
+            return s
+        if s is not None:                        # engine path changed -> retire the old one
+            try:
+                s.cleanup()
+            except Exception:
+                pass
+        s = core.Tes3ConvSession(conv, dump_dir=str(self._tes3conv_json_dir()), keep=keep)
+        self._session = s
+        return s
+
+    def on_check_conflicts(self):
+        """Scan the current (sorted, enabled) plugins for TES3 record conflicts.
+        Runs in a worker since parsing every plugin can take a moment."""
+        if self.worker_running or not self._current_plan:
+            return
+        order = self._apply_exclusions(self.order_panel.get_enabled())
+        if not order:
+            return
+        data_order = self._current_plan.get("data_order") or []
+        subset = self._current_plan.get("subset") or []
+        self._keep_json = self.keep_json_var.get()
+        self._conf_subset_lower = {str(s).lower() for s in subset}   # your custom mods
+        self.worker_running = True
+        self.sort_button.configure(state="disabled")
+        self.export_button.configure(state="disabled")
+        self.conflicts_button.configure(state="disabled")
+        self.status_var.set("Scanning for conflicts...")
+        threading.Thread(target=self._conflicts_worker,
+                         args=(order, data_order, subset), daemon=True).start()
+
+    def _conflicts_worker(self, order, data_order, subset):
+        writer = QueueWriter(self.log_queue)
+        conflicts, stats, session = [], {}, None
+        try:
+            with redirect_stdout(writer), redirect_stderr(writer):
+                dirs = [d for d in (core.extract_data_path_value(l) for l in data_order) if d]
+                index = core.PluginFileIndex(dirs)
+                cfg_dir = str(Path(self.cfg_var.get().strip()).parent) if self.cfg_var.get().strip() else None
+                conv = core.find_tes3conv(explicit=self._tes3conv_override, extra_dirs=[cfg_dir])
+                session = self._get_session(conv)
+                print("\n" + "=" * 70)
+                print(" TES3 RECORD CONFLICTS (read-only)")
+                print("=" * 70)
+                if session:
+                    print(f"  Engine: tes3conv ({conv}) -- field-level diffs available.")
+                else:
+                    print("  Engine: built-in parser (record-level). Point the Conflicts window at "
+                          "a tes3conv binary for field-level diffs.")
+                conflicts, stats = core.detect_conflicts(order, index, subset_names=subset, session=session)
+                print(core.format_conflict_report(conflicts, stats, limit=200))
+            n_sub = sum(1 for c in conflicts if c.get("involves_subset"))
+            status = (f"Conflicts: {stats.get('conflicts', 0)} record(s), "
+                      f"{n_sub} involving your mods. See the Conflicts window.")
+        except Exception:
+            writer.write("\nERROR: conflict scan failed:\n" + traceback.format_exc())
+            status = "Conflict scan failed -- see log."
+        finally:
+            self.root.after(0, self._conflicts_finished, conflicts, stats, session, status)
+
+    def _conflicts_finished(self, conflicts, stats, session, status):
+        self.worker_running = False
+        self.sort_button.configure(state="normal")
+        self.export_button.configure(state="normal" if self._current_plan else "disabled")
+        self.conflicts_button.configure(state="normal" if self._current_plan else "disabled")
+        self.cellmap_button.configure(state="normal" if self._current_plan else "disabled")
+        self.resource_button.configure(state="normal" if self._current_plan else "disabled")
+        self.status_var.set(status)
+        self._conf_session = session
+        self._conf_paths = (stats or {}).get("paths", {})
+        self._show_conflict_window(conflicts, stats)
+
+    # -- cell map (modmapper) ------------------------------------------------
+
+    def on_cell_map(self):
+        if self.worker_running or not self._current_plan:
+            return
+        order = self._apply_exclusions(self.order_panel.get_enabled())
+        if not order:
+            return
+        data_order = self._current_plan.get("data_order") or []
+        subset = self._current_plan.get("subset") or []
+        self._keep_json = self.keep_json_var.get()
+        self.worker_running = True
+        for b in (self.sort_button, self.export_button, self.conflicts_button,
+                  self.cellmap_button, self.resource_button):
+            b.configure(state="disabled")
+        self.status_var.set("Building cell map...")
+        threading.Thread(target=self._cellmap_worker, args=(order, data_order, subset), daemon=True).start()
+
+    def _cellmap_file(self):
+        """Stable, user-findable, writable location for the generated map."""
+        return app_base_dir() / "cell_map.html"
+
+    def _cellmap_worker(self, order, data_order, subset):
+        writer = QueueWriter(self.log_queue)
+        path = None
+        core.trace(f"cell map: start, {len(order)} plugin(s)")
+        try:
+            with redirect_stdout(writer), redirect_stderr(writer):
+                dirs = [d for d in (core.extract_data_path_value(l) for l in data_order) if d]
+                index = core.PluginFileIndex(dirs)
+                cfg_dir = str(Path(self.cfg_var.get().strip()).parent) if self.cfg_var.get().strip() else None
+                conv = core.find_tes3conv(explicit=self._tes3conv_override, extra_dirs=[cfg_dir])
+                session = self._get_session(conv)
+                print("\n" + "=" * 70)
+                print(" CELL MAP")
+                print("=" * 70)
+                print(f"  Engine: {'tes3conv' if conv else 'built-in parser'}")
+                cov = core.build_cell_coverage(order, index, subset_names=subset, session=session)
+                core.trace(f"cell map: coverage built, {len(cov['exterior'])} ext, {len(cov['interior'])} int")
+                html = core.generate_cell_map_html(cov)
+                core.trace(f"cell map: html built, {len(html)} bytes")
+                # Write straight to disk and drop the string -- the map is viewed
+                # FROM the file (browser / tkinterweb load_file), never rendered
+                # from an in-memory 2MB+ string (that path OOM'd tkhtmlview).
+                path = str(self._cellmap_file())
+                try:
+                    Path(path).write_text(html, encoding="utf-8")
+                except OSError:
+                    # script dir not writable (e.g. a read-only install) -> temp
+                    import tempfile
+                    fd, path = tempfile.mkstemp(prefix="cell_map_", suffix=".html")
+                    os.close(fd)
+                    Path(path).write_text(html, encoding="utf-8")
+                del html
+                core.trace(f"cell map: written to {path}")
+                print(f"  {len(cov['exterior'])} exterior + {len(cov['interior'])} interior cell(s) "
+                      f"touched across {cov['scanned']} plugin(s).")
+                print(f"  Map written to: {path}")
+            status = f"Cell map ready ({len(cov['exterior'])} exterior, {len(cov['interior'])} interior)."
+        except Exception:
+            writer.write("\nERROR: cell map failed:\n" + traceback.format_exc())
+            status = "Cell map failed -- see log."
+        finally:
+            self.root.after(0, self._cellmap_finished, path, status)
+
+    def _cellmap_finished(self, path, status):
+        self.worker_running = False
+        self.sort_button.configure(state="normal")
+        for b in (self.export_button, self.conflicts_button, self.cellmap_button, self.resource_button):
+            b.configure(state="normal" if self._current_plan else "disabled")
+        self.status_var.set(status)
+        if not path:
+            return
+        self._last_cell_file = path
+        # Optional override: MLOX_MAP_VIEWER = pywebview | tkinterweb | browser.
+        # Handy when pywebview is installed but its backend is broken (e.g. its
+        # WebView2/pythonnet backend on a too-new Python) -- force tkinterweb/browser.
+        force = (os.environ.get("MLOX_MAP_VIEWER") or "").strip().lower()
+        can_tkweb = HTMLViewer is not None and hasattr(HTMLViewer, "load_file")
+        if force == "browser":
+            core.trace("cell map: viewer = browser (forced)"); self._open_cell_map_browser(); return
+        if force == "tkinterweb" and can_tkweb:
+            core.trace("cell map: viewer = tkinterweb (forced)"); self._show_cell_map_window(path); return
+        if force == "pywebview" and HAVE_PYWEBVIEW:
+            core.trace("cell map: viewer = pywebview (forced)"); self._open_cell_map_pywebview(path); return
+        # Auto: prefer pywebview (real OS webview), then tkinterweb's load_file,
+        # then the browser. tkhtmlview can't draw SVG, so it's never used here.
+        if HAVE_PYWEBVIEW:
+            core.trace("cell map: viewer = pywebview (embedded)")
+            self._open_cell_map_pywebview(path)
+        elif can_tkweb:
+            core.trace("cell map: viewer = tkinterweb (in-app window)")
+            self._show_cell_map_window(path)
+        else:
+            core.trace("cell map: viewer = browser (no pywebview/tkinterweb available)")
+            self._open_cell_map_browser()
+            self.status_var.set(status + "  (opened in browser — pip install pywebview "
+                                         "for an in-app window)")
+
+    def _open_cell_map_pywebview(self, path):
+        """Show the map in an embedded OS webview by re-invoking ourselves with
+        --show-map in a SEPARATE process (webview.start() needs its own main
+        thread). Frozen-safe: a built .exe re-runs the .exe; from source we re-run
+        the script -- never 'python -c', which a frozen exe can't do."""
+        ap = os.path.abspath(path)
+        # IMPORTANT: only CREATE_NO_WINDOW here (suppresses a console flash) -- do
+        # NOT use the SW_HIDE startupinfo from _no_window_kwargs(): that STARTUPINFO
+        # is inherited by the child's FIRST window, which would hide the WebView2
+        # cell-map window itself (it spawns but never shows). That was the bug.
+        nw = {"creationflags": 0x08000000} if os.name == "nt" else {}
+        try:
+            if getattr(sys, "frozen", False):
+                cmd = [sys.executable, "--show-map", ap]
+            else:
+                cmd = [sys.executable, os.path.abspath(__file__), "--show-map", ap]
+            core.trace(f"cell map: launching pywebview child: {cmd}")
+            subprocess.Popen(cmd, **nw)
+        except Exception:
+            core.trace("cell map: pywebview child launch FAILED:\n" + traceback.format_exc())
+            self._open_cell_map_browser()
+
+    def _show_cell_map_window(self, path):
+        win = getattr(self, "_cellmap_win", None)
+        if win is not None and win.winfo_exists():
+            win.destroy()
+        win = tk.Toplevel(self.root)
+        self._cellmap_win = win
+        win.title("Cell Map")
+        win.configure(bg=DARK["bg"])
+        win.geometry("1000x720")
+        bar = ttk.Frame(win, padding=6)
+        bar.pack(fill="x")
+        ttk.Button(bar, text="Save HTML...", command=self._save_cell_map).pack(side="left")
+        ttk.Button(bar, text="Open in browser", command=self._open_cell_map_browser).pack(side="left", padx=(8, 0))
+        ttk.Button(bar, text="Close", command=win.destroy).pack(side="right")
+        try:
+            viewer = HTMLViewer(win)
+            viewer.pack(fill="both", expand=True)
+            viewer.load_file(path)   # reads from disk, not an in-memory string
+        except Exception:
+            ttk.Label(win, foreground="#ffb454", padding=8,
+                      text="(inline render failed — use 'Open in browser' for the full map)").pack(anchor="w")
+
+    def _open_cell_map_browser(self):
+        p = getattr(self, "_last_cell_file", None)
+        if not p or not os.path.exists(p):
+            return
+        try:
+            webbrowser.open(Path(p).resolve().as_uri())   # correct file URI on Win/Linux/macOS
+        except Exception:
+            pass
+
+    def _save_cell_map(self):
+        src = getattr(self, "_last_cell_file", None)
+        if not src or not os.path.exists(src):
+            return
+        out = filedialog.asksaveasfilename(title="Save cell map", defaultextension=".html",
+                                           initialfile="cell_map.html",
+                                           filetypes=(("HTML files", "*.html"), ("All files", "*.*")))
+        if not out:
+            return
+        try:
+            import shutil
+            if os.path.abspath(out) != os.path.abspath(src):
+                shutil.copyfile(src, out)
+            self.status_var.set(f"Cell map saved: {out}")
+        except OSError as e:
+            messagebox.showerror("Save failed", str(e))
+
+    # -- resource (VFS) conflicts --------------------------------------------
+
+    def on_resource_conflicts(self):
+        if self.worker_running or not self._current_plan:
+            return
+        data_order = self._current_plan.get("data_order") or []
+        dirs = [d for d in (core.extract_data_path_value(l) for l in data_order) if d]
+        if not dirs:
+            self.status_var.set("No data= folders to scan.")
+            return
+        subset_dirs = [d.get("value") for d in (self._current_plan.get("data_inserts") or [])]
+        self.worker_running = True
+        for b in (self.sort_button, self.export_button, self.conflicts_button,
+                  self.cellmap_button, self.resource_button):
+            b.configure(state="disabled")
+        self.status_var.set("Scanning data folders for file conflicts...")
+        threading.Thread(target=self._resource_worker, args=(dirs, subset_dirs), daemon=True).start()
+
+    def _resource_worker(self, dirs, subset_dirs):
+        writer = QueueWriter(self.log_queue)
+        conflicts, stats = [], {}
+        try:
+            with redirect_stdout(writer), redirect_stderr(writer):
+                print("\n" + "=" * 70)
+                print(" DATA-PATH RESOURCE (VFS) CONFLICTS")
+                print("=" * 70)
+                conflicts, stats = core.detect_resource_conflicts(dirs, subset_dirs=subset_dirs)
+                print(core.format_resource_report(conflicts, stats, limit=200))
+            status = f"Resource conflicts: {stats.get('conflicts', 0)} file(s). See the window."
+        except Exception:
+            writer.write("\nERROR: resource scan failed:\n" + traceback.format_exc())
+            status = "Resource scan failed -- see log."
+        finally:
+            self.root.after(0, self._resource_finished, conflicts, stats, status)
+
+    def _resource_finished(self, conflicts, stats, status):
+        self.worker_running = False
+        self.sort_button.configure(state="normal")
+        for b in (self.export_button, self.conflicts_button, self.cellmap_button, self.resource_button):
+            b.configure(state="normal" if self._current_plan else "disabled")
+        self.status_var.set(status)
+        self._show_resource_window(conflicts, stats)
+
+    def _show_resource_window(self, conflicts, stats):
+        self._all_res = conflicts
+        win = getattr(self, "_res_win", None)
+        if win is not None and win.winfo_exists():
+            win.destroy()
+        win = tk.Toplevel(self.root)
+        self._res_win = win
+        win.title("Data-path Resource Conflicts")
+        win.configure(bg=DARK["bg"])
+        win.geometry("900x560")
+        top = ttk.Frame(win, padding=8)
+        top.pack(fill="x")
+        n_sub = sum(1 for c in conflicts if c.get("involves_subset"))
+        ttk.Label(top, text=(f"{stats.get('conflicts', 0)} loose-file conflict(s) across "
+                             f"{stats.get('dirs', 0)} folder(s), {stats.get('files', 0)} file(s) — "
+                             f"{n_sub} involve your custom data paths (★). Later folder wins — reorder "
+                             f"the data-path panel to change it.")).pack(side="left")
+        self._res_subset_only = tk.BooleanVar(value=False)
+        ttk.Checkbutton(top, text="Only my paths", variable=self._res_subset_only,
+                        command=self._refill_res_tree).pack(side="right")
+        # tree (top) and the detail panel (bottom) live in a draggable vertical
+        # split, so the detail box can be resized -- grab the grip to grow it.
+        body = self._paned(win, "vertical")
+        body.pack(fill="both", expand=True, padx=8, pady=(0, 6))
+
+        mid = ttk.Frame(body)
+        cols = ("custom", "path", "count", "winner")
+        tree = ttk.Treeview(mid, columns=cols, show="headings", selectmode="browse", style="Conf.Treeview")
+        for c, txt, w in (("custom", "★", 34), ("path", "File", 520), ("count", "#", 50),
+                          ("winner", "Winner (loads last)", 280)):
+            tree.heading(c, text=txt)
+            tree.column(c, width=w, anchor="w", stretch=(c in ("path", "winner")))
+        vsb = ttk.Scrollbar(mid, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        mid.rowconfigure(0, weight=1)
+        mid.columnconfigure(0, weight=1)
+        tree.tag_configure("sub", foreground="#ff9b6b")
+        self._res_tree = tree
+        body.add(mid, minsize=120, stretch="always")
+
+        detbox = ttk.Frame(body)
+        detail = tk.Text(detbox, height=5, wrap="word", background="#141414", foreground=DARK["fg"],
+                         relief="flat", highlightthickness=1, highlightbackground=DARK["border"])
+        detail.pack(fill="both", expand=True)
+        detail.insert("1.0", "Select a file to see every folder that provides it, in load order.")
+        detail.configure(state="disabled")
+        body.add(detbox, minsize=70)
+        self._attach_hamburger_grip(body, "vertical")
+
+        def on_sel(_e=None):
+            sel = tree.selection()
+            if not sel:
+                return
+            c = self._res_shown[int(sel[0])]
+            txt = (f"{c['path']}\n"
+                   + "\n".join(f"  {i + 1}. {p}" for i, p in enumerate(c["providers"]))
+                   + f"\nWins: {c['winner']}")
+            detail.configure(state="normal")
+            detail.delete("1.0", "end")
+            detail.insert("1.0", txt)
+            detail.configure(state="disabled")
+        tree.bind("<<TreeviewSelect>>", on_sel)
+        btns = ttk.Frame(win, padding=8)
+        btns.pack(fill="x")
+        ttk.Button(btns, text="Save report (CSV)...", command=self._save_resource_csv).pack(side="left")
+        ttk.Button(btns, text="Close", command=win.destroy).pack(side="right")
+        self._refill_res_tree()
+
+    def _refill_res_tree(self):
+        tree = getattr(self, "_res_tree", None)
+        if tree is None or not tree.winfo_exists():
+            return
+        only = self._res_subset_only.get()
+        self._res_shown = [c for c in self._all_res if c.get("involves_subset") or not only]
+        tree.delete(*tree.get_children())
+        for i, c in enumerate(self._res_shown):
+            star = "★" if c["involves_subset"] else ""
+            tags = ("sub",) if c["involves_subset"] else ()
+            tree.insert("", "end", iid=str(i), tags=tags,
+                        values=(star, c["path"], len(c["providers"]), c["winner"]))
+
+    def _save_resource_csv(self):
+        if not getattr(self, "_all_res", None):
+            return
+        path = filedialog.asksaveasfilename(title="Save resource conflicts", defaultextension=".csv",
+                                            initialfile="resource_conflicts.csv",
+                                            filetypes=(("CSV files", "*.csv"), ("All files", "*.*")))
+        if not path:
+            return
+        try:
+            core.write_resource_csv(path, self._all_res)
+            self.status_var.set(f"Saved: {path}")
+        except OSError as e:
+            messagebox.showerror("Save failed", str(e))
+
+    def _show_conflict_window(self, conflicts, stats):
+        self._all_conflicts = conflicts
+        win = getattr(self, "_conflict_win", None)
+        if win is not None and win.winfo_exists():
+            win.destroy()
+        win = tk.Toplevel(self.root)
+        self._conflict_win = win
+        win.title("TES3 Record Conflicts")
+        win.configure(bg=DARK["bg"])
+        win.geometry("980x680")
+
+        top = ttk.Frame(win, padding=8)
+        top.pack(fill="x")
+        n_sub = sum(1 for c in conflicts if c.get("involves_subset"))
+        ttk.Label(top, text=(f"{stats.get('conflicts', 0)} conflicting record(s) across "
+                             f"{stats.get('scanned', 0)} plugin(s) — {n_sub} involve your custom mods "
+                             f"(★). Winner = last loaded.")).pack(side="left")
+        self._conf_subset_only = tk.BooleanVar(value=False)
+        ttk.Checkbutton(top, text="Only my mods", variable=self._conf_subset_only,
+                        command=self._refill_conflict_tree).pack(side="right")
+
+        engine = (stats or {}).get("engine", "builtin")
+        bar = ttk.Frame(win, padding=(8, 0))
+        bar.pack(fill="x")
+        ttk.Label(bar, foreground=(DARK["fg_dim"] if engine == "tes3conv" else "#ffb454"),
+                  text=("Field-level diffs: ON (tes3conv)." if engine == "tes3conv"
+                        else "Field-level diffs: OFF — record-level only. Set a tes3conv binary, then re-check.")
+                  ).pack(side="left")
+        ttk.Button(bar, text="Set tes3conv...", command=self._set_tes3conv).pack(side="left", padx=(8, 0))
+
+        panes = tk.PanedWindow(win, orient="vertical", bg=DARK["bg"], bd=0, sashwidth=6,
+                               sashrelief="flat", background=DARK["border"])
+        panes.pack(fill="both", expand=True, padx=8, pady=6)
+
+        # --- conflicts table ---
+        topf = ttk.Frame(panes)
+        cols = ("custom", "type", "id", "count", "winner")
+        tree = ttk.Treeview(topf, columns=cols, show="headings", selectmode="browse", style="Conf.Treeview")
+        for c, txt, w in (("custom", "★", 34), ("type", "Type", 90), ("id", "Record", 380),
+                          ("count", "#", 40), ("winner", "Winner (loads last)", 280)):
+            tree.heading(c, text=txt)
+            tree.column(c, width=w, anchor="w", stretch=(c in ("id", "winner")))
+        vsb = ttk.Scrollbar(topf, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        topf.rowconfigure(0, weight=1)
+        topf.columnconfigure(0, weight=1)
+        tree.tag_configure("sub", foreground="#ff9b6b")
+        self._conf_tree = tree
+        panes.add(topf, minsize=150, stretch="always")
+
+        # --- field-level comparison (populated on record select) ---
+        botf = ttk.Frame(panes)
+        ttk.Label(botf, foreground=DARK["fg_dim"],
+                  text="Field comparison for the selected record — differing fields in red · "
+                       "★ = your custom mod · last column wins · double-click a field for the full "
+                       "value:").grid(row=0, column=0, columnspan=2, sticky="w", pady=(2, 2))
+        ftree = ttk.Treeview(botf, show="headings", selectmode="browse", style="Conf.Treeview")
+        fvsb = ttk.Scrollbar(botf, orient="vertical", command=ftree.yview)
+        fhsb = ttk.Scrollbar(botf, orient="horizontal", command=ftree.xview)
+        ftree.configure(yscrollcommand=fvsb.set, xscrollcommand=fhsb.set)
+        ftree.grid(row=1, column=0, sticky="nsew")
+        fvsb.grid(row=1, column=1, sticky="ns")
+        fhsb.grid(row=2, column=0, sticky="ew")
+        botf.rowconfigure(1, weight=1)
+        botf.columnconfigure(0, weight=1)
+        ftree.tag_configure("diff", foreground="#ff6b6b")
+        ftree.bind("<Double-Button-1>", lambda _e: self._show_field_detail())
+        self._conf_ftree = ftree
+        panes.add(botf, minsize=120, stretch="always")
+
+        tree.bind("<<TreeviewSelect>>", lambda _e: self._on_conflict_select())
+
+        btns = ttk.Frame(win, padding=8)
+        btns.pack(fill="x")
+        ttk.Button(btns, text="Save report (CSV)...", command=self._save_conflicts_csv).pack(side="left")
+        if self._conf_session is not None:
+            ttk.Button(btns, text="Dump tes3conv JSON...", command=self._dump_conflict_json).pack(side="left", padx=(8, 0))
+        ttk.Button(btns, text="Close", command=win.destroy).pack(side="right")
+
+        self._refill_conflict_tree()
+
+    def _dump_conflict_json(self):
+        """Write the (in-memory) tes3conv JSON for every scanned plugin to a
+        folder you pick."""
+        if self._conf_session is None or not self._conf_paths:
+            return
+        folder = filedialog.askdirectory(title="Dump tes3conv JSON to folder")
+        if not folder:
+            return
+        try:
+            n = core.dump_tes3conv_json(self._conf_session, list(self._conf_paths.keys()),
+                                        self._conf_paths, folder)
+            self.status_var.set(f"Wrote {n} JSON file(s) to {folder}")
+            if n:
+                messagebox.showinfo("JSON dumped", f"Wrote {n} tes3conv JSON file(s) to:\n{folder}")
+            else:
+                messagebox.showwarning("Nothing written",
+                    "No JSON was written. The tes3conv session may have been cleared — "
+                    "re-run Check Conflicts, then dump again.")
+        except Exception as e:
+            messagebox.showerror("Dump failed", str(e))
+
+    def _on_conflict_select(self):
+        tree = getattr(self, "_conf_tree", None)
+        sel = tree.selection() if tree else None
+        if not sel:
+            return
+        self._populate_field_diff(self._shown_conflicts[int(sel[0])])
+
+    def _is_custom(self, plugin):
+        """True if this plugin is one of YOUR custom mods (in the scanned subset),
+        as opposed to a curated-list plugin."""
+        return str(plugin).lower() in getattr(self, "_conf_subset_lower", set())
+
+    @staticmethod
+    def _fmt_val(v):
+        if v is None:
+            return "—"
+        if isinstance(v, list):
+            # short lists of scalars (e.g. a grid [x, y]) show inline; long ones
+            # or lists of objects (e.g. references) get a count + hint to expand
+            if all(not isinstance(x, (dict, list)) for x in v):
+                s = str(v)
+                if len(s) <= 140:
+                    return s
+            return f"[{len(v)} item(s)]  — double-click to view"
+        s = str(v)
+        return s if len(s) <= 140 else s[:137] + "…  (double-click)"
+
+    def _populate_field_diff(self, conflict):
+        ftree = getattr(self, "_conf_ftree", None)
+        if ftree is None or not ftree.winfo_exists():
+            return
+        plugins = conflict["plugins"]
+        cols = ["field"] + [f"p{i}" for i in range(len(plugins))]
+        ftree.configure(columns=cols)
+        ftree.heading("field", text="Field")
+        ftree.column("field", width=240, anchor="w", stretch=False)
+        for i, p in enumerate(plugins):
+            star = "★ " if self._is_custom(p) else ""       # ★ marks your custom mods
+            suffix = "  (wins)" if i == len(plugins) - 1 else ""
+            ftree.heading(f"p{i}", text=f"{star}{p}{suffix}")
+            ftree.column(f"p{i}", width=210, anchor="w", stretch=True)
+        ftree.delete(*ftree.get_children())
+        if self._conf_session is None:
+            ftree.insert("", "end", values=["(set a tes3conv binary for field-level diffs)"] + [""] * len(plugins))
+            return
+        try:
+            keys, per, diff = core.diff_record_fields(self._conf_session, conflict, self._conf_paths)
+        except Exception:
+            ftree.insert("", "end", values=["(field diff unavailable)"] + [""] * len(plugins))
+            return
+        self._conf_fdiff = {"plugins": plugins, "per": per}   # for the expand popup
+        for k in keys:
+            row = [k] + [self._fmt_val(per[p].get(k)) for p in plugins]
+            ftree.insert("", "end", iid=k, values=row, tags=("diff",) if k in diff else ())
+        if not keys:
+            ftree.insert("", "end", values=["(no fields / identical)"] + [""] * len(plugins))
+
+    def _show_field_detail(self):
+        """Popup with the full value of the selected field for each plugin --
+        one tab per plugin, pretty-printed. For long fields like 'references'
+        that get truncated in the table."""
+        ftree = getattr(self, "_conf_ftree", None)
+        fd = getattr(self, "_conf_fdiff", None)
+        if not ftree or not fd:
+            return
+        sel = ftree.selection()
+        if not sel:
+            return
+        key = sel[0]
+        plugins = fd["plugins"]
+        per = fd["per"]
+        win = tk.Toplevel(self.root)
+        win.title(f"Field: {key}")
+        win.configure(bg=DARK["bg"])
+        win.geometry("820x520")
+        ttk.Label(win, text=f"{key}   (last plugin wins · ★ orange = your custom mod)",
+                  padding=8).pack(anchor="w")
+        bar = ttk.Frame(win, padding=(8, 0))
+        bar.pack(fill="x")
+        wrap_var = tk.BooleanVar(value=True)
+        texts = []
+
+        def _apply_wrap():
+            w = "word" if wrap_var.get() else "none"
+            for st in texts:
+                st.configure(state="normal")
+                st.configure(wrap=w)
+                st.configure(state="disabled")
+        ttk.Checkbutton(bar, text="Word wrap", variable=wrap_var, command=_apply_wrap).pack(side="left")
+        nb = ttk.Notebook(win)
+        nb.pack(fill="both", expand=True, padx=8, pady=(4, 8))
+        import json as _json
+        CUST = "#ff9b6b"
+        for i, p in enumerate(plugins):
+            cust = self._is_custom(p)
+            val = per[p].get(key, None)
+            try:
+                text = _json.dumps(val, indent=2, ensure_ascii=False, default=str)
+            except Exception:
+                text = repr(val)
+            frame = ttk.Frame(nb)
+            # colored per-plugin header inside the tab: orange = your custom mod
+            ttk.Label(frame, text=(("★ " if cust else "") + p
+                                   + ("   — your custom mod" if cust else "   — curated list")
+                                   + ("   ✓ wins" if i == len(plugins) - 1 else "")),
+                      foreground=(CUST if cust else "#9a9a9a"), padding=(4, 4)).pack(anchor="w")
+            st = scrolledtext.ScrolledText(frame, wrap="word", font=("TkFixedFont", 10),
+                                           background="#141414", foreground=DARK["fg"],
+                                           insertbackground=DARK["fg"], relief="flat",
+                                           highlightthickness=1, highlightbackground=DARK["border"])
+            st.pack(fill="both", expand=True)
+            st.insert("1.0", text if val is not None else "(field not present in this plugin)")
+            st.configure(state="disabled")
+            texts.append(st)
+            label = (p[:22] + "…") if len(p) > 24 else p
+            tab = ("★ " if cust else "") + label + (" ✓" if i == len(plugins) - 1 else "")
+            nb.add(frame, text=tab)
+        ttk.Button(win, text="Close", command=win.destroy).pack(pady=(0, 8))
+
+    def _set_tes3conv(self):
+        p = filedialog.askopenfilename(title="Locate the tes3conv executable",
+                                       filetypes=(("All files", "*.*"),))
+        if not p:
+            return
+        self._tes3conv_override = p
+        self.status_var.set("tes3conv set — click 'Check Conflicts' again to re-scan with field diffs.")
+        messagebox.showinfo("tes3conv set",
+                            "tes3conv location saved.\n\nClick 'Check Conflicts' again to re-scan; the "
+                            "field comparison will then populate when you select a record.")
+
+    def _refill_conflict_tree(self):
+        tree = getattr(self, "_conf_tree", None)
+        if tree is None or not tree.winfo_exists():
+            return
+        only = self._conf_subset_only.get()
+        self._shown_conflicts = [c for c in self._all_conflicts
+                                 if c.get("involves_subset") or not only]
+        tree.delete(*tree.get_children())
+        for i, c in enumerate(self._shown_conflicts):
+            star = "★" if c["involves_subset"] else ""
+            tags = ("sub",) if c["involves_subset"] else ()
+            tree.insert("", "end", iid=str(i), tags=tags,
+                        values=(star, c["type"], c["id"], len(c["plugins"]), c["winner"]))
+
+    def _save_conflicts_csv(self):
+        if not getattr(self, "_all_conflicts", None):
+            return
+        path = filedialog.asksaveasfilename(
+            title="Save conflict report", defaultextension=".csv",
+            initialfile="tes3_conflicts.csv",
+            filetypes=(("CSV files", "*.csv"), ("All files", "*.*")))
+        if not path:
+            return
+        try:
+            core.write_conflict_csv(path, self._all_conflicts)
+            self.status_var.set(f"Conflict report saved: {path}")
+        except OSError as e:
+            messagebox.showerror("Save failed", str(e))
+
+
+def _run_pywebview_window(path):
+    """Open one cell-map file in an OS webview and block until closed. Invoked in a
+    child process (see _open_cell_map_pywebview) so webview.start() owns its own
+    main thread, cleanly, without disturbing the tkinter app. Always writes its
+    outcome to cell_map_viewer.log next to the app so a failed backend (e.g.
+    pywebview's WebView2/pythonnet backend on an unsupported Python) is visible
+    instead of silently falling back to the browser."""
+    try:
+        logf = str(app_base_dir() / "cell_map_viewer.log")
+    except Exception:
+        logf = None
+
+    def _log(msg):
+        if not logf:
+            return
+        try:
+            from datetime import datetime as _dt
+            with open(logf, "a", encoding="utf-8") as fh:
+                fh.write(f"{_dt.now():%Y-%m-%d %H:%M:%S}  {msg}\n")
+        except Exception:
+            pass
+
+    try:
+        import webview
+        _log(f"pywebview {getattr(webview, '__version__', '?')}: opening {path}")
+        webview.create_window("Cell Map", Path(path).resolve().as_uri(), width=1050, height=760)
+        webview.start()
+        _log("pywebview: window closed cleanly")
+    except Exception:
+        import traceback as _tb
+        _log("pywebview FAILED -- falling back to browser:\n" + _tb.format_exc())
+        try:
+            webbrowser.open(Path(path).resolve().as_uri())
+        except Exception:
+            pass
 
 
 def main():
+    # Re-entry used by the pywebview viewer child process. Works whether we're run
+    # from source (python gui.py --show-map X) or frozen (App.exe --show-map X),
+    # because it never spawns "python -c" (a frozen exe is not a Python interpreter).
+    if len(sys.argv) >= 3 and sys.argv[1] == "--show-map":
+        _run_pywebview_window(sys.argv[2])
+        return
+    import argparse
+    ap = argparse.ArgumentParser(description="MLOX Subset Sort (GUI)")
+    ap.add_argument("--trace", nargs="?", const=True, default=None, metavar="LOGFILE",
+                    help="Write a debug trace log for troubleshooting. Off by default. "
+                         "Pass --trace for the default log (mlox_subset_sort_trace.log next "
+                         "to the app), or --trace PATH to choose the file.")
+    args, _unknown = ap.parse_known_args()
+    global _TRACE_REQUEST
+    _TRACE_REQUEST = args.trace
     root = TkinterDnD.Tk() if HAVE_DND else tk.Tk()
     apply_dark_theme(root)
     App(root)

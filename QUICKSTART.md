@@ -45,6 +45,24 @@ python mlox_subset_sort_gui.py
   leave mods out — handy when not everything you scanned needs to load.
 - **Read the log colours**: green = inserted/moved by this sort, orange =
   warnings and rules your cfg order overrode, red = errors.
+- **Check conflicts**: click **Check Conflicts** to scan for TES3 record-level
+  conflicts (two plugins editing the same record; last one wins). Results show
+  in the log and a dedicated window — ones involving your mods are marked ★.
+  For a **field-by-field diff**, point it at a `tes3conv` binary (**Set
+  tes3conv...** in that window, or `--tes3conv`); then selecting a record shows
+  each plugin's values with differing fields in red.
+- **Cell map**: click **Cell Map** for a modmapper-style SVG heatmap of which
+  mods touch which exterior/interior cells (click a cell to jump to its list row).
+  The map is written to `cell_map.html` and shown in an in-app window if
+  `pywebview` (best) or `tkinterweb` is installed, otherwise your browser — it is
+  never rendered from an in-memory string, so big load orders won't OOM.
+- **Big load orders / memory / speed**: conflict + cell-map scans run tes3conv to
+  disk, reading one plugin at a time (bounded memory) instead of holding every
+  plugin's records in RAM. The first scan also caches a tiny per-plugin sidecar,
+  so **repeat Check Conflicts and Cell Map runs are near-instant** (a mod is only
+  re-read if it changed). Tick **Keep tes3conv JSON dump** (Options) to keep the
+  `tes3conv_json` folder (and its caches) between launches; leave it off to remove
+  it on close. (CLI: `--json-dump-dir FOLDER`.)
 
 ### Then apply it
 

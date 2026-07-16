@@ -28,6 +28,9 @@ future Configurator rebuilds.
 - `plugin-order.yml` — MOMW's source of truth for which plugins belong to which
   curated list (optional but recommended). From the
   [modding-openmw.com repo](https://gitlab.com/modding-openmw/modding-openmw.com/-/blob/master/momw/momw/data_seeds/data/plugin-order.yml).
+- `CREDITS.md` — acknowledgements for the projects this tool ports, references,
+  and depends on (mlox, plox, tes3conv, modmapper, OpenMW, MOMW, and more).
+- `CHANGELOG.md` — what changed between releases (current: **2.1**).
 
 ---
 
@@ -47,9 +50,52 @@ Pure Python + tkinter, so it runs on all three platforms.
   - `pip install PyYAML` — faster/robust `plugin-order.yml` parsing. Without it,
     a built-in parser is used automatically.
   - `pip install tomli` — only on Python < 3.11, for reading TOML.
+  - `pip install pywebview` — shows the cell map in an in-app window (uses the OS
+    webview, so the SVG heatmap and tabs render exactly like a browser).
+    `tkinterweb` also works as a lighter fallback; without either, the map opens
+    in your default browser.
 
 Install optional deps on an externally-managed Python with
 `pip install ... --break-system-packages` if needed.
+
+### Packaging into a standalone `.exe` (PyInstaller / auto-py-to-exe)
+
+The tool runs frozen. It never persists data next to `__file__` (which, when
+frozen, is a temp extraction dir that's wiped on exit), so your settings and
+outputs survive the build:
+
+- `mlox_subset_sort_settings.json`, `mlox_subset_sort_trace.log`, `cell_map.html`,
+  and the `tes3conv_json/` spool are written **next to the `.exe`**. If that
+  folder isn't writable (e.g. installed under `Program Files`), they fall back to
+  a per-user data dir (`%APPDATA%\MloxSubsetSort` on Windows,
+  `~/Library/Application Support/MloxSubsetSort` on macOS,
+  `~/.config/MloxSubsetSort` on Linux).
+- The in-app cell-map viewer re-invokes the same executable with `--show-map`, so
+  pywebview works from the frozen build too (no bundled Python interpreter
+  needed). **But the library must actually be inside the exe** — if it isn't, the
+  map falls back to the browser.
+
+**Bundling the embedded (pywebview) cell-map viewer.** In your build environment,
+`pip install pywebview`, then tell PyInstaller / auto-py-to-exe to collect it and
+its Windows backend. In auto-py-to-exe, add under *Advanced → hidden-import* and
+*--collect-all*, or on the PyInstaller command line:
+
+```
+pyinstaller --noconsole --collect-all webview --collect-all clr_loader \
+    --hidden-import clr --hidden-import webview.platforms.edgechromium \
+    mlox_subset_sort_gui.py
+```
+
+pywebview on Windows uses the Edge **WebView2** runtime (present on Windows 11 and
+most updated Windows 10; otherwise install the free "Evergreen" runtime from
+Microsoft). To confirm what the build actually sees, run the exe with `--trace`
+and open the log: the `viewers: ... pywebview=True/False` line and the
+`cell map: viewer = ...` line tell you which path it took.
+
+If you'd rather avoid the WebView2 dependency, bundle **tkinterweb** instead
+(`pip install tkinterweb`; `--collect-all tkinterweb`). It renders the SVG map in
+a real in-app window (the tab buttons need a full browser, so use *Open in
+browser* for those). Without either library, the map opens in your browser.
 
 Run the GUI:
 
@@ -176,6 +222,109 @@ Works with or without PyYAML.
 
 ---
 
+## Conflict detection (TES3 records)
+
+Click **Check Conflicts** (after a Sort) — or pass `--check-conflicts` on the CLI
+— to scan the active plugins for **record-level conflicts**, the way TES3View /
+tes3cmd do: where two or more plugins define or override the *same* record (by
+type + editor id), the last one in the load order wins.
+
+- Results appear both as a colour-coded report in the log **and** in a dedicated
+  **Conflicts window** (sortable table: type, record, how many plugins touch it,
+  and the winner). Conflicts that involve **your** custom mods are marked with a
+  ★ and listed first — those are the ones your additions caused.
+- Save the full list to CSV for later.
+- Read-only and opt-in: it never changes the sort or your files, and it needs the
+  plugin files reachable via your cfg's `data=` folders. It can be slow on a big
+  list (it parses every active plugin), so it runs in the background.
+
+Handles **`.esp/.esm/.omwaddon/.omwgame`** (all TES3-format) and **`.omwscripts`**
+(OpenMW's text Lua-attach config). Lua scripts are surfaced as `LuaScript` records
+keyed by their script path — whether declared in an `.omwscripts` file or in an
+`.omwaddon`'s `LuaScriptsCfg` — so two mods attaching the same script path show up
+as a conflict.
+
+**Two engines:**
+
+- **Built-in (default, no dependencies)** — record-level: which plugins touch the
+  same record. Handles the common types including scripts (by name), interior
+  cells (by name), exterior cells / landscape (by grid coords), and Lua scripts
+  (by path, from `.omwscripts` and `.omwaddon`).
+- **tes3conv (optional) — adds field-level diffs.** If a
+  [`tes3conv`](https://github.com/Greatness7/tes3conv) binary is available, the
+  Conflicts window shows a **field-by-field comparison** for the selected record
+  (each plugin's value side by side, differing fields in red, last column wins) —
+  the same JSON approach TES3 Conflictsolver uses. Point the tool at it via the
+  **Set tes3conv...** button, the `--tes3conv` CLI flag, `$MLOX_TES3CONV`, your
+  `PATH`, or by dropping the binary next to the script.
+
+Depth is record-level for detection (not a full record schema like xEdit); use it
+to spot overlaps worth a patch, and the field diff (with tes3conv) to see exactly
+what differs. Confirm anything subtle in TES3View if needed.
+
+### Data-path resource (VFS) conflicts
+
+Click **Resource Conflicts** (or `--resource-conflicts`) to scan your `data=`
+folders for **loose-file conflicts**: the same relative path (a mesh, texture,
+script, icon…) provided by two or more mod folders. In OpenMW's VFS the **later**
+`data=` folder wins, so these are decided by data-path order — reorder the
+**Data path order** panel to change the winner (this is what MO2's *Data*
+conflicts show). Read-only; a window lists each file, how many folders provide
+it, and the winner (yours highlighted), with CSV export. Can be slow on a big
+install.
+
+### Skipping noisy mods, settings, JSON
+
+- **Exclude field** (Options) — comma-separated glob patterns to skip in the
+  Conflict / Cell-map / Resource scans, e.g. `s3lightfixes*, *delta*, *grass*`.
+  Great for "touches-everything" mods that swamp the results. Saved with settings.
+- **Settings are remembered** — your paths, rule files, options, tes3conv path,
+  and exclude patterns are saved to `mlox_subset_sort_settings.json` on close and
+  reloaded next launch.
+- **Dump tes3conv JSON** — in the Conflicts window (tes3conv mode), export the
+  per-plugin JSON for every scanned plugin to a folder you pick.
+- **Keep tes3conv JSON dump** (Options) — tes3conv conversions are always spooled
+  to a `tes3conv_json` folder next to the tool and read one plugin at a time
+  (bounded memory, even on 900+ plugins). Within a run the spool is reused, so
+  **Check Conflicts followed by Cell Map won't re-run tes3conv** — a plugin is
+  only re-converted if it changed (checked by modified-time). This box only
+  decides what happens on exit: checked = keep the folder (reused next launch
+  too); unchecked = delete it on close. CLI: `--json-dump-dir FOLDER` keeps it.
+- **Scan caching (fast repeats).** The first Check Conflicts / Cell Map reads each
+  plugin's JSON once and writes two tiny per-plugin sidecars next to it —
+  `*.keys.json` (record ids, for conflict detection) and `*.cells.json` (cells
+  touched, for the map) — in a single pass, so running both features reads each
+  big JSON only once per run. Every scan after that reads those few-KB sidecars
+  instead of re-parsing the multi-MB JSON, so **repeat Check Conflicts and Cell
+  Map runs are near-instant**. Sidecars are mtime-invalidated per plugin (an
+  edited mod rebuilds only its own), live in the same `tes3conv_json` folder, and
+  follow the same keep/cleanup rule. The on-click field diff still reads the full
+  record on demand, so accuracy is unchanged.
+- The **field comparison** shows list fields (e.g. `references`) as a count;
+  **double-click a field row** to see the full value per plugin, pretty-printed.
+  Your custom mods are flagged with a **★** in the column headers (and shown in
+  **orange** in the double-click popout, vs grey for curated-list plugins), so you
+  can tell at a glance which side of a conflict is yours. The popout has a
+  **Word wrap** toggle for long values.
+- The **Cell map** is written to `cell_map.html` and shown in an in-app window if
+  `pywebview` (best) or `tkinterweb` is installed, otherwise in your browser; the
+  window has **Save HTML** / **Open in browser**.
+
+### Cell map (which mods touch which cells)
+
+Click **Cell Map** (after a Sort) — or pass `--cell-map out.html` — to build a
+self-contained HTML page (a port of
+[modmapper](https://www.nexusmods.com/morrowind/mods/53069)) with three tabs: an
+**exterior-cell SVG heatmap** (uniform squares, brighter/hotter = more mods
+editing that cell; hover for the mod list, click a cell to jump to its list row)
+plus filterable **exterior-** and **interior-cell lists**. Cells your custom mods
+touch get a gold outline, so you can see exactly where your additions land and
+which areas are conflict hotspots. It writes `cell_map.html` and opens it in an
+in-app window (with `pywebview`/`tkinterweb`) or your browser, changes nothing,
+and works with either engine (tes3conv gives the most exact cell identification).
+
+---
+
 ## Command-line usage
 
 ```
@@ -210,8 +359,18 @@ Key flags:
 | `--emit-toml` | Write the corrected `momw-customizations.toml` (the durable fix). |
 | `--write-cfg` | Patch `openmw.cfg` in place instead/also (one-off). |
 | `--sort-data-paths` | Also position `data=` folder inserts. |
+| `--check-conflicts` | Scan active plugins for TES3 record-level conflicts. |
+| `--conflicts-out` | Write the conflict list to a CSV (with `--check-conflicts`). |
+| `--conflicts-subset-only` | Only report conflicts involving your custom mods. |
+| `--tes3conv` | Path to tes3conv (switches to its engine; enables field-level diffs). |
+| `--json-dump-dir` | Keep the per-plugin tes3conv JSON spool in this folder (reused between runs). |
+| `--resource-conflicts` | Scan `data=` folders for loose-file (VFS) conflicts. |
+| `--resources-out` | Write the resource-conflict list to a CSV. |
+| `--exclude` | Glob patterns to skip in conflict/cell-map/resource scans. |
+| `--cell-map` | Write an HTML cell-coverage heatmap (which mods touch which cells). |
 | `--no-predicate-warnings` | Skip `[Conflict]/[Requires]/[Note]` evaluation. |
 | `--no-backup` | Skip timestamped `.bak` copies. |
+| `--trace [LOGFILE]` | Write a debug trace log for troubleshooting (off by default). |
 | `--dry-run` | Print the plan, write nothing. |
 
 A timestamped `.bak` is written before any file is overwritten (unless

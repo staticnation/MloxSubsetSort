@@ -30,7 +30,7 @@ future Configurator rebuilds.
   [modding-openmw.com repo](https://gitlab.com/modding-openmw/modding-openmw.com/-/blob/master/momw/momw/data_seeds/data/plugin-order.yml).
 - `CREDITS.md` — acknowledgements for the projects this tool ports, references,
   and depends on (mlox, plox, tes3conv, modmapper, OpenMW, MOMW, and more).
-- `CHANGELOG.md` — what changed between releases (current: **2.1**).
+- `CHANGELOG.md` — what changed between releases (current: **2.2**).
 
 ---
 
@@ -393,10 +393,26 @@ Parsing and matching are ported from mlox itself and cross-checked against
   fallback when those files aren't reachable. `[MWSE-LUA]` is parsed but treated
   as not-applicable under OpenMW.
 
+Beyond mlox's rule DB, the sort also enforces the two hard load-order rules that
+rules alone don't cover for arbitrary custom mods:
+
+- **Header-master dependencies + interleaving.** Each custom plugin's TES3 header
+  masters are read (from your `data=` folders and the paths added this run), and
+  it's placed **after** every master it declares — and *anchored* right after the
+  mod it extends (its latest non-vanilla master), so a patch/addon interleaves
+  next to its target. Mods that depend only on the vanilla masters have no
+  positioning info and sit at the end. Falls back to rules + ESM-first if the mod
+  files aren't reachable.
+- **ESM-first.** Master-type plugins (`.esm`/`.omwgame`) tie-break before ordinary
+  plugins, so a custom master with no rule floats up into the master block.
+
+Both apply only to your customs; the curated list is never reordered.
+
 Deliberately different from full mlox (by design):
 
-- **Sorting only repositions the subset** — the existing `content=` order is
-  frozen and never reordered.
+- **Sorting only repositions the subset** — the curated (non-custom) `content=`
+  order is frozen and never reordered. Custom mods already in the cfg *are*
+  repositioned (that's the point); only the curated list is held fixed.
 - `[Requires]/[Conflict]/[Note]` are **read-only warnings** — they never change
   the order or block anything. Treat them as a prompt to go check, not gospel.
 - `[NearStart]/[NearEnd]` become ordering chains among the listed plugins, not a

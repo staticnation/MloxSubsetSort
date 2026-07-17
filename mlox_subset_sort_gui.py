@@ -561,6 +561,12 @@ class ReorderPanel:
     HIGHLIGHT = {"background": "#8a0808", "foreground": "#ffe8c2"}
     NORMAL = {"background": DARK["field_bg"], "foreground": DARK["fg"]}
     DISABLED = {"background": DARK["field_bg"], "foreground": "#6a6a6a"}
+    # rows with an active problem (e.g. missing/mis-ordered master): vivid
+    # purple with white text -- the only strong hue not already meaning
+    # something in this app (red = touched by this sort, gold = your mods on
+    # the cell map, navy = selection, grey = disabled, orange = log warnings),
+    # and it pops against all of them
+    ERROR = {"background": "#8e24aa", "foreground": "#ffffff"}
     DISABLE_PREFIX = "✗ "   # "X " marker shown on opted-out rows
 
     def __init__(self, parent, title, reset_label="Reset to Computed Order", listbox_tooltip=None):
@@ -614,6 +620,7 @@ class ReorderPanel:
 
         self._original_order = []
         self._highlight_lower = set()
+        self._error_lower = set()  # rows flagged with an active problem (bright red)
         self._disabled = set()   # real item texts the user has opted out
 
     def load(self, items, highlighted_items=(), disabled_items=()):
@@ -623,9 +630,16 @@ class ReorderPanel:
         any item still present."""
         self._original_order = list(items)
         self._highlight_lower = {str(x).lower() for x in highlighted_items}
+        self._error_lower = set()
         present = set(items)
         self._disabled = {str(d) for d in disabled_items if str(d) in present}
         self._refill(self._original_order)
+
+    def set_errors(self, items):
+        """Flag rows with an active problem (e.g. a missing master) -- they
+        render bright red until the next load()."""
+        self._error_lower = {str(x).lower() for x in (items or ())}
+        self._restyle()
 
     def reset(self):
         self._refill(self._original_order)
@@ -645,12 +659,15 @@ class ReorderPanel:
         self._restyle()
 
     def _restyle(self):
-        """Apply per-row colours: disabled = dim, else highlighted = amber, else
-        normal. Explicit on every row so toggling/dragging stays consistent."""
+        """Apply per-row colours: disabled = dim, else problem rows = bright
+        red, else highlighted, else normal. Explicit on every row so
+        toggling/dragging stays consistent."""
         for i, disp in enumerate(self.listbox.get(0, "end")):
             real = self._strip(disp)
             if real in self._disabled:
                 self.listbox.itemconfig(i, **self.DISABLED)
+            elif real.lower() in self._error_lower:
+                self.listbox.itemconfig(i, **self.ERROR)
             elif real.lower() in self._highlight_lower:
                 self.listbox.itemconfig(i, **self.HIGHLIGHT)
             else:
@@ -730,13 +747,16 @@ class PluginOrderPanel(ReorderPanel):
     def __init__(self, parent):
         super().__init__(
             parent,
-            title="Plugin load order -- drag to override mlox (highlighted = touched by this sort)",
+            title="Plugin load order -- drag to override mlox (red = touched by this sort, "
+                  "purple = master problem)",
             reset_label="Reset to mlox Order",
             listbox_tooltip="The content= load order mlox computed, after '1. Sort'. Drag rows to "
-                             "manually override it before Exporting -- highlighted rows are the ones "
-                             "mlox actually inserted or moved; unhighlighted rows were already in "
-                             "openmw.cfg and left where they were. Select row(s) and click "
-                             "Disable/Enable (or double-click) to opt them out of the load order.",
+                             "manually override it before Exporting -- red rows are the ones "
+                             "mlox actually inserted or moved; PURPLE rows have a missing or "
+                             "mis-ordered master (see the MASTER CHECK section in the log); "
+                             "unhighlighted rows were already in openmw.cfg and left where they "
+                             "were. Select row(s) and click Disable/Enable (or double-click) to "
+                             "opt them out of the load order.",
         )
 
 
@@ -789,6 +809,7 @@ class App:
         self._current_plan = None
         self._scanned_subset_lines = None  # in-memory scan result (when not saved to a file)
         self._tes3conv_override = None     # user-set path to tes3conv (for field-level diffs)
+        self._tes3cmd_override = None      # user-set path to tes3cmd (frontend window)
         self._conf_session = None
         self._conf_paths = {}
         self._session = None               # reused disk-backed Tes3ConvSession
@@ -829,6 +850,7 @@ class App:
             "subset_file": self.subset_file_var.get(), "emit_toml": self.emit_toml_var.get(),
             "list_name": self.list_name_var.get(), "plugin_order_yml": self.plugin_order_yml_var.get(),
             "tes3conv": self._tes3conv_override or "", "exclude": self.exclude_var.get(),
+            "tes3cmd": self._tes3cmd_override or "",
             "rules": [str(p) for p in self.rules_panel.get_paths()],
             "write_toml_inplace": self.write_toml_inplace_var.get(),
             "dry_run": self.dry_run_var.get(), "write_cfg": self.write_cfg_var.get(),
@@ -863,6 +885,8 @@ class App:
                 var.set(d[k])
         if d.get("tes3conv"):
             self._tes3conv_override = d["tes3conv"]
+        if d.get("tes3cmd"):
+            self._tes3cmd_override = d["tes3cmd"]
         for p in (d.get("rules") or []):
             try:
                 self.rules_panel.listbox.insert("end", p)
@@ -1220,9 +1244,19 @@ class App:
                      "(meshes/textures/scripts/...) provided by two or more mod folders. In OpenMW the "
                      "LATER data folder wins, so reorder the data-path panel to change the winner "
                      "(like MO2's Data conflicts). Read-only; can be slow on a big install.")
+        self.tes3cmd_button = ttk.Button(action_row, text="tes3cmd",
+                                          command=self.on_tes3cmd_window)
+        self.tes3cmd_button.grid(row=0, column=5, sticky="w", padx=(8, 0))
+        add_tooltip(self.tes3cmd_button,
+                     "Frontend for tes3cmd (distributed with the MOMW Tools Pack): clean plugins "
+                     "(staged with their masters so tes3cmd sees the full VFS), resync master "
+                     "sizes in-app ([MASTER SIZE] notes), or view headers. Uses the compiled "
+                     "tes3cmd.exe; the pure-perl script also works if perl is installed. "
+                     "Modifying commands keep backups. (No multipatch: OpenMW setups use "
+                     "delta-plugin for merged lists.)")
 
         self.status_var = tk.StringVar(value="Ready.")
-        ttk.Label(action_row, textvariable=self.status_var, foreground=DARK["fg_dim"]).grid(row=0, column=5, sticky="e")
+        ttk.Label(action_row, textvariable=self.status_var, foreground=DARK["fg_dim"]).grid(row=0, column=6, sticky="e")
 
     def _build_log(self, log_container):
         log_container.columnconfigure(0, weight=1)
@@ -1270,9 +1304,12 @@ class App:
         # milder heads-ups and stay orange
         if "[CONFLICT]" in line or "INTERNAL WARNING" in line:
             return "error"
+        # a missing or out-of-order master breaks the game at launch -- red
+        if "[MISSING MASTER]" in line or "[MASTER ORDER]" in line:
+            return "error"
         if any(k in line for k in ("Traceback", "ERROR", "Error:")):
             return "error"
-        if any(k in line for k in ("[REQUIRES]", "[NOTE]", "WARNING:", "NOTE:",
+        if any(k in line for k in ("[REQUIRES]", "[NOTE]", "WARNING:", "NOTE:", "[MASTER SIZE]",
                                     "[REDUNDANT]", "[ORPHAN]", "[NEEDS CLEANING]", "[LIST ORDER]",
                                     # skipped-rule summary (mlox order overridden by the curated cfg)
                                     "ordering rule(s) not applied", "mlox wanted")):
@@ -1488,6 +1525,8 @@ class App:
         final_order = (plan or {}).get("final_order") or []
         self.order_panel.load(final_order, (plan or {}).get("subset") or [],
                               disabled_items=prev_disabled_p)
+        # plugins with a missing / mis-ordered master render bright red
+        self.order_panel.set_errors((plan or {}).get("master_problem_plugins") or [])
 
         data_result = (plan or {}).get("data_result") or []
         data_lines = [line for line, _, _ in data_result]
@@ -1637,7 +1676,7 @@ class App:
         order = self._apply_exclusions(self.order_panel.get_enabled())
         if not order:
             return
-        data_order = self._current_plan.get("data_order") or []
+        dirs = self._plan_scan_dirs()
         subset = self._current_plan.get("subset") or []
         self._keep_json = self.keep_json_var.get()
         self._conf_subset_lower = {str(s).lower() for s in subset}   # your custom mods
@@ -1647,14 +1686,27 @@ class App:
         self.conflicts_button.configure(state="disabled")
         self.status_var.set("Scanning for conflicts...")
         threading.Thread(target=self._conflicts_worker,
-                         args=(order, data_order, subset), daemon=True).start()
+                         args=(order, dirs, subset), daemon=True).start()
 
-    def _conflicts_worker(self, order, data_order, subset):
+    def _plan_scan_dirs(self):
+        """All folders the scans should search for THIS run: the cfg's data=
+        dirs plus the pending custom data paths (scan / customizations TOML)
+        that aren't in the cfg yet -- so Check Conflicts / Cell Map / Resource
+        Conflicts can see your custom mods BEFORE the cfg is written."""
+        plan = self._current_plan or {}
+        dirs = plan.get("scan_dirs")
+        if dirs:
+            return list(dirs)
+        # fallback for an old plan dict: rebuild from its parts
+        return core.all_scan_dirs(plan.get("data_order") or [],
+                                  plan.get("raw_toml_data_inserts"),
+                                  plan.get("data_inserts"))
+
+    def _conflicts_worker(self, order, dirs, subset):
         writer = QueueWriter(self.log_queue)
         conflicts, stats, session = [], {}, None
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
-                dirs = [d for d in (core.extract_data_path_value(l) for l in data_order) if d]
                 index = core.PluginFileIndex(dirs)
                 cfg_dir = str(Path(self.cfg_var.get().strip()).parent) if self.cfg_var.get().strip() else None
                 conv = core.find_tes3conv(explicit=self._tes3conv_override, extra_dirs=[cfg_dir])
@@ -1698,7 +1750,7 @@ class App:
         order = self._apply_exclusions(self.order_panel.get_enabled())
         if not order:
             return
-        data_order = self._current_plan.get("data_order") or []
+        dirs = self._plan_scan_dirs()
         subset = self._current_plan.get("subset") or []
         self._keep_json = self.keep_json_var.get()
         self.worker_running = True
@@ -1706,19 +1758,18 @@ class App:
                   self.cellmap_button, self.resource_button):
             b.configure(state="disabled")
         self.status_var.set("Building cell map...")
-        threading.Thread(target=self._cellmap_worker, args=(order, data_order, subset), daemon=True).start()
+        threading.Thread(target=self._cellmap_worker, args=(order, dirs, subset), daemon=True).start()
 
     def _cellmap_file(self):
         """Stable, user-findable, writable location for the generated map."""
         return app_base_dir() / "cell_map.html"
 
-    def _cellmap_worker(self, order, data_order, subset):
+    def _cellmap_worker(self, order, dirs, subset):
         writer = QueueWriter(self.log_queue)
         path = None
         core.trace(f"cell map: start, {len(order)} plugin(s)")
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
-                dirs = [d for d in (core.extract_data_path_value(l) for l in data_order) if d]
                 index = core.PluginFileIndex(dirs)
                 cfg_dir = str(Path(self.cfg_var.get().strip()).parent) if self.cfg_var.get().strip() else None
                 conv = core.find_tes3conv(explicit=self._tes3conv_override, extra_dirs=[cfg_dir])
@@ -1864,12 +1915,13 @@ class App:
     def on_resource_conflicts(self):
         if self.worker_running or not self._current_plan:
             return
-        data_order = self._current_plan.get("data_order") or []
-        dirs = [d for d in (core.extract_data_path_value(l) for l in data_order) if d]
+        dirs = self._plan_scan_dirs()
         if not dirs:
             self.status_var.set("No data= folders to scan.")
             return
-        subset_dirs = [d.get("value") for d in (self._current_plan.get("data_inserts") or [])]
+        subset_dirs = (self._current_plan.get("custom_data_dirs")
+                       or core.pending_custom_dirs(self._current_plan.get("raw_toml_data_inserts"),
+                                                   self._current_plan.get("data_inserts")))
         self.worker_running = True
         for b in (self.sort_button, self.export_button, self.conflicts_button,
                   self.cellmap_button, self.resource_button):
@@ -1901,6 +1953,433 @@ class App:
             b.configure(state="normal" if self._current_plan else "disabled")
         self.status_var.set(status)
         self._show_resource_window(conflicts, stats)
+
+    # -- tes3cmd frontend ----------------------------------------------------
+
+    T3_COMMANDS = (
+        ("clean",      "clean -- remove junk (dup records, junk cells, evil GMSTs); runs in a "
+                       "staged Data Files with the plugin's masters, so tes3cmd sees the full "
+                       "VFS; skipped if a master can't be found; backup kept"),
+        ("sync",       "resync master sizes -- IN-APP, VFS-aware (fixes [MASTER SIZE] notes; "
+                       "tes3cmd's own sync writes empty sizes on OpenMW multi-folder setups)"),
+        ("header",     "header -- show author / description / masters (read-only)"),
+        # NO multipatch: it needs the ENTIRE load order in one flat Data Files
+        # dir, which can't be faked safely for a multi-GB OpenMW setup -- and
+        # OpenMW/MOMW users get merged leveled lists from delta-plugin instead.
+    )
+    T3_MODIFIES = {"clean", "sync"}
+    # NEVER cleaned, no exceptions: cleaning the vanilla masters -- even a
+    # careful GMST-preserving clean -- rewrites record bytes that other
+    # content depends on byte-for-byte, and causes in-game failures.
+    T3_NEVER_CLEAN = {"morrowind.esm", "tribunal.esm", "bloodmoon.esm"}
+
+    def on_tes3cmd_window(self):
+        win = getattr(self, "_t3_win", None)
+        if win is not None and win.winfo_exists():
+            win.lift()
+            return
+        win = tk.Toplevel(self.root)
+        self._t3_win = win
+        win.title("tes3cmd")
+        win.configure(bg=DARK["bg"])
+        win.geometry("760x520")
+        top = ttk.Frame(win, padding=10)
+        top.pack(fill="both", expand=True)
+        top.columnconfigure(1, weight=1)
+
+        # tes3cmd binary path (auto-detected; MOMW Tools Pack ships tes3cmd.exe)
+        ttk.Label(top, text="tes3cmd:").grid(row=0, column=0, sticky="w")
+        self._t3_path_var = tk.StringVar(value=self._tes3cmd_override or "")
+        ent = ttk.Entry(top, textvariable=self._t3_path_var)
+        ent.grid(row=0, column=1, sticky="ew", padx=6)
+        add_tooltip(ent, "Path to tes3cmd. Leave empty to auto-detect (PATH, next to this app, "
+                         "next to openmw.cfg). End users normally have the compiled tes3cmd.exe "
+                         "from the MOMW Tools Pack; the pure-perl script works too if perl is "
+                         "installed.")
+
+        def _browse():
+            p = filedialog.askopenfilename(
+                title="Locate tes3cmd",
+                filetypes=(("tes3cmd", "tes3cmd*"), ("Executables", "*.exe"), ("All files", "*.*")))
+            if p:
+                self._t3_path_var.set(p)
+        ttk.Button(top, text="Browse...", command=_browse).grid(row=0, column=2, padx=(0, 0))
+
+        detected = core.find_tes3cmd(explicit=None, extra_dirs=[self._cfg_dir()])
+        note = f"auto-detected: {detected}" if detected else \
+            "not found -- install the MOMW Tools Pack or Browse to it"
+        ttk.Label(top, text=note, foreground=DARK["fg_dim"]).grid(
+            row=1, column=1, columnspan=2, sticky="w", padx=6, pady=(2, 6))
+
+        # plugin list
+        lf = ttk.LabelFrame(top, text="Plugins to run on")
+        lf.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=(4, 6))
+        top.rowconfigure(2, weight=1)
+        lf.columnconfigure(0, weight=1)
+        lf.rowconfigure(0, weight=1)
+        self._t3_list = tk.Listbox(lf, selectmode="extended", exportselection=False,
+                                   activestyle="dotbox")
+        style_plain_widget(self._t3_list)
+        self._t3_list.grid(row=0, column=0, sticky="nsew", padx=(8, 0), pady=8)
+        sc = ttk.Scrollbar(lf, orient="vertical", command=self._t3_list.yview)
+        sc.grid(row=0, column=1, sticky="ns", pady=8)
+        self._t3_list.configure(yscrollcommand=sc.set)
+        self._t3_files = []   # full paths, parallel to listbox rows
+
+        btns = ttk.Frame(lf)
+        btns.grid(row=0, column=2, sticky="n", padx=8, pady=8)
+        b1 = ttk.Button(btns, text="My mods (last sort)", command=self._t3_add_from_plan)
+        b1.pack(fill="x", pady=2)
+        add_tooltip(b1, "Add every custom mod from the last Sort whose file could be located "
+                        "(curated plugins are the list's job, not yours).")
+        b1b = ttk.Button(btns, text="MOMW needs-cleaning", command=self._t3_add_needs_cleaning)
+        b1b.pack(fill="x", pady=2)
+        add_tooltip(b1b, "Add every ACTIVE plugin that plugin-order.yml flags as "
+                         "needs_cleaning (MOMW's own 'clean this one' list), resolved across "
+                         "the data folders. Requires the plugin-order.yml path on the main tab.")
+        b2 = ttk.Button(btns, text="Add file(s)...", command=self._t3_add_files)
+        b2.pack(fill="x", pady=2)
+        b3 = ttk.Button(btns, text="Remove selected",
+                        command=lambda: self._t3_remove_selected())
+        b3.pack(fill="x", pady=2)
+        b4 = ttk.Button(btns, text="Clear", command=lambda: self._t3_set_files([]))
+        b4.pack(fill="x", pady=2)
+
+        # command choice
+        cf = ttk.LabelFrame(top, text="Command")
+        cf.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(0, 6))
+        self._t3_cmd_var = tk.StringVar(value="sync")
+        for i, (val, label) in enumerate(self.T3_COMMANDS):
+            ttk.Radiobutton(cf, text=label, value=val, variable=self._t3_cmd_var)\
+                .grid(row=i, column=0, sticky="w", padx=8, pady=1)
+        xf = ttk.Frame(cf)
+        xf.grid(row=len(self.T3_COMMANDS), column=0, sticky="ew", padx=8, pady=(4, 6))
+        ttk.Label(xf, text="extra arguments:").pack(side="left")
+        self._t3_extra_var = tk.StringVar()
+        xent = ttk.Entry(xf, textvariable=self._t3_extra_var, width=48)
+        xent.pack(side="left", padx=6, fill="x", expand=True)
+        add_tooltip(xent, "Optional extra tes3cmd switches, e.g. --instances for clean, "
+                          "--author/--description for header. Passed through verbatim.")
+
+        row = ttk.Frame(top)
+        row.grid(row=4, column=0, columnspan=3, sticky="ew")
+        self._t3_run_btn = ttk.Button(row, text="Run", command=self._t3_run)
+        self._t3_run_btn.pack(side="left")
+        add_tooltip(self._t3_run_btn, "Output streams to the main Log. Modifying commands ask "
+                                      "for confirmation first; tes3cmd makes its own backups.")
+        ttk.Button(row, text="Close", command=win.destroy).pack(side="right")
+
+    def _cfg_dir(self):
+        c = self.cfg_var.get().strip()
+        return str(Path(c).parent) if c else None
+
+    def _t3_set_files(self, paths):
+        self._t3_files = list(paths)
+        self._t3_list.delete(0, "end")
+        for p in self._t3_files:
+            self._t3_list.insert("end", f"{Path(p).name}    ({Path(p).parent})")
+
+    def _t3_remove_selected(self):
+        keep = [p for i, p in enumerate(self._t3_files)
+                if i not in set(self._t3_list.curselection())]
+        self._t3_set_files(keep)
+
+    def _t3_add_from_plan(self):
+        plan = self._current_plan or {}
+        subset = plan.get("subset") or []
+        if not subset:
+            self.status_var.set("Run '1. Sort' first so I know which mods are yours.")
+            return
+        index = core.PluginFileIndex(self._plan_scan_dirs())
+        found, missing = [], 0
+        have = {str(p).lower() for p in self._t3_files}
+        for n in subset:
+            if str(n).lower().endswith(".omwscripts"):
+                continue          # not a TES3 file; nothing for tes3cmd to do
+            p = index.find(n)
+            if p is None:
+                missing += 1
+            elif str(p).lower() not in have:
+                found.append(str(p))
+        self._t3_set_files(self._t3_files + found)
+        msg = f"tes3cmd: added {len(found)} of your mods"
+        if missing:
+            msg += f" ({missing} file(s) not found in the data folders)"
+        self.status_var.set(msg + ".")
+
+    def _t3_add_needs_cleaning(self):
+        """Add active plugins that MOMW's plugin-order.yml flags needs_cleaning."""
+        yml = self.plugin_order_yml_var.get().strip()
+        if not yml:
+            self.status_var.set("Set the plugin-order.yml path on the main tab first.")
+            return
+        try:
+            entries = core.parse_plugin_order_yml(Path(yml))
+            nc = core.needs_cleaning_set(entries)
+        except Exception as e:
+            self.status_var.set(f"Couldn't read plugin-order.yml: {e}")
+            return
+        plan = self._current_plan or {}
+        active = plan.get("final_order") or plan.get("base_order_names") or []
+        if not active:
+            self.status_var.set("Run '1. Sort' first so I know the active load order.")
+            return
+        index = core.PluginFileIndex(self._plan_scan_dirs())
+        have = {str(p).lower() for p in self._t3_files}
+        found, unfound = [], 0
+        for n in active:
+            if n.lower() not in nc or n.lower() in self.T3_NEVER_CLEAN:
+                continue
+            p = index.find(n)
+            if p is None:
+                unfound += 1
+            elif str(p).lower() not in have:
+                found.append(str(p))
+        self._t3_set_files(self._t3_files + found)
+        msg = f"tes3cmd: added {len(found)} needs-cleaning plugin(s)"
+        if unfound:
+            msg += f" ({unfound} not found in the data folders)"
+        self.status_var.set(msg + ".")
+
+    def _t3_add_files(self):
+        ps = filedialog.askopenfilenames(
+            title="Choose plugin file(s)",
+            filetypes=(("TES3 plugins", "*.esp *.esm *.omwaddon *.omwgame"), ("All files", "*.*")))
+        if ps:
+            have = {str(p).lower() for p in self._t3_files}
+            self._t3_set_files(self._t3_files + [p for p in ps if str(p).lower() not in have])
+
+    def _t3_run(self):
+        if self.worker_running:
+            return
+        cmd = self._t3_cmd_var.get()
+        extra = self._t3_extra_var.get().split()
+        files = list(self._t3_files)
+
+        # "sync" runs entirely in-app (VFS-aware) -- tes3cmd not needed, and
+        # its own --synchronize writes EMPTY master sizes when the masters
+        # aren't in the plugin's folder (OpenMW multi-folder layouts).
+        if cmd == "sync":
+            if not files:
+                messagebox.showinfo("tes3cmd", "Add at least one plugin file first.",
+                                    parent=self._t3_win)
+                return
+            if not messagebox.askyesno(
+                    "Resync master sizes",
+                    f"Rewrite the recorded master sizes in {len(files)} plugin file(s) to "
+                    f"match the installed masters?\n\nOnly the 8-byte size fields change; a "
+                    f"one-time .masterfix.bak copy of each file is kept.",
+                    parent=self._t3_win):
+                return
+            self.worker_running = True
+            self._t3_run_btn.configure(state="disabled")
+            self.sort_button.configure(state="disabled")
+            self.status_var.set("Resyncing master sizes...")
+            threading.Thread(target=self._t3_sync_worker, args=(files,), daemon=True).start()
+            return
+
+        # A manually-entered path must WIN or fail loudly -- never silently
+        # fall back to some other tes3cmd found on the system.
+        explicit = self._t3_path_var.get().strip() or None
+        if explicit:
+            if not Path(explicit).is_file():
+                messagebox.showerror("tes3cmd", f"'{explicit}' does not exist. Fix the path "
+                                                f"or clear it to auto-detect.", parent=self._t3_win)
+                return
+            exe = explicit
+        else:
+            exe = core.find_tes3cmd(extra_dirs=[self._cfg_dir()])
+        if not exe:
+            messagebox.showerror("tes3cmd", "tes3cmd not found. Browse to the compiled "
+                                            "tes3cmd.exe (MOMW Tools Pack).", parent=self._t3_win)
+            return
+        argv, err = core.tes3cmd_invocation(exe)
+        if err:
+            messagebox.showerror("tes3cmd", err, parent=self._t3_win)
+            return
+        self._tes3cmd_override = explicit  # persist a manual path in settings
+        if not files:
+            messagebox.showinfo("tes3cmd", "Add at least one plugin file first.", parent=self._t3_win)
+            return
+        if cmd == "clean":
+            guarded = [f for f in files if Path(f).name.lower() in self.T3_NEVER_CLEAN]
+            if guarded:
+                files = [f for f in files if Path(f).name.lower() not in self.T3_NEVER_CLEAN]
+                messagebox.showwarning(
+                    "tes3cmd",
+                    "Skipping the vanilla master(s):\n\n  " +
+                    "\n  ".join(Path(f).name for f in guarded) +
+                    "\n\nMorrowind.esm, Tribunal.esm and Bloodmoon.esm are never cleaned -- "
+                    "even a careful GMST-preserving clean rewrites bytes that other content "
+                    "depends on and causes in-game failures.",
+                    parent=self._t3_win)
+                if not files:
+                    return
+            # masters before dependents: cleaning changes the master a
+            # dependent is compared against, so sequence by the sorted load
+            # order (fallback: masters first, then name)
+            order = {n.lower(): i for i, n in
+                     enumerate((self._current_plan or {}).get("final_order") or [])}
+            files.sort(key=lambda f: (order.get(Path(f).name.lower(), 1 << 30),
+                                      not Path(f).name.lower().endswith((".esm", ".omwgame")),
+                                      Path(f).name.lower()))
+            if not messagebox.askyesno(
+                    "tes3cmd clean",
+                    f"Clean {len(files)} plugin file(s)?\n\nEach is staged into a private "
+                    f"'Data Files' with its masters so tes3cmd sees the full VFS; plugins "
+                    f"whose masters can't be found are skipped. A one-time .preclean.bak "
+                    f"copy of each modified file is kept.", parent=self._t3_win):
+                return
+        self.worker_running = True
+        self._t3_run_btn.configure(state="disabled")
+        self.sort_button.configure(state="disabled")
+        self.status_var.set(f"tes3cmd {cmd} running...")
+        threading.Thread(target=self._t3_worker, args=(argv, cmd, extra, files),
+                         daemon=True).start()
+
+    def _t3_staging_dir(self):
+        """Persistent staging root (next to the app, like the tes3conv dump):
+        hardlinked/copied masters are reused across runs, so staging a plugin
+        costs almost nothing after the first time."""
+        return app_base_dir() / "tes3cmd_staging"
+
+    def _t3_worker(self, argv, cmd, extra, files):
+        import subprocess
+        writer = QueueWriter(self.log_queue)
+        ok = fail = skipped = changed = 0
+        # clean: --replace makes tes3cmd overwrite its input (we work on a
+        # staged COPY and copy back ourselves); --hide-backups keeps its own
+        # backup clutter inside the disposable staging dir
+        sub = {"clean": ["clean", "--replace", "--hide-backups"], "header": ["header"]}[cmd]
+
+        def _run_t3(args, cwd):
+            env = dict(os.environ)
+            env["PWD"] = str(cwd)   # tes3cmd trusts $PWD over getcwd when set
+            return subprocess.run(args, capture_output=True, text=True, errors="replace",
+                                  timeout=900, cwd=str(cwd), env=env,
+                                  **core._no_window_kwargs())
+        try:
+            with redirect_stdout(writer), redirect_stderr(writer):
+                print("\n" + "=" * 70)
+                print(f" TES3CMD {' '.join(sub).upper()}" +
+                      (" (staged, VFS-aware)" if cmd == "clean" else ""))
+                print("=" * 70)
+                print(f"  Engine: {' '.join(argv)}")
+                index = None
+                staging = None
+                if cmd == "clean":
+                    dirs = self._plan_scan_dirs()
+                    dirs += [str(Path(f).parent) for f in files]
+                    index = core.PluginFileIndex(list(dict.fromkeys(dirs)))
+                    staging = self._t3_staging_dir()
+                    print(f"  Staging dir: {staging}")
+                for f in files:
+                    name = Path(f).name
+                    print(f"\n--- {' '.join(sub)}: {f}")
+                    try:
+                        if cmd == "header":
+                            r = _run_t3(argv + sub + extra + [name], Path(f).parent)
+                            print(((r.stdout or "") + (("\n" + r.stderr) if r.stderr else "")).strip()
+                                  or "(no output)")
+                            ok += 1 if r.returncode == 0 else 0
+                            fail += 0 if r.returncode == 0 else 1
+                            continue
+                        # clean: stage plugin + masters, run there, copy back
+                        staged, missing = core.stage_for_tes3cmd(staging, f, index)
+                        if missing:
+                            skipped += 1
+                            print(f"  SKIPPED: master(s) not found in any data folder: "
+                                  f"{', '.join(missing)} -- cleaning without the masters "
+                                  f"present gives wrong results.")
+                            continue
+                        before = staged.read_bytes()
+                        r = _run_t3(argv + sub + extra + [staged.name], staged.parent)
+                        print(((r.stdout or "") + (("\n" + r.stderr) if r.stderr else "")).strip()
+                              or "(no output)")
+                        if r.returncode != 0:
+                            fail += 1
+                            print(f"  (exit code {r.returncode}) -- original NOT touched")
+                            continue
+                        after = staged.read_bytes()
+                        if after == before:
+                            ok += 1
+                            print("  no changes -- already clean")
+                            continue
+                        # copy the cleaned result back over the original,
+                        # keeping a one-time backup of the original
+                        import shutil as _sh
+                        bak = Path(f).with_name(name + ".preclean.bak")
+                        if not bak.exists():
+                            _sh.copy2(f, bak)
+                        Path(f).write_bytes(after)
+                        ok += 1
+                        changed += 1
+                        print(f"  cleaned: {len(before)} -> {len(after)} bytes "
+                              f"(backup: {bak.name})")
+                    except Exception as e:
+                        fail += 1
+                        print(f"  ERROR: {e}")
+            if cmd == "clean":
+                status = (f"tes3cmd clean: {changed} cleaned, {ok - changed} already clean, "
+                          f"{skipped} skipped (missing masters), {fail} failed.")
+                if changed:
+                    status += "  Re-run '1. Sort' to refresh checks."
+            else:
+                status = f"tes3cmd {cmd}: {ok} ok, {fail} failed. See the log."
+        except Exception:
+            writer.write("\nERROR: tes3cmd run failed:\n" + traceback.format_exc())
+            status = "tes3cmd run failed -- see log."
+        finally:
+            self.root.after(0, self._t3_finished, status)
+
+    def _t3_sync_worker(self, files):
+        """In-app master-size resync (see core.sync_plugin_master_sizes)."""
+        writer = QueueWriter(self.log_queue)
+        ok = fixed = fail = 0
+        try:
+            with redirect_stdout(writer), redirect_stderr(writer):
+                print("\n" + "=" * 70)
+                print(" MASTER-SIZE RESYNC (in-app, VFS-aware)")
+                print("=" * 70)
+                dirs = self._plan_scan_dirs()
+                extra = [str(Path(f).parent) for f in files]
+                index = core.PluginFileIndex(list(dict.fromkeys(dirs + extra)))
+                for f in files:
+                    name = Path(f).name
+                    updated, unresolved, err = core.sync_plugin_master_sizes(f, index)
+                    if err:
+                        fail += 1
+                        print(f"  {name}: ERROR: {err}")
+                        continue
+                    ok += 1
+                    if updated:
+                        fixed += 1
+                        for m, old, new in updated:
+                            print(f"  {name}: '{m}' {old} -> {new}")
+                    else:
+                        print(f"  {name}: already in sync")
+                    for m in unresolved:
+                        print(f"  {name}: WARNING: master '{m}' not found in any data "
+                              f"folder -- its size field left untouched")
+            status = (f"Resync: {fixed} plugin(s) updated, {ok - fixed} already in sync, "
+                      f"{fail} error(s).")
+            if fixed:
+                status += "  Re-run '1. Sort' to refresh the master check."
+        except Exception:
+            writer.write("\nERROR: resync failed:\n" + traceback.format_exc())
+            status = "Resync failed -- see log."
+        finally:
+            self.root.after(0, self._t3_finished, status)
+
+    def _t3_finished(self, status):
+        self.worker_running = False
+        self.sort_button.configure(state="normal")
+        try:
+            if self._t3_win and self._t3_win.winfo_exists():
+                self._t3_run_btn.configure(state="normal")
+        except Exception:
+            pass
+        self.status_var.set(status)
 
     def _show_resource_window(self, conflicts, stats):
         self._all_res = conflicts

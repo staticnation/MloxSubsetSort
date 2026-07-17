@@ -123,21 +123,78 @@ PLUGIN_EXTS = (".esp", ".esm", ".omwaddon", ".omwgame", ".omwscripts")
 # operation OOMs/hangs and the process dies, the last steps are still on disk.
 # Off unless set_trace_file() is called (the GUI turns it on at startup).
 _TRACE_PATH = None
+_TRACE_FH = None
+# The sort engine's play-by-play is very chatty and unrelated to the cell-map /
+# tes3conv traces, so it gets its OWN file (next to the main trace), truncated at
+# the start of each sort -- so a sort log is small, self-contained, and readable.
+_SORT_TRACE_PATH = None
+_SORT_TRACE_FH = None
 
 
 def set_trace_file(path):
-    global _TRACE_PATH
+    global _TRACE_PATH, _TRACE_FH
+    if _TRACE_FH is not None:
+        try:
+            _TRACE_FH.close()
+        except Exception:
+            pass
+        _TRACE_FH = None
     _TRACE_PATH = str(path) if path else None
     if _TRACE_PATH:
+        try:
+            # truncate per session so the log doesn't grow unbounded across runs
+            _TRACE_FH = open(_TRACE_PATH, "w", encoding="utf-8")
+        except OSError:
+            _TRACE_FH = None
         trace("=== trace start ===")
 
 
 def trace(msg):
+    # Keeps the file handle OPEN (reopening per call crawled once the sort engine
+    # started logging thousands of steps). Still flushes each line, so a crash/OOM
+    # leaves the last steps on disk.
+    global _TRACE_FH
     if not _TRACE_PATH:
         return
     try:
-        with open(_TRACE_PATH, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  {msg}\n")
+        if _TRACE_FH is None:
+            _TRACE_FH = open(_TRACE_PATH, "a", encoding="utf-8")
+        _TRACE_FH.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  {msg}\n")
+        _TRACE_FH.flush()
+    except OSError:
+        pass
+
+
+def sort_trace_begin():
+    """Open a FRESH (truncated) sort-trace file next to the main trace. Call once
+    at the start of a sort so its steps aren't mixed with map/tes3conv traces and
+    don't pile up across runs. No-op unless --trace is on."""
+    global _SORT_TRACE_PATH, _SORT_TRACE_FH
+    if _SORT_TRACE_FH is not None:
+        try:
+            _SORT_TRACE_FH.close()
+        except Exception:
+            pass
+        _SORT_TRACE_FH = None
+    if not _TRACE_PATH:
+        _SORT_TRACE_PATH = None
+        return
+    _SORT_TRACE_PATH = str(Path(_TRACE_PATH).with_name("mlox_subset_sort_sort_trace.log"))
+    try:
+        _SORT_TRACE_FH = open(_SORT_TRACE_PATH, "w", encoding="utf-8")
+    except OSError:
+        _SORT_TRACE_FH = None
+    trace(f"[sort] full sort play-by-play -> {_SORT_TRACE_PATH}")   # pointer in the MAIN log
+
+
+def trace_sort(msg):
+    """Write one line to the dedicated sort-trace file (see sort_trace_begin)."""
+    global _SORT_TRACE_FH
+    if not _TRACE_PATH or _SORT_TRACE_FH is None:
+        return
+    try:
+        _SORT_TRACE_FH.write(f"{datetime.now().strftime('%H:%M:%S')}  {msg}\n")
+        _SORT_TRACE_FH.flush()
     except OSError:
         pass
 
@@ -204,7 +261,9 @@ _re_filename_version = re.compile(r'\D%s\D*\.es[mp]' % _MLOX_VER, re.IGNORECASE)
 _re_header_version = re.compile(r'\b(?:version\b\D+|v(?:er)?\.?\s*)%s' % _MLOX_VER, re.IGNORECASE)
 # atomic function forms, matched against a single token produced by the tokenizer
 _re_ver_fun = re.compile(r'^\[\s*VER\s*([=<>])\s*%s\s*([^\]]+?)\s*\]$' % _MLOX_VER, re.IGNORECASE)
-_re_size_fun = re.compile(r'^\[\s*SIZE\s*(!?)(\d+)\s+(\S.*?\.es[mp]\b)\s*\]$', re.IGNORECASE)
+_re_size_fun = re.compile(
+    r'^\[\s*SIZE\s*(!?)(\d+)\s+(\S.*?\.(?:es[mp]|omwaddon|omwgame|omwscripts)\b)\s*\]$',
+    re.IGNORECASE)
 _re_desc_fun = re.compile(r'^\[\s*DESC\s*(!?)/([^/]+)/\s+([^\]]+?)\s*\]$', re.IGNORECASE)
 _re_mwselua_fun = re.compile(r'^\[\s*MWSE-LUA\s*(!?)/([^/]+)/\s+([^\]]+?)\s*\]$', re.IGNORECASE)
 
@@ -284,6 +343,211 @@ def _read_plugin_description(path) -> str:
         raw = block[64:end] if end != -1 else block[64:]
         return raw.decode("latin-1", "replace")
     return ""
+
+
+def read_plugin_masters(path):
+    """The master files a plugin depends on, from its TES3 header (the MAST
+    subrecords). These are the ground-truth load-order dependencies: a plugin
+    must load AFTER every master it lists. Returns [] for non-TES3 files
+    (.omwscripts) or any read problem. Works for .esm/.esp/.omwaddon/.omwgame."""
+    try:
+        with open(path, "rb") as fh:
+            if fh.read(4) != b"TES3":
+                return []
+            data_size = struct.unpack("<I", fh.read(4))[0]
+            fh.read(8)                                  # header1 + flags
+            data = fh.read(min(data_size, 1 << 20))     # header is tiny; cap defensively
+    except (OSError, struct.error):
+        return []
+    masters, i = [], 0
+    while i + 8 <= len(data):
+        tag = data[i:i + 4]
+        sz = struct.unpack_from("<I", data, i + 4)[0]
+        i += 8
+        chunk = data[i:i + sz]
+        i += sz
+        if tag == b"MAST":
+            nm = chunk.split(b"\x00", 1)[0].decode("latin-1", "replace").strip()
+            if nm:
+                masters.append(nm)
+    return masters
+
+
+def read_plugin_masters_with_sizes(path):
+    """Like read_plugin_masters, but returns [(master_name, recorded_size)] --
+    each MAST subrecord is (per the TES3 format) immediately followed by a DATA
+    subrecord holding the master's file size (8 bytes) at the time the plugin
+    was saved. tes3cmd uses the same pairing for its master-sync check.
+    recorded_size is None when the DATA subrecord is absent/malformed."""
+    try:
+        with open(path, "rb") as fh:
+            if fh.read(4) != b"TES3":
+                return []
+            data_size = struct.unpack("<I", fh.read(4))[0]
+            fh.read(8)                                  # header1 + flags
+            data = fh.read(min(data_size, 1 << 20))
+    except (OSError, struct.error):
+        return []
+    out, i = [], 0
+    pending = None  # last MAST name waiting for its DATA size
+    while i + 8 <= len(data):
+        tag = data[i:i + 4]
+        sz = struct.unpack_from("<I", data, i + 4)[0]
+        i += 8
+        chunk = data[i:i + sz]
+        i += sz
+        if tag == b"MAST":
+            if pending is not None:
+                out.append((pending, None))
+            nm = chunk.split(b"\x00", 1)[0].decode("latin-1", "replace").strip()
+            pending = nm or None
+        elif tag == b"DATA" and pending is not None:
+            size = struct.unpack_from("<Q", chunk, 0)[0] if len(chunk) >= 8 else None
+            out.append((pending, size))
+            pending = None
+    if pending is not None:
+        out.append((pending, None))
+    return out
+
+
+def sync_plugin_master_sizes(path, index, make_backup=True):
+    """VFS-aware replacement for `tes3cmd header --synchronize`: fix the
+    master sizes recorded in a plugin's TES3 header (the DATA subrecord after
+    each MAST) to match the installed masters.
+
+    Why not tes3cmd: it assumes a single flat 'Data Files' directory. In an
+    OpenMW multi-folder layout the masters usually aren't next to the plugin,
+    so tes3cmd resolves them to nothing and writes EMPTY sizes into the
+    header (observed in the wild -- 'Synchronized ... length: 79837557 --> ').
+    This resolves each master across ALL data folders via the index and
+    rewrites only the 8-byte size fields; nothing else in the file changes.
+
+    Returns (updated, unresolved, error):
+      updated    -- [(master, old_size, new_size)] fields actually rewritten
+      unresolved -- masters whose file couldn't be found (left untouched)
+      error      -- message if the file isn't a TES3 plugin / can't be read
+    A one-time '<name>.masterfix.bak' copy is made before the first write."""
+    p = Path(path)
+    try:
+        raw = bytearray(p.read_bytes())
+    except OSError as e:
+        return [], [], f"can't read: {e}"
+    if raw[:4] != b"TES3":
+        return [], [], "not a TES3 plugin (no TES3 header)"
+    (data_size,) = struct.unpack_from("<I", raw, 4)
+    end = min(16 + data_size, len(raw))
+    i, updated, unresolved = 16, [], []
+    pending = None   # master name waiting for its DATA size field
+    while i + 8 <= end:
+        tag = bytes(raw[i:i + 4])
+        (sz,) = struct.unpack_from("<I", raw, i + 4)
+        off = i + 8
+        if off + sz > end:
+            break
+        if tag == b"MAST":
+            pending = raw[off:off + sz].split(b"\x00", 1)[0].decode("latin-1", "replace").strip()
+        elif tag == b"DATA" and pending:
+            if sz >= 8:
+                mpath = index.find(pending) if index else None
+                if mpath is None:
+                    unresolved.append(pending)
+                else:
+                    try:
+                        actual = mpath.stat().st_size
+                    except OSError:
+                        actual = None
+                    (old,) = struct.unpack_from("<Q", raw, off)
+                    if actual is not None and old != actual:
+                        struct.pack_into("<Q", raw, off, actual)
+                        updated.append((pending, old, actual))
+            pending = None
+        i = off + sz
+    if updated:
+        if make_backup:
+            import shutil as _sh
+            bak = p.with_name(p.name + ".masterfix.bak")
+            if not bak.exists():
+                try:
+                    _sh.copy2(p, bak)
+                except OSError as e:
+                    return [], unresolved, f"couldn't write backup ({e}) -- plugin NOT modified"
+        try:
+            p.write_bytes(bytes(raw))
+        except OSError as e:
+            return [], unresolved, f"couldn't write plugin: {e}"
+    return updated, unresolved, None
+
+
+def check_missing_masters(active_order, index, subset_origins=None):
+    """Verify every active plugin's TES3 header masters against the load order.
+
+    Returns (missing, order_problems, size_notes, checked):
+      missing        -- '[MISSING MASTER]' warnings: a required master is not in
+                        the load order. Distinguishes 'installed but not
+                        enabled' from 'not found in any data folder' (the
+                        latter fails hard at game launch).
+      order_problems -- '[MASTER ORDER]' warnings: the master is active but
+                        loads AFTER its dependent.
+      size_notes     -- '[MASTER SIZE]' notes (tes3cmd-style sync check): the
+                        installed master's size differs from the size recorded
+                        in the plugin's header -- the plugin was made against a
+                        different version of that master. Usually benign.
+      checked        -- how many plugin files were actually readable/checked
+                        (0 means the mod files aren't reachable; nothing to say).
+      problem_names  -- the plugin names behind `missing`/`order_problems`,
+                        for UI highlighting.
+    """
+    origins = subset_origins or {}
+    pos = {p.lower(): i for i, p in enumerate(active_order)}
+    missing, order_problems, size_notes = [], [], []
+    problem_names = set()
+    checked = 0
+    for p in active_order:
+        path = index.find(p) if index else None
+        if path is None:
+            continue
+        pairs = read_plugin_masters_with_sizes(path)
+        if not pairs and not str(p).lower().endswith((".esp", ".esm", ".omwaddon", ".omwgame")):
+            continue
+        checked += 1
+        origin = origins.get(p.lower())
+        tag = f" [{origin}]" if origin else ""
+        for m, rec_size in pairs:
+            ml = m.lower()
+            if ml not in pos:
+                mpath = index.find(m) if index else None
+                if mpath is None:
+                    missing.append(
+                        f"[MISSING MASTER] '{p}'{tag} requires '{m}' -- NOT FOUND in any data "
+                        f"folder. The game will fail to load with this plugin enabled.")
+                else:
+                    missing.append(
+                        f"[MISSING MASTER] '{p}'{tag} requires '{m}' -- installed but not in "
+                        f"the load order. Enable/add it (it must load before '{p}').")
+                problem_names.add(p)
+                continue
+            if pos[ml] > pos[p.lower()]:
+                order_problems.append(
+                    f"[MASTER ORDER] '{p}'{tag} loads BEFORE its master '{m}' -- "
+                    f"'{m}' must come first.")
+                problem_names.add(p)
+            if rec_size is not None:   # 0 counts: a failed tes3cmd sync zeroes these
+                mpath = index.find(m) if index else None
+                if mpath is not None:
+                    try:
+                        actual = mpath.stat().st_size
+                    except OSError:
+                        actual = None
+                    if actual is not None and actual != rec_size:
+                        hint = ("header records 0 bytes -- likely damaged by a tes3cmd "
+                                "sync that couldn't find the master"
+                                if rec_size == 0 else
+                                "made against a different version of the master (usually fine)")
+                        size_notes.append(
+                            f"[MASTER SIZE] '{p}'{tag}: header says '{m}' was {rec_size} bytes, "
+                            f"installed copy is {actual} -- {hint}. The tes3cmd window's "
+                            f"in-app resync fixes this.")
+    return missing, order_problems, size_notes, checked, problem_names
 
 
 def _plugin_version(plugin_name: str, index: "PluginFileIndex"):
@@ -488,6 +752,140 @@ def find_tes3conv(explicit=None, extra_dirs=None):
         except OSError:
             continue
     return None
+
+
+def find_tes3cmd(explicit=None, extra_dirs=None):
+    """Locate tes3cmd. Prefers the compiled executable (tes3cmd.exe -- what the
+    MOMW Tools Pack distributes and what end users will normally have); the
+    pure-perl 'tes3cmd' script is also accepted (it then needs a perl on PATH;
+    see tes3cmd_invocation). Order: explicit path, $MLOX_TES3CMD, PATH, then
+    alongside this script / any extra dirs given. Returns a path or None."""
+    import shutil
+    names = ["tes3cmd.exe", "tes3cmd.bat", "tes3cmd"]   # compiled build first
+    cands = []
+    if explicit:
+        cands.append(str(explicit))
+    env = os.environ.get("MLOX_TES3CMD")
+    if env:
+        cands.append(env)
+    for nm in names:
+        found = shutil.which(nm)
+        if found:
+            cands.append(found)
+    search_dirs = [Path(__file__).resolve().parent]
+    for d in (extra_dirs or []):
+        if d:
+            search_dirs.append(Path(d))
+    for d in search_dirs:
+        for nm in names:
+            cands.append(str(d / nm))
+    for c in cands:
+        try:
+            if c and Path(c).is_file():
+                return c
+        except OSError:
+            continue
+    return None
+
+
+def tes3cmd_invocation(path):
+    """argv prefix to run the given tes3cmd, or (None, why-not).
+
+    The compiled tes3cmd.exe (MOMW Tools Pack) runs directly. If the path is
+    the pure-perl script instead, it's run through a perl interpreter from
+    PATH -- with a clear error if there isn't one, since end users normally
+    have the compiled build and shouldn't need perl."""
+    import shutil
+    p = Path(path)
+    if p.suffix.lower() in (".exe", ".bat", ".cmd"):
+        return [str(p)], None
+    try:
+        head = p.open("rb").read(256)
+    except OSError as e:
+        return None, f"can't read '{p}': {e}"
+    if head.startswith(b"#!") or b"perl" in head.lower():
+        perl = shutil.which("perl")
+        if not perl:
+            return None, (f"'{p.name}' is the pure-perl tes3cmd but no perl interpreter was found "
+                          f"on PATH. Point this at the compiled tes3cmd.exe from the MOMW Tools "
+                          f"Pack instead (or install perl).")
+        return [perl, str(p)], None
+    return [str(p)], None
+
+
+def stage_for_tes3cmd(staging_root, plugin_path, index, quiet=False):
+    """Build/refresh a minimal vanilla-Morrowind layout so tes3cmd can work on
+    ONE plugin from an OpenMW multi-folder setup.
+
+    tes3cmd walks up from its cwd until it finds a directory holding BOTH a
+    'Morrowind.ini' and a 'Data Files' folder; masters are then resolved
+    inside that single Data Files dir. OpenMW's VFS spreads mods over many
+    folders, so run against a mod folder directly tes3cmd can't see the
+    masters -- clean silently degrades and header --synchronize corrupts.
+
+    This creates:  <staging_root>/Morrowind.ini      minimal [Game Files]
+                   <staging_root>/Data Files/        masters + the plugin
+    Masters are HARDLINKED when possible (same volume; read-only use, and a
+    hardlink shares the original's timestamp) with copy fallback, and reused
+    across runs when size+mtime still match -- so the 100MB+ masters aren't
+    recopied per plugin. The target plugin is always a fresh private COPY
+    (tes3cmd rewrites it; the original is never touched here).
+
+    Returns (staged_plugin_path, missing_masters). A non-empty
+    missing_masters means the caller should SKIP cleaning this plugin --
+    tes3cmd compares records against the masters, and cleaning without them
+    gives wrong results (the classic batch files refuse too).
+    """
+    import shutil as _sh
+    root = Path(staging_root)
+    df = root / "Data Files"
+    df.mkdir(parents=True, exist_ok=True)
+    p = Path(plugin_path)
+    masters = read_plugin_masters(p)
+    staged_names, missing = [], []
+
+    def _ensure(src, allow_link):
+        dest = df / src.name
+        try:
+            if dest.exists():
+                s, d = src.stat(), dest.stat()
+                if d.st_size == s.st_size and int(d.st_mtime) == int(s.st_mtime):
+                    return dest            # cached from a previous run
+                dest.unlink()
+            if allow_link:
+                try:
+                    os.link(src, dest)     # same-volume: instant, no disk cost
+                    return dest
+                except OSError:
+                    pass                   # cross-volume etc. -> copy
+            _sh.copy2(src, dest)
+            return dest
+        except OSError as e:
+            if not quiet:
+                print(f"  WARNING: couldn't stage '{src.name}': {e}")
+            return None
+
+    for m in masters:
+        src = index.find(m) if index else None
+        if src is None:
+            missing.append(m)
+            continue
+        if _ensure(Path(src), allow_link=True) is not None:
+            staged_names.append(Path(src).name)
+        else:
+            missing.append(m)
+
+    staged_plugin = df / p.name
+    if staged_plugin.exists():
+        staged_plugin.unlink()
+    _sh.copy2(p, staged_plugin)            # always a private copy
+    staged_names.append(p.name)
+
+    ini = root / "Morrowind.ini"
+    ini.write_text("[Game Files]\n" +
+                   "".join(f"GameFile{i}={n}\n" for i, n in enumerate(staged_names)),
+                   encoding="latin-1", errors="replace")
+    return staged_plugin, missing
 
 
 def flatten_dict(d, parent_key="", sep="."):
@@ -1284,7 +1682,14 @@ def write_cfg(path: Path, lines, segments, dry_run, no_backup):
 # ---------------------------------------------------------------------------
 
 TOP_KEYWORDS = ("Order", "NearStart", "NearEnd", "Requires", "Conflict", "Patch", "Note", "Version")
-TOP_RE = re.compile(r"\[\s*(" + "|".join(TOP_KEYWORDS) + r")\b[^\]]*\]", re.IGNORECASE)
+# A rule header must sit at the START of a line (mlox: ^\[(order|...) ; plox:
+# line.starts_with("[order")). Matching anywhere in the line -- the old
+# behaviour -- turned mentions like "see the [Order] section" inside a rule's
+# message text into phantom rule starts, silently corrupting block boundaries.
+# The header's optional arguments must stay on the same line, and the closing
+# bracket is required (same as both reference parsers).
+TOP_RE = re.compile(r"^\[(" + "|".join(TOP_KEYWORDS) + r")\b([^\]\n]*)\]",
+                    re.IGNORECASE | re.MULTILINE)
 
 
 def strip_comment(line: str) -> str:
@@ -1294,43 +1699,91 @@ def strip_comment(line: str) -> str:
     return line[:idx] if idx != -1 else line
 
 
+# One plugin name/pattern on an [Order]/[NearStart]/[NearEnd] body line.
+# Follows the reference parsers: a name starts at the first non-space, runs
+# non-greedily to a recognized plugin extension (mlox: `^(\S.*?\.es[mp]\b)`,
+# here extended with the OpenMW extensions like plox), may carry a trailing
+# '*', and must be followed by whitespace or end-of-line. Names routinely
+# contain spaces, '&', '-', parens, wildcards (*, ?) and <VER> -- all pass
+# through untouched. finditer supports plox-style multiple names per line
+# (extension-delimited); trailing junk after a name is dropped like mlox does.
+_RE_ORDER_NAME = re.compile(
+    r"\S[^\n]*?\.(?:esp|esm|omwaddon|omwgame|omwscripts)\*?(?=\s|$)",
+    re.IGNORECASE)
+
+
 def parse_mlox_file(path: Path):
-    """Returns list of blocks: (keyword, [plugin_pattern, ...])"""
-    raw = path.read_text(encoding="utf-8", errors="replace")
+    """Returns list of blocks: (keyword, [plugin_pattern, ...]) for the
+    ordering keywords (order / nearstart / nearend). Keywords are separated --
+    an [Order] body is an ordering CHAIN, while [NearStart]/[NearEnd] bodies
+    are independent position hints; conflating them creates bogus edges."""
+    # utf-8-sig: a BOM would otherwise hide a header on the very first line
+    raw = path.read_text(encoding="utf-8-sig", errors="replace")
     lines = [strip_comment(l) for l in raw.splitlines()]
     text = "\n".join(lines)
 
     matches = list(TOP_RE.finditer(text))
     blocks = []
+    skipped = 0
     for idx, m in enumerate(matches):
         keyword = m.group(1)
         start = m.end()
         end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
         body = text[start:end]
         if keyword.lower() in ("order", "nearstart", "nearend"):
-            # plain list of plugin filenames, one (or more) per line, no brackets expected
-            names = [tok for tok in re.split(r"\s+", body.strip()) if tok and "[" not in tok and "]" not in tok]
+            names = []
+            for ln in body.splitlines():
+                ln = ln.strip()
+                if not ln:
+                    continue
+                if ln.startswith("["):
+                    # conditional/bracketed entry (e.g. "[DESC /.../ Foo.esp]"
+                    # qualifiers that appear in a few mlox_base Order blocks)
+                    # or a malformed header. mlox treats these as phantom
+                    # names that match nothing, so the ordering chain simply
+                    # bridges over them -- which is what skipping does here.
+                    skipped += 1
+                    continue
+                found = _RE_ORDER_NAME.findall(ln)
+                if found:
+                    names.extend(found)
+                else:
+                    # a non-empty line with no recognizable plugin name --
+                    # same phantom treatment as above
+                    skipped += 1
             if names:
                 blocks.append((keyword.lower(), names))
+    if skipped:
+        print(f"NOTE: {path.name}: {skipped} conditional/unrecognized line(s) inside "
+              f"ordering rules treated as not-installed and bridged over (mlox does the same).")
     return blocks
 
 
 def load_rule_blocks(rule_paths):
     """
-    Returns list of (names, priority) where names is the ORDERED list of plugin
-    patterns in one [Order]/[NearStart]/[NearEnd] block, in the order the rule
-    lists them, and priority = index of the file on the command line (later
-    files win ties/conflicts).
+    Returns (order_blocks, nearstart_patterns, nearend_patterns):
+      order_blocks       -- [(names, priority)] ordering chains from [Order]
+                            blocks, names in rule order; priority = index of
+                            the file on the command line (later files win
+                            conflicts, like mlox reading mlox_user first)
+      nearstart_patterns -- flat pattern list from [NearStart] blocks
+      nearend_patterns   -- flat pattern list from [NearEnd] blocks
 
-    Keeping the whole ordered block (rather than pre-zipping it into a<b pairs)
-    lets build_and_sort bridge over plugins you don't have: in [Order] A,B,C
-    where B isn't installed, chaining A->C directly preserves the A-before-C
-    constraint instead of losing it -- matching how the real mlox engine keeps
-    a not-installed plugin as a phantom bridge node (see pluggraph). Pre-zipping
-    would have produced A->B and B->C, both of which vanish when B expands to
-    nothing.
+    NearStart/NearEnd are per-plugin position hints ("as close to the start/
+    end as the constraints allow"), NOT ordering chains -- chaining them (the
+    old behaviour) invented edges between unrelated plugins (mlox_base's
+    [NearEnd] block alone linked Merged Objects.esp -> Mashed Lists.esp -> ...).
+
+    Keeping each whole ordered block (rather than pre-zipping it into a<b
+    pairs) lets build_and_sort bridge over plugins you don't have: in
+    [Order] A,B,C where B isn't installed, chaining A->C directly preserves
+    the A-before-C constraint instead of losing it -- matching how the real
+    mlox engine keeps a not-installed plugin as a phantom bridge node (see
+    pluggraph). Pre-zipping would have produced A->B and B->C, both of which
+    vanish when B expands to nothing.
     """
     blocks_out = []
+    nearstart, nearend = [], []
     for priority, p in enumerate(rule_paths):
         p = Path(p)
         files = [p] if p.is_file() else sorted(p.glob("*.txt"))
@@ -1341,9 +1794,14 @@ def load_rule_blocks(rule_paths):
                 print(f"WARNING: could not parse rule file {f}: {e}", file=sys.stderr)
                 continue
             for keyword, names in blocks:
-                blocks_out.append((names, priority))
+                if keyword == "order":
+                    blocks_out.append((names, priority))
+                elif keyword == "nearstart":
+                    nearstart.extend(names)
+                elif keyword == "nearend":
+                    nearend.extend(names)
             print(f"Loaded {sum(len(n) for _, n in blocks)} plugin refs from {f.name}")
-    return blocks_out
+    return blocks_out, nearstart, nearend
 
 
 # ---------------------------------------------------------------------------
@@ -1359,10 +1817,14 @@ def tokenize_mlox_logic(text: str) -> list:
     the atomic [VER]/[SIZE]/[DESC]/[MWSE-LUA] function forms (captured whole so
     they become single leaf nodes the evaluator can dispatch on, rather than
     being split into '[' + garbage + ']')."""
-    func = (r'\[\s*VER\b[^\]]*\]|'
-            r'\[\s*SIZE\b[^\]]*\]|'
-            r'\[\s*DESC\b[^\]]*\]|'
-            r'\[\s*MWSE-LUA\b[^\]]*\]')
+    # DESC/MWSE-LUA carry a /regex/ which may itself contain ']' (e.g.
+    # /[Tt]ribunal/), so those forms consume the /.../ part explicitly
+    # before looking for the closing bracket; VER/SIZE bodies can't
+    # contain brackets.
+    func = (r'\[\s*VER\b[^\]\n]*\]|'
+            r'\[\s*SIZE\b[^\]\n]*\]|'
+            r'\[\s*DESC\s*!?\s*/[^/\n]*/[^\]\n]*\]|'
+            r'\[\s*MWSE-LUA\s*!?\s*/[^/\n]*/[^\]\n]*\]')
     pattern = (func + r'|\[|\]|\bALL\b|\bANY\b|\bNOT\b|/[^/]+/|'
                r'[^\[\]\n]+?\.(?:esp|esm|omwaddon|omwgame|omwscripts)\*?')
     tokens = re.findall(pattern, text, re.IGNORECASE)
@@ -1552,7 +2014,7 @@ def load_rules_raw_text(rule_paths):
         files = [p] if p.is_file() else sorted(p.glob("*.txt"))
         for f in files:
             try:
-                chunks.append(f.read_text(encoding="utf-8", errors="replace"))
+                chunks.append(f.read_text(encoding="utf-8-sig", errors="replace"))
             except Exception as e:
                 print(f"WARNING: could not read rule file {f} for predicate checks: {e}", file=sys.stderr)
     return "\n".join(chunks)
@@ -1598,18 +2060,28 @@ def check_predicates(rules_text: str, final_order: list, subset_origins: dict = 
         end = matches[idx + 1].start() if idx + 1 < len(matches) else len(rules_text)
         body = rules_text[start:end]
 
-        # Split each line into "logic" (brackets / plugin filenames) vs.
-        # free-text message lines, same heuristic mlox itself uses.
+        # Split lines into "logic" (expressions) vs. message text the way the
+        # real mlox does: a line that starts with WHITESPACE is message text
+        # (mlox's re_message = ^\s), everything else is an expression line.
+        # The first body line is the remainder of the header line itself, so
+        # it's always logic. (The old heuristic classified by content --
+        # "contains brackets or a plugin extension" -- which turned the
+        # thousands of indented message lines in mlox_base that happen to
+        # mention a plugin name into phantom logic operands, producing false
+        # conflict/note warnings.)
         message_lines = []
+        header_arg = (m.group(2) or "").strip()
+        if header_arg:
+            message_lines.append(header_arg)  # mlox: header args are the message
         logic_text = ""
-        for line in body.splitlines():
-            line = line.split(";")[0].strip()  # ';' comment stripping
+        for i, raw_line in enumerate(body.splitlines()):
+            line = strip_comment(raw_line).strip()
             if not line:
                 continue
-            if any(c in line for c in "[]") or any(ext in line.lower() for ext in PLUGIN_EXTS):
-                logic_text += " " + line
-            else:
+            if i > 0 and raw_line[:1] in (" ", "\t"):
                 message_lines.append(line)
+            else:
+                logic_text += " " + line
 
         message = " ".join(message_lines).strip()
         ast = parse_mlox_lisp(tokenize_mlox_logic(logic_text))
@@ -2465,7 +2937,13 @@ def would_create_cycle(adj, start, target, nodes):
     return False
 
 
-def build_and_sort(base_order_names, subset_names, rule_blocks):
+def _is_master_file(name):
+    """True for master-type plugins that should load before ordinary plugins."""
+    return name.lower().endswith((".esm", ".omwgame"))
+
+
+def build_and_sort(base_order_names, subset_names, rule_blocks, masters=None,
+                   nearstart=None, nearend=None):
     # Guard against the same plugin becoming two different graph nodes just
     # because of a casing difference (OpenMW's VFS is case-insensitive, so
     # 'NewMod.esp' and 'newmod.esp' are the same file) -- canonicalize any
@@ -2473,37 +2951,84 @@ def build_and_sort(base_order_names, subset_names, rule_blocks):
     # exact spelling, and drop the resulting case-duplicates. Without this,
     # a subset plugin already in the cfg under different casing would get
     # inserted a second time instead of being repositioned.
+    trace_sort(f"[sort] === build_and_sort: {len(base_order_names)} base plugin(s), "
+          f"{len(subset_names)} subset (custom) plugin(s), {len(rule_blocks)} mlox rule block(s), "
+          f"masters for {len(masters or {})} plugin(s) ===")
     base_lower_map = {n.lower(): n for n in base_order_names}
     canonical_subset_names = []
     seen_lower = set()
     for n in subset_names:
         canon = base_lower_map.get(n.lower(), n)
+        if canon.lower() != n.lower():
+            trace_sort(f"[sort] canonicalize subset '{n}' -> cfg spelling '{canon}'")
         if canon.lower() not in seen_lower:
             seen_lower.add(canon.lower())
             canonical_subset_names.append(canon)
+        else:
+            trace_sort(f"[sort] drop duplicate subset entry '{n}' (already have '{canon}')")
     subset_names = canonical_subset_names
 
     base_index = {name: i for i, name in enumerate(base_order_names)}
     nodes = set(base_order_names) | set(subset_names)
+    # Deterministic iteration pool: set order is randomized per process
+    # (PYTHONHASHSEED), and using `nodes` directly for rule expansion made
+    # edge insertion order -- and through it the final sort -- vary from
+    # run to run. Same membership, fixed order.
+    node_pool = base_order_names + [n for n in subset_names if n not in base_index]
     subset_set = set(subset_names)
+    node_lower = {n.lower(): n for n in nodes}
+    in_cfg = [n for n in subset_names if n in base_index]
+    new_cust = [n for n in subset_names if n not in base_index]
+    trace_sort(f"[sort] {len(in_cfg)} custom(s) already in cfg (will be repositioned), "
+          f"{len(new_cust)} brand-new custom(s) to insert")
 
     adj = {n: set() for n in nodes}
     indeg = {n: 0 for n in nodes}
     conflicts = []  # mlox rules we couldn't apply without reordering the frozen cfg
 
-    def add_edge(a, b, label):
+    def add_edge(a, b, label, quiet=False):
         if a == b or b in adj.get(a, ()):
             return True
         if would_create_cycle(adj, a, b, nodes):
             conflicts.append((a, b))
+            if not quiet:
+                trace_sort(f"[sort]   edge REJECTED (would cycle): '{a}' -> '{b}'  [{label}]")
             return False
         adj[a].add(b)
         indeg[b] += 1
+        if not quiet:
+            trace_sort(f"[sort]   edge OK: '{a}' -> '{b}'  [{label}]")
         return True
 
-    # 1) frozen chain from the existing cfg order
-    for a, b in zip(base_order_names, base_order_names[1:]):
-        add_edge(a, b, "existing cfg order")
+    # 1) frozen chain from the existing cfg order -- but ONLY the curated (non-
+    #    subset) plugins. Your custom mods that are already in the cfg must NOT be
+    #    chained in place, or they'd be locked between their current neighbors and
+    #    couldn't be re-sorted. Bridging over them chains curated[i] -> curated[i+1]
+    #    directly, freezing the curated list while leaving customs free to move.
+    frozen_seq = [n for n in base_order_names if n not in subset_set]
+    trace_sort(f"[sort] step 1: frozen chain over {len(frozen_seq)} curated plugin(s), "
+          f"bridging over {len(in_cfg)} custom(s) in the cfg (chain edges not logged individually)")
+    for a, b in zip(frozen_seq, frozen_seq[1:]):
+        add_edge(a, b, "existing cfg order", quiet=True)
+
+    # 1b) header-master dependencies: every custom plugin must load AFTER each
+    #     master it lists in its TES3 header (the real dependency, which mlox's
+    #     rule DB doesn't capture for arbitrary mods). Only added for CUSTOM
+    #     dependents so the curated list (already master-correct) is never touched.
+    trace_sort(f"[sort] step 1b: header-master dependency edges")
+    if masters:
+        for p in subset_names:
+            ms = masters.get(p.lower(), ())
+            if ms:
+                trace_sort(f"[sort]  '{p}' header masters: {list(ms)}")
+            for m in ms:
+                mn = node_lower.get(m.lower())
+                if mn and mn != p:
+                    add_edge(mn, p, "master (header)")
+                elif not mn:
+                    trace_sort(f"[sort]   master '{m}' of '{p}' NOT installed -- no edge")
+    else:
+        trace_sort("[sort]  (no header masters available -- mod files not reachable)")
 
     # 2) mlox ordering edges, but only where they touch a subset plugin (the
     #    frozen base is already ordered by step 1). Within each block we chain
@@ -2512,11 +3037,18 @@ def build_and_sort(base_order_names, subset_names, rule_blocks):
     #    yields A -> C directly, preserving the constraint instead of losing it
     #    when B drops out. This is the transitive-bridge behaviour the real mlox
     #    engine gets by keeping a not-installed plugin as a phantom node.
-    blocks_sorted = sorted(rule_blocks, key=lambda b: b[1])  # lower priority first, later files last
+    trace_sort("[sort] step 2: mlox [Order] rule edges (only those touching a custom plugin)")
+    _rule_edge_count = 0
+    # Higher priority (later file, e.g. mlox_user.txt) FIRST: since add_edge
+    # rejects any edge that would close a cycle, the edges added earliest win
+    # a conflict -- exactly how the real mlox gives user rules precedence by
+    # reading mlox_user.txt before mlox_base.txt. (Sorting ascending here
+    # silently gave the BASE file precedence -- backwards.)
+    blocks_sorted = sorted(rule_blocks, key=lambda b: -b[1])
     for names, priority in blocks_sorted:
         # expand each token to its installed matches; a token that matches
         # nothing is dropped (it becomes an order bridge, not a broken link)
-        survivors = [ms for ms in (expand_pattern(tok, nodes) for tok in names) if ms]
+        survivors = [ms for ms in (expand_pattern(tok, node_pool) for tok in names) if ms]
         for a_matches, b_matches in zip(survivors, survivors[1:]):
             for a in a_matches:
                 for b in b_matches:
@@ -2524,6 +3056,8 @@ def build_and_sort(base_order_names, subset_names, rule_blocks):
                         continue
                     if a in subset_set or b in subset_set:
                         add_edge(a, b, f"mlox rule (priority {priority})")
+                        _rule_edge_count += 1
+    trace_sort(f"[sort]  considered rule edges touching customs: {_rule_edge_count}")
 
     # Report rules we couldn't apply -- deduped and phrased as info, not alarm.
     # These aren't errors: they happen whenever a curated MOMW cfg order
@@ -2542,26 +3076,231 @@ def build_and_sort(base_order_names, subset_names, rule_blocks):
             print(f"    - mlox wanted '{a}' before '{b}', but your load order already has "
                   f"'{b}' before '{a}'")
 
-    # 3) stable Kahn's topological sort: among ready nodes, prefer original
-    #    cfg position; unconstrained subset nodes (no cfg position) sort last
+    # 3) stable Kahn's topological sort. Tie-break among ready nodes:
+    #    (a) masters (.esm/.omwgame) before ordinary plugins -- ESM-first, so a
+    #        custom master with no rule still floats up into the master block;
+    #    (b) then original cfg position (curated keep their exact order; a custom
+    #        already in the cfg keeps its rough spot; brand-new customs sort after
+    #        the plugins they were declared after);
+    #    (c) then name, for determinism.
+    #    Edges always win over the tie-break, so real dependencies/rules dominate.
     import heapq
-    ready = [(base_index.get(n, float("inf")), n) for n in nodes if indeg[n] == 0]
+    nb = len(base_order_names)
+    pos = dict(base_index)
+    # Position each custom from ALL of its graph predecessors -- header-master
+    # edges AND applied mlox [Order] rule edges -- resolved TRANSITIVELY through
+    # custom->custom chains: "place this custom right after the latest-loading
+    # thing it must come after", whatever that thing is (a curated plugin or
+    # another custom). Master-type predecessors (.esm/.omwgame) are NOT a
+    # position signal: they sit in the master block at the very top and half
+    # the list depends on them, so anchoring to them would cluster everything
+    # at the front (a previous failed attempt). A custom with no non-master
+    # predecessor keeps its cfg position (if already in the cfg) or goes to
+    # the end, in declared order -- same place the Configurator would append it.
+    trace_sort("[sort] step 3: anchoring custom plugins from their graph neighbors "
+               "(master edges + applied mlox rule edges, resolved transitively)")
+    preds = {}
+    succs = {}
+    for a, tgts in adj.items():
+        for b in tgts:
+            if b in subset_set:
+                preds.setdefault(b, []).append(a)
+            if a in subset_set:
+                succs.setdefault(a, []).append(b)
+    # adj's edge sets iterate in hash order (randomized per process); sort the
+    # neighbor lists so tie-breaks and resolution order -- and therefore the
+    # final sort -- are identical run to run.
+    for lst in preds.values():
+        lst.sort(key=str.lower)
+    for lst in succs.values():
+        lst.sort(key=str.lower)
+
+    declared_end = {n: nb + j for j, n in enumerate(subset_names)}
+    _EPS = 1e-6  # nudge a dependent just past/short of its custom neighbor
+    resolved = {}   # custom -> (pos value, anchor name or None, "after"/"before"/"none")
+    derives = {}    # custom -> set of customs its position value was derived from
+    _resolving = set()  # in-flight nodes (graph is a DAG, but pred/succ lookups interlock)
+
+    def _no_signal_pos(n):
+        # no positioning signal: keep cfg pos if already in the cfg, else end
+        return float(base_index[n]) if n in base_index else float(declared_end[n])
+
+    def _derives_from(x, n):
+        """True if custom x's resolved position was derived (transitively)
+        from n's -- using such a value to anchor n would be circular and
+        inflate both (e.g. 'A loads before B' must not make B anchor after
+        A's fallback-end position)."""
+        stack, seen = [x], set()
+        while stack:
+            c = stack.pop()
+            if c == n:
+                return True
+            if c in seen:
+                continue
+            seen.add(c)
+            stack.extend(derives.get(c, ()))
+        return False
+
+    def _final_pos(n):
+        """Anchor position for custom n.
+
+        1. "After" signal (preferred): right after the latest-loading NON-master
+           thing n must load after -- a curated plugin (rule edge / header
+           master) or another custom (resolved transitively). Master-type
+           (.esm/.omwgame) predecessors are NOT a signal: they sit in the
+           master block at the very top and half the list depends on them, so
+           anchoring to them clusters everything at the front.
+        2. "Before" signal: otherwise, just before the earliest-loading thing
+           n must load BEFORE (mlox [Order] rules mostly constrain customs
+           this way). Without this, a before-constrained custom keeps its
+           end position, and when the frozen chain reaches its curated
+           successor, Kahn's stalls there and dumps every earlier pending
+           custom in one big block -- the exact bug being fixed.
+        3. Neither: keep cfg position (if already in the cfg) or go to the
+           end, in declared order -- where the Configurator would append it.
+
+        Neighbors whose position derives from n (see _derives_from), or that
+        are still being resolved, are skipped -- their value comes FROM n's,
+        so it can't ground n's. A skip is recorded in `derives` so the round
+        loop below can recompute n once the neighbor has settled.
+        """
+        got = resolved.get(n)
+        if got is not None:
+            return got[0]
+        _resolving.add(n)
+        deps = derives.setdefault(n, set())
+        try:
+            best, best_p = None, None
+            for p in preds.get(n, ()):
+                if _is_master_file(p):
+                    continue              # master block, top of list: no position signal
+                if p in subset_set:
+                    if p in _resolving:
+                        deps.add(p)       # interlock: p's value needs n's -- skip
+                        continue
+                    bp = _final_pos(p)
+                    if _derives_from(p, n):
+                        continue          # p's position came from n -- circular
+                    bp += _EPS            # right after that custom
+                else:
+                    bp = base_index[p] + 0.5        # right after that curated plugin
+                if best is None or bp > best:
+                    best, best_p = bp, p
+            if best is not None:
+                if best_p in subset_set:
+                    deps.add(best_p)
+                    deps.update(derives.get(best_p, ()))
+                resolved[n] = (best, best_p, "after")
+                return best
+            low, low_s = None, None
+            for s in succs.get(n, ()):
+                if s in subset_set:
+                    if s in _resolving:
+                        deps.add(s)
+                        continue
+                    bs = _final_pos(s)
+                    if _derives_from(s, n):
+                        continue
+                    bs -= _EPS            # just before that custom
+                else:
+                    bs = base_index[s] - 0.5 + _EPS  # just before that curated plugin
+                if low is None or bs < low:
+                    low, low_s = bs, s
+            if low is not None:
+                if low_s in subset_set:
+                    deps.add(low_s)
+                    deps.update(derives.get(low_s, ()))
+                resolved[n] = (low, low_s, "before")
+                return low
+            resolved[n] = (_no_signal_pos(n), None, "none")
+            return resolved[n][0]
+        finally:
+            _resolving.discard(n)
+
+    import sys as _sys
+    _old_rlimit = _sys.getrecursionlimit()
+    _sys.setrecursionlimit(max(_old_rlimit, 10 * len(subset_names) + 1000))
+    try:
+        # A node resolved while a neighbor was still in flight may hold a
+        # degraded value (the interlocked contribution was skipped). Re-run
+        # nodes whose value depended on another custom's -- everything else
+        # stays memoized -- until the values stop changing (bounded).
+        for n in subset_names:
+            _final_pos(n)
+        for _round in range(len(subset_names) + 1):
+            changed = False
+            for n in [x for x in subset_names if derives.get(x)]:
+                old = resolved.pop(n)
+                derives[n] = set()
+                _final_pos(n)
+                if resolved[n][0] != old[0]:
+                    changed = True
+            if not changed:
+                break
+    finally:
+        _sys.setrecursionlimit(_old_rlimit)
+
+    n_after = n_before = 0
+    for n in subset_names:
+        val, anch, how = resolved[n]
+        if how == "after":
+            pos[n] = val
+            n_after += 1
+            kind = "custom" if anch in subset_set else "curated"
+            trace_sort(f"[sort]  anchor '{n}' -> right after {kind} '{anch}' (pos {val:.6g})")
+        elif how == "before":
+            pos[n] = val
+            n_before += 1
+            kind = "custom" if anch in subset_set else "curated"
+            trace_sort(f"[sort]  anchor '{n}' -> right before {kind} '{anch}' (pos {val:.6g})")
+        else:
+            pos.setdefault(n, declared_end[n])
+            where = "keeps cfg pos" if n in base_index else "end of load order"
+            trace_sort(f"[sort]  '{n}' no non-master neighbor -> {where}")
+    trace_sort(f"[sort]  anchored after a dependency: {n_after}, before a successor: {n_before}, "
+               f"unanchored (standalone / masters-only): {len(subset_names) - n_after - n_before} "
+               f"/ {len(subset_names)} customs")
+
+    # [NearStart]/[NearEnd] position hints (mlox semantics: pull each matching
+    # plugin as close to the start/end as the edges allow -- NOT a chain).
+    # Applied to CUSTOMS only (the curated list is frozen), and they override
+    # the anchor heuristic above; graph edges still always win.
+    for pats, to_start, label in ((nearstart, True, "NearStart"), (nearend, False, "NearEnd")):
+        for pat in (pats or ()):
+            for n in expand_pattern(pat, node_pool):
+                if n not in subset_set:
+                    continue
+                j = declared_end[n] - nb  # stable tie-break among hinted customs
+                pos[n] = (-1.0 + j * _EPS) if to_start else float(2 * nb + len(subset_names) + j)
+                trace_sort(f"[sort]  [{label}] hint: '{n}' -> {'front' if to_start else 'very end'} "
+                           f"(pos {pos[n]:.6g})")
+
+    def rank(n):
+        return (0 if _is_master_file(n) else 1, pos.get(n, nb), n.lower())
+
+    trace_sort("[sort] step 4: topological placement (order each plugin is emitted)")
+    ready = [(rank(n), n) for n in nodes if indeg[n] == 0]
     heapq.heapify(ready)
     result = []
     while ready:
         _, n = heapq.heappop(ready)
         result.append(n)
+        if n in subset_set:       # log only customs to keep the trace readable
+            trace_sort(f"[sort]  place #{len(result)}: '{n}'  (CUSTOM, rank={rank(n)})")
         for m in adj[n]:
             indeg[m] -= 1
             if indeg[m] == 0:
-                heapq.heappush(ready, (base_index.get(m, float("inf")), m))
+                heapq.heappush(ready, (rank(m), m))
 
     if len(result) != len(nodes):
         remaining = nodes - set(result)
+        trace_sort(f"[sort] UNPLACED (cycle): {sorted(remaining)}")
         print(f"WARNING: {len(remaining)} plugin(s) could not be placed due to an "
               f"unresolved cycle and were appended at the end: {sorted(remaining)}")
         result.extend(sorted(remaining, key=str.lower))
 
+    trace_sort(f"[sort] === done: {len(result)} plugin(s) placed "
+          f"({len(conflicts)} rule edge(s) rejected as cycles) ===")
     return result
 
 
@@ -2695,6 +3434,40 @@ def build_arg_parser() -> argparse.ArgumentParser:
                           "to disk and read one plugin at a time (bounded memory); by default that spool "
                           "is a temp dir removed on exit -- give this to keep it (or to reuse it).")
     return ap
+
+
+def all_scan_dirs(data_order, raw_toml_data_inserts=None, data_inserts=None):
+    """Every folder a plugin/resource may live in for THIS run: the cfg's
+    existing data= folders PLUS the pending custom data-path inserts (from a
+    mods-folder scan or a customizations TOML) that aren't in the cfg yet.
+
+    Conflict / cell-map / resource scans must search this combined list, not
+    just the cfg's dirs -- otherwise your custom mods are invisible to those
+    tools until AFTER the cfg has been written, which defeats the point of
+    checking them before committing to an order. (Pending dirs are appended
+    after the cfg dirs; that matches where they'd typically land.)"""
+    dirs = [v for v in (extract_data_path_value(l) for l in (data_order or [])) if v]
+    seen = {str(d).lower() for d in dirs}
+    for src in (data_inserts, raw_toml_data_inserts):
+        for d in (src or []):
+            v = d.get("value")
+            if v and str(v).lower() not in seen:
+                seen.add(str(v).lower())
+                dirs.append(v)
+    return dirs
+
+
+def pending_custom_dirs(raw_toml_data_inserts=None, data_inserts=None):
+    """Just the pending custom data-path folders (deduped, in declared order)
+    -- used to flag which side of a conflict is YOUR mod."""
+    out, seen = [], set()
+    for src in (data_inserts, raw_toml_data_inserts):
+        for d in (src or []):
+            v = d.get("value")
+            if v and str(v).lower() not in seen:
+                seen.add(str(v).lower())
+                out.append(v)
+    return out
 
 
 def compute_plan(args) -> dict:
@@ -2838,13 +3611,58 @@ def compute_plan(args) -> dict:
             print(f"  Not in cfg yet, will be inserted: {', '.join(new_plugins)}")
 
         _subsection("loading mlox rules")
-        rule_blocks = load_rule_blocks(args.rules)
+        rule_blocks, nearstart_pats, nearend_pats = load_rule_blocks(args.rules)
 
-        final_order = build_and_sort(base_order_names, subset, rule_blocks)
+        sort_trace_begin()   # fresh, dedicated sort log for this sort's play-by-play
 
-        base_only_after = [n for n in final_order if n in set(base_order_names)]
-        if base_order_names != base_only_after:
-            print("\n  INTERNAL WARNING: base cfg order drifted -- this shouldn't happen. "
+        # header-master dependencies for the custom plugins (best-effort: needs
+        # the mod files reachable via the cfg's data= folders). These force each
+        # custom to load after the masters it declares -- the real dependency the
+        # mlox rule DB doesn't cover for arbitrary mods.
+        masters = {}
+        try:
+            # Look for the custom plugin files in BOTH the cfg's existing data=
+            # folders AND the data paths being added by this run (the custom mods
+            # usually live in folders not yet in the cfg -- e.g. the umo custom
+            # dirs -- so without these their headers can't be read).
+            sort_dirs = all_scan_dirs(data_order, raw_toml_data_inserts, data_inserts)
+            sort_index = PluginFileIndex(sort_dirs)
+            trace_sort(f"[sort] header-master read: searching {len(sort_dirs)} data folder(s) for "
+                  f"{len(subset)} custom plugin(s)")
+            _not_found = 0
+            for name in subset:
+                p = sort_index.find(name)
+                if p is None:
+                    _not_found += 1
+                    trace_sort(f"[sort]  '{name}': file NOT found in data folders -- masters unknown")
+                    continue
+                ms = read_plugin_masters(p)
+                trace_sort(f"[sort]  '{name}': {len(ms)} master(s) {ms}  ({p})")
+                if ms:
+                    masters[name.lower()] = ms
+            if _not_found:
+                trace_sort(f"[sort] header-master read: {_not_found} custom file(s) not found in any "
+                      f"data folder")
+            if masters:
+                print(f"  Read header masters for {len(masters)} of {len(subset)} custom plugin(s).")
+            else:
+                print("  (No header masters read -- mod files not reachable from the cfg's data= "
+                      "folders, so ordering uses mlox rules + ESM-first only.)")
+        except Exception:
+            masters = {}
+
+        final_order = build_and_sort(base_order_names, subset, rule_blocks, masters=masters,
+                                     nearstart=nearstart_pats, nearend=nearend_pats)
+
+        # Drift check: the CURATED (non-custom) plugins must keep their exact cfg
+        # order. Customs that were already in the cfg are expected to move, so
+        # they're excluded from this check.
+        subset_lower_chk = {s.lower() for s in subset}
+        frozen_before = [n for n in base_order_names if n.lower() not in subset_lower_chk]
+        base_set = set(base_order_names)
+        frozen_after = [n for n in final_order if n in base_set and n.lower() not in subset_lower_chk]
+        if frozen_before != frozen_after:
+            print("\n  INTERNAL WARNING: curated (frozen) order drifted -- this shouldn't happen. "
                   "Please double check the output before using it.")
 
         _subsection("final content= order")
@@ -2887,12 +3705,49 @@ def compute_plan(args) -> dict:
         else:
             print("\n  No plugin-order.yml warnings.")
 
+    # --- missing / out-of-order master check (always on, read-only) ---------
+    # Every active plugin's TES3 header masters must be present and load
+    # before it -- a missing master fails hard at game launch, so this is
+    # checked on every run, against the final (sorted) order when there is
+    # one. Uses the combined dirs (cfg + pending custom paths) so custom mods
+    # are checked BEFORE the cfg is written.
+    master_warnings = []
+    master_problem_plugins = []
+    try:
+        _active_for_masters = final_order if final_order else base_order_names
+        _mindex = PluginFileIndex(all_scan_dirs(data_order, raw_toml_data_inserts, data_inserts))
+        _missing, _order_problems, _size_notes, _checked, _problem_names = check_missing_masters(
+            _active_for_masters, _mindex, subset_origins)
+        master_problem_plugins = sorted(_problem_names, key=str.lower)
+        if _checked == 0:
+            _section("MASTER CHECK -- skipped")
+            print("  (plugin files not reachable from the data folders; can't read headers)")
+        else:
+            master_warnings = _missing + _order_problems
+            n_issues = len(_missing) + len(_order_problems)
+            _section(f"MASTER CHECK -- {_checked} plugin(s) read, "
+                     f"{n_issues} problem(s), {len(_size_notes)} size note(s)")
+            for w in _missing:
+                print(f"\n{w}")
+            for w in _order_problems:
+                print(f"\n{w}")
+            if _size_notes:
+                _subsection(f"{len(_size_notes)} master size mismatch note(s) (usually benign)")
+                for w in _size_notes:
+                    print(f"{w}")
+            if not n_issues and not _size_notes:
+                print("  All masters present and correctly ordered.")
+    except Exception as e:
+        print(f"  WARNING: master check failed: {e}", file=sys.stderr)
+
     # --- TES3 record-level conflict scan (opt-in, read-only) ----------------
     conflicts = []
     want_conflicts = getattr(args, "check_conflicts", False)
     cell_map_out = getattr(args, "cell_map", None)
     want_resources = getattr(args, "resource_conflicts", False)
-    conf_dirs = [v for v in (extract_data_path_value(l) for l in data_order) if v]
+    # Search the cfg's data= dirs AND the pending custom data paths, so the
+    # scans can see your custom mods BEFORE the cfg is updated.
+    conf_dirs = all_scan_dirs(data_order, raw_toml_data_inserts, data_inserts)
     if want_conflicts or cell_map_out:
         active = final_order if final_order else base_order_names
         active, _excl = filter_plugins(active, getattr(args, "exclude", None))
@@ -2938,7 +3793,7 @@ def compute_plan(args) -> dict:
 
     if want_resources:
         _section("DATA-PATH RESOURCE (VFS) CONFLICTS (read-only)")
-        subset_dirs = [d["value"] for d in (data_inserts or raw_toml_data_inserts or [])]
+        subset_dirs = pending_custom_dirs(raw_toml_data_inserts, data_inserts)
         rconf, rstats = detect_resource_conflicts(conf_dirs, subset_dirs=subset_dirs)
         print(format_resource_report(rconf, rstats, limit=200))
         rout = getattr(args, "resources_out", None)
@@ -2977,6 +3832,8 @@ def compute_plan(args) -> dict:
         "data_result": data_result,
         "predicate_warnings": predicate_warnings,
         "yml_warnings": yml_warnings,
+        "master_warnings": master_warnings,
+        "master_problem_plugins": master_problem_plugins,
         "original_content_values": original_content_values,
         "original_toml_data": original_toml_data,
         "replace_dest_names": replace_dest_names,
@@ -2984,6 +3841,12 @@ def compute_plan(args) -> dict:
         "data_inserts": data_inserts,
         "base_order_names": base_order_names,
         "conflicts": conflicts,
+        # every folder the scans should search THIS run (cfg data= dirs +
+        # pending custom data paths), and just the pending custom folders --
+        # so conflict/cell-map/resource scans can see your custom mods before
+        # the cfg is written
+        "scan_dirs": all_scan_dirs(data_order, raw_toml_data_inserts, data_inserts),
+        "custom_data_dirs": pending_custom_dirs(raw_toml_data_inserts, data_inserts),
     }
 
 

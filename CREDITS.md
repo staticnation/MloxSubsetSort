@@ -19,13 +19,25 @@ and their `LICENSE` files are included in their source folders in this repo.
 - **mlox** — © 2009–2017 John Moonsugar (alias), dragon32, Arthur Moore. MIT.
   The load-order rule engine and the rule databases (`mlox_base.txt` /
   `mlox_user.txt`) this whole tool is built around. Our matching, ordering, and
-  `[Conflict]/[Requires]/[Note]` predicate logic is a port of mlox's.
+  `[Conflict]/[Requires]/[Note]` predicate logic is a port of mlox's. Our
+  **Lint** checks (evil GMSTs, the interior fog-density-0 bug, missing
+  pathgrids, expansion-function dependencies) are ports of the diagnostics in
+  mlox's `tes3lint` and the `missing_pathgrids.pl` helper.
+- **[mlox-rules](https://github.com/DanaePlays/mlox-rules)** — maintained by
+  DanaePlays and contributors. The **actively-updated** rule database that
+  modern mlox (v1.1+) and plox both use. Our "Update Rules..." button downloads
+  the current `mlox_base.txt`/`mlox_user.txt` from this repo.
 - **plox** — © 2024 Moritz Baron. MIT.
   A Rust reimplementation of mlox. Used as a second reference to harden our
   engine (wildcard/`<VER>` matching, order transitivity, predicate functions).
 - **tes3conv** — © 2025 Greatness7. MIT.
   Converts Morrowind plugins ↔ JSON. Used (optionally, if present on PATH) as the
   exact record-identification and field-diff engine behind Check Conflicts.
+- **momw-configurator** — © Modding-OpenMW.com (johnnyhostile). MIT.
+  We read its `cfg/custom.go` to reimplement its customization-apply logic
+  faithfully, so the **Export preview** can simulate exactly what the
+  Configurator will do to your `openmw.cfg` (matching, insert/replace/remove
+  order, ambiguity errors) before it runs.
 - **modmapper** — © 2023 Michiel. MIT.
   The inspiration and reference for the cell-map heatmap (which mods touch which
   exterior/interior cells).
@@ -62,6 +74,15 @@ the credit is one of gratitude and correctness.
   source of truth for which plugins belong to which list). This tool is designed
   specifically to *complement* MOMW lists without ever reordering them.
   Customizations are not supported by the MOMW team.
+- **tes3cmd** — © Paul Halliday ("Yacoby"/community) and contributors. The
+  plugin-maintenance Swiss-army knife distributed with the MOMW Tools Pack. Our
+  **tes3cmd** window is a front-end that stages plugins with their masters so
+  tes3cmd works correctly on a multi-folder OpenMW VFS; we drive the real
+  binary for `clean`, and reimplement master-size resync in-app (tes3cmd's own
+  sync corrupts headers on this layout). The safe-cleaning workflow (never
+  cleaning the vanilla masters, cleaning masters before dependents) is adapted
+  from the community "drag-and-drop" cleaning batch by RMWChaos, Pinkertonius,
+  and Spirithawke.
 
 ## Runtime & optional libraries
 

@@ -1,5 +1,145 @@
 # Changelog
 
+## 2.3
+
+- **Type-to-jump in every list.** Click a list (plugin order, data paths,
+  rule files, tes3cmd plugins, backups) and just start typing a name:
+  prefix match first, substring fallback, press one letter repeatedly to
+  cycle its matches, Backspace edits, Esc clears. The panel title shows
+  what you've typed; the buffer resets after a short pause.
+- **Configurator dry-run preview on every TOML export.** The emitted
+  customizations are applied to a simulated fresh curated cfg using a
+  faithful re-implementation of momw-configurator's own apply logic
+  (cfg/custom.go: substring matching, insert/replace/remove/append order,
+  same-anchor stacking quirks, ambiguity aborts) and the result is verified
+  against the sorted order — `VERIFIED` in green when the round trip is
+  exact, a red `MISMATCH`/`PREVIEW ABORTED` with details when it isn't. What
+  the Configurator will do to your cfg is now known before it runs.
+- **Save Check.** Pick an `.omwsave` and every content file it depends on
+  (the SAVE record's DEPE list) is verified against the sorted, enabled
+  order — OpenMW refuses to load a save with missing plugins, so this warns
+  before an export orphans a character.
+- **Backups window.** Lists every backup this tool, tes3cmd and the
+  Configurator leave behind (`.preclean.bak`, `.masterfix.bak`, `name~1.esp`,
+  timestamped `.bak-*` / `.backup.*`) across the data folders, with
+  restore-over-original and delete.
+- **Rule maker hardening** (checked against the mlox rule guidelines). A rule
+  that lists the same plugin twice is now rejected — ordering a plugin relative
+  to itself is a self-cycle mlox would discard. And when a new `[Order]` rule
+  contradicts the frozen curated (MOMW) order, the maker warns before writing
+  that mlox will discard those orderings (it never reorders the curated list),
+  so you don't get a silently-ineffective rule. Engine cycle handling was
+  re-verified against the guidelines: conflicting orderings are discarded (no
+  hang), user-file rules win over base rules, and the curated order is never
+  broken. The comment field now hints at the `(Ref: ...)` citation convention.
+- **Rule maker.** A "New Rule..." button on the rule-files panel writes mlox
+  rules without knowing the syntax: pick `[Order]` / `[NearStart]` /
+  `[NearEnd]`, build the plugin list by grabbing the selected rows from the
+  plugin panel (their displayed order becomes the rule order), typing names
+  (wildcards and `<VER>` allowed, validated with the same regex the parser
+  uses — a rule that writes is a rule that loads), add an optional `;;`
+  comment, watch the live preview, append. Rules go to a personal file
+  (mlox_base/mlox_user are refused — "Update Rules..." would overwrite them)
+  that's auto-added LAST in the rules list, so your rules win conflicts.
+  This is how rules for modern mods get made; contribute good ones upstream.
+- **Configurable download sources.** A "Sources..." button on the rule-files
+  panel opens a dialog for pointing the two updaters at a fork or mirror if
+  upstream moves: an mlox-rules URL template (must contain `{name}`, filled
+  with `mlox_base.txt`/`mlox_user.txt`) and a plugin-order.yml URL. Both
+  persist in settings, blank means the built-in defaults, and
+  `$MLOX_RULES_URL_TEMPLATE` / `$MLOX_PLUGIN_ORDER_URL` still work as env
+  overrides. Downloads are validated before anything is written regardless of
+  source. (The plugin-order.yml default now points at the current upstream
+  location, `.../momw/momw/data_seeds/data/plugin-order.yml`, with the GitLab
+  API raw endpoint as a fallback.)
+- **Tooltips stay on screen.** A tooltip on a right-edge or bottom-edge widget
+  (common when the window is maximized) is now clamped to the screen — it
+  slides left to fit and flips above the widget when there's no room below,
+  instead of being cut off past the edge.
+- **Two-row action layout.** The action buttons are split across two compact,
+  left-aligned rows — primary + read-only analysis on top (with the status
+  label trailing), tools below — so the growing toolset doesn't crowd into one
+  long row.
+- **Update plugin-order.yml button** (next to its path field). Downloads the
+  current MOMW plugin-order.yml, trying the website then the site's GitLab
+  repo (`$MLOX_PLUGIN_ORDER_URL` overrides for mirrors). The download must
+  parse as plugin-order data with hundreds of entries before a single byte
+  is written — an error page or moved URL can never clobber the file — and
+  the old copy is kept as a timestamped .bak.
+- **Update Rules button.** Downloads the current `mlox_base.txt` /
+  `mlox_user.txt` from the actively maintained rules repo
+  (github.com/DanaePlays/mlox-rules — the same source plox uses and mlox
+  1.1+ auto-updates from) over the matching configured files, keeping
+  timestamped backups; shows each file's age first. Personal rules files
+  with other names are never touched.
+- **New lint checks:** `[TWIN]` — an active `.omwaddon`/`.esp` whose
+  `.omwscripts` sibling sits in the same folder but isn't in the load order
+  (or vice versa), which silently disables a mod's Lua half; `[EXP-DEP]` —
+  scripts calling Tribunal/Bloodmoon-only functions in a plugin that doesn't
+  master the expansion (tes3lint's !TB-FUN/!BM-FUN, comment-aware).
+- **Watchdogs:** `[STALE]` warns when `delta-merged.omwaddon` /
+  `deleted_groundcover.omwaddon` / `S3LightFixes.esp` is older than active
+  plugins (the merge no longer reflects the load order — re-run the
+  Configurator); the GUI warns on Export when openmw.cfg changed on disk
+  since the Sort.
+- **`--lint` CLI flag** for the same checks the GUI Lint button runs.
+- **Unconstrained mods keep YOUR declared order.** The subset was being
+  alphabetized on input, so mods that no rule or dependency constrains landed
+  at the end A→Z instead of in the order written in your subset file /
+  customizations TOML (or scan order). Declaration order is now preserved
+  (de-duped, not sorted). *(user feedback)*
+- **Multi-line mlox expressions parse correctly.** An indented line inside a
+  [Note]/[Conflict]/[Requires] body is only message text when no bracket is
+  open — mlox conditions like `[ALL a.esp ⏎ [NOT b.esp] ⏎ c.esm]` continue
+  across indented lines, and treating the continuations as message text
+  truncated the condition (e.g. the Uvirith's Legacy "Children of Morrowind"
+  note fired for people without Children of Morrowind, with the lost
+  condition text leaking into the message). *(user feedback)*
+- **removeContent / removeData etc. are emitted one entry per line**, matching
+  the style of MOMW's own documentation examples instead of an unreadable
+  single line. *(user feedback)*
+- **Every emitted insert is annotated with its REAL constraint.** The
+  `after=` in the generated TOML is the mod's chained position (documented
+  Configurator semantics, kept deliberately — see below), but a comment above
+  each insert now says *why* the sort put it there: `# constraint: must load
+  after 'X'` (header master or mlox rule), `must load before 'X'`, an mlox
+  NearStart/NearEnd hint, or `# no ordering constraint -- positional only`.
+  The generated file reads like dependency documentation without betting the
+  load order on the Configurator's undocumented same-anchor stacking
+  behaviour. *(user feedback)*
+- **Ambiguity warnings, verified against momw-configurator's source.** Its
+  `cfg/custom.go` matches `after`/`before`/`source` values with
+  `strings.Contains` against whole cfg lines and hard-errors on multiple
+  matches — so a filename nested inside another (`Incantation.omwscripts`
+  inside `content=Incantation.omwscripts.esp` — a real pair on a real list)
+  breaks the run. Worse, `remove*` entries use the same substring match with
+  NO multi-match error: every matching line is deleted **silently**
+  (path-like values instead match exactly / by suffix). The emitted TOML is
+  now checked both ways and collisions are flagged with the exact lines.
+  Warn-only; output unchanged. Also confirmed from source while in there:
+  same-anchor `before=` inserts stack in file order but same-anchor `after=`
+  inserts stack in REVERSE file order — undocumented either way, which is
+  why this tool keeps explicit chained anchors.
+- **Cell map: "Focus on mod" filter** (the good idea in cell_conflicts.pl).
+  A dropdown above the map — customs first, starred — dims every cell the
+  chosen mod doesn't touch, filters both cell lists to match (combined with
+  the existing text filter), and summarizes its footprint: how many
+  exterior/interior cells it touches and which other mods share those cells,
+  ranked by overlap. One click answers "what does this mod actually edit,
+  and who else is in those cells?".
+- **Lint: native tes3lint-style checks.** A Lint button runs ports of the
+  worthwhile tes3lint / missing_pathgrids.pl diagnostics directly on the
+  plugin binaries (VFS-aware, no perl needed): `[EVLGMST]` — the 72 evil
+  GMSTs, flagged only when name AND value match tes3lint's table so
+  deliberate changes aren't accused (cross-validated: tes3cmd clean removes
+  exactly the ones we flag); `[FOGBUG]` — interior cells with AMBI fog
+  density 0.0 (black-void bug), exact port including the behave-like-exterior
+  exemption; `[NO PATHGRID]` — new interior cells with no pathgrid anywhere
+  in the load order (improves on the reference script, which missed grids
+  supplied by later plugins); `[HEADER]` — customs with a blank
+  author/description. Vanilla masters and merged/multipatch artifacts are
+  skipped, like the reference scripts do.
+
 ## 2.2
 
 Sort-engine correctness, a conflict-detection fix, faster repeat scans, and UI

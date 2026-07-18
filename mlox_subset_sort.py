@@ -888,6 +888,331 @@ def stage_for_tes3cmd(staging_root, plugin_path, index, quiet=False):
     return staged_plugin, missing
 
 
+# ---------------------------------------------------------------------------
+# native lint checks -- ports of the useful tes3lint (mlox project) and
+# missing_pathgrids.pl diagnostics, working directly on the plugin binaries
+# so they see the full OpenMW multi-folder VFS (no perl, no tes3cmd needed).
+# ---------------------------------------------------------------------------
+
+# The "72 evil GMSTs": settings copied into a plugin by an old Construction
+# Set whenever it was used without both expansions loaded. They are only
+# legitimate inside Tribunal.esm/Bloodmoon.esm; in any other plugin they
+# override expansion behaviour with stale defaults. A GMST is only flagged
+# when BOTH the name and the recorded value match tes3lint's table (a mod
+# deliberately changing one of these settings to a new value is fine).
+_EVIL_GMSTS = {
+    'fcombatdistancewerewolfmod': ('FLTV', b'\x9a\x99\x99>'),
+    'ffleedistance': ('FLTV', b'\x00\x80;E'),
+    'fwerewolfacrobatics': ('FLTV', b'\x00\x00\x16C'),
+    'fwerewolfagility': ('FLTV', b'\x00\x00\x16C'),
+    'fwerewolfalchemy': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfalteration': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfarmorer': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfathletics': ('FLTV', b'\x00\x00\x16C'),
+    'fwerewolfaxe': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfblock': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfbluntweapon': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfconjuration': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfdestruction': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfenchant': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfendurance': ('FLTV', b'\x00\x00\x16C'),
+    'fwerewolffatigue': ('FLTV', b'\x00\x00\xc8C'),
+    'fwerewolfhandtohand': ('FLTV', b'\x00\x00\xc8B'),
+    'fwerewolfhealth': ('FLTV', b'\x00\x00\x00@'),
+    'fwerewolfheavyarmor': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfillusion': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfintellegence': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolflightarmor': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolflongblade': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfluck': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfmagicka': ('FLTV', b'\x00\x00\xc8B'),
+    'fwerewolfmarksman': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfmediumarmor': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfmerchantile': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfmysticism': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfpersonality': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfrestoration': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfrunmult': ('FLTV', b'\x00\x00\xc0?'),
+    'fwerewolfsecurity': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfshortblade': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfsilverweapondamagemult': ('FLTV', b'\x00\x00\xc0?'),
+    'fwerewolfsneak': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfspear': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfspeechcraft': ('FLTV', b'\x00\x00\x80?'),
+    'fwerewolfspeed': ('FLTV', b'\x00\x00\x16C'),
+    'fwerewolfstrength': ('FLTV', b'\x00\x00\x16C'),
+    'fwerewolfunarmored': ('FLTV', b'\x00\x00\xc8B'),
+    'fwerewolfwillpower': ('FLTV', b'\x00\x00\x80?'),
+    'iwerewolfbounty': ('INTV', b"\x10'\x00\x00"),
+    'iwerewolffightmod': ('INTV', b'd\x00\x00\x00'),
+    'iwerewolffleemod': ('INTV', b'd\x00\x00\x00'),
+    'iwerewolfleveltoattack': ('INTV', b'\x14\x00\x00\x00'),
+    'scompanionshare': ('STRV', b'Companion Share'),
+    'scompanionwarningbuttonone': ('STRV', b'Let the mercenary quit.'),
+    'scompanionwarningbuttontwo': ('STRV', b'Return to Companion Share display.'),
+    'scompanionwarningmessage': ('STRV', b'Your mercenary is poorer now than when he contracted with you.  Your mercenary will quit if you do not give him gold or goods to bring his Profit Value to a positive value.'),
+    'sdeletenote': ('STRV', b'Delete Note?'),
+    'seditnote': ('STRV', b'Edit Note'),
+    'seffectsummoncreature01': ('STRV', b'sEffectSummonCreature01'),
+    'seffectsummoncreature02': ('STRV', b'sEffectSummonCreature02'),
+    'seffectsummoncreature03': ('STRV', b'sEffectSummonCreature03'),
+    'seffectsummoncreature04': ('STRV', b'sEffectSummonCreature04'),
+    'seffectsummoncreature05': ('STRV', b'sEffectSummonCreature05'),
+    'seffectsummonfabricant': ('STRV', b'sEffectSummonFabricant'),
+    'slevitatedisabled': ('STRV', b'Levitation magic does not work here.'),
+    'smagiccreature01id': ('STRV', b'sMagicCreature01ID'),
+    'smagiccreature02id': ('STRV', b'sMagicCreature02ID'),
+    'smagiccreature03id': ('STRV', b'sMagicCreature03ID'),
+    'smagiccreature04id': ('STRV', b'sMagicCreature04ID'),
+    'smagiccreature05id': ('STRV', b'sMagicCreature05ID'),
+    'smagicfabricantid': ('STRV', b'Fabricant'),
+    'smaxsale': ('STRV', b'Max Sale'),
+    'sprofitvalue': ('STRV', b'Profit Value'),
+    'steleportdisabled': ('STRV', b'Teleportation magic does not work here.'),
+    'swerewolfalarmmessage': ('STRV', b'You have been detected changing from a werewolf state.'),
+    'swerewolfpopup': ('STRV', b'Werewolf'),
+    'swerewolfrefusal': ('STRV', b'You cannot do this as a werewolf.'),
+    'swerewolfrestmessage': ('STRV', b'You cannot rest in werewolf form.'),
+}
+
+# Script functions introduced by the expansions (from tes3lint's DATA lists).
+# A plugin calling one without listing the expansion as a master is fragile
+# on non-expansion setups and usually indicates a truncated master list.
+_TRIBUNAL_FUNCS = (
+    "AddToLevCreature", "AddToLevItem", "ClearForceJump", "ClearForceMoveJump",
+    "ClearForceRun", "DisableLevitation", "EnableLevitation", "ExplodeSpell",
+    "ForceJump", "ForceMoveJump", "ForceRun", "GetCollidingActor",
+    "GetCollidingPC", "GetForceJump", "GetForceMoveJump", "GetForceRun",
+    "GetPCJumping", "GetPCRunning", "GetPCSneaking", "GetScale",
+    "GetSpellReadied", "GetSquareRoot", "GetWaterLevel", "GetWeaponDrawn",
+    "GetWeaponType", "HasItemEquipped", "ModScale", "ModWaterLevel",
+    "PlaceItem", "PlaceItemCell", "RemoveFromLevCreature", "RemoveFromLevItem",
+    "SetDelete", "SetScale", "SetWaterLevel")
+_BLOODMOON_FUNCS = (
+    "BecomeWerewolf", "GetPCInJail", "GetPCTraveling", "GetWerewolfKills",
+    "IsWerewolf", "PlaceAtMe", "SetWerewolfAcrobatics", "TurnMoonRed",
+    "TurnMoonWhite", "UndoWerewolf")
+# mirror tes3lint's per-line matching: ignore comment text after ';'
+_RE_TB_FUN = re.compile(r"^[^;\n]*?\b(" + "|".join(_TRIBUNAL_FUNCS) + r")\b",
+                        re.IGNORECASE | re.MULTILINE)
+_RE_BM_FUN = re.compile(r"^[^;\n]*?\b(" + "|".join(_BLOODMOON_FUNCS) + r")\b",
+                        re.IGNORECASE | re.MULTILINE)
+
+_LINT_SKIP = {"morrowind.esm", "tribunal.esm", "bloodmoon.esm",
+              "merged objects.esp", "merged lands.esp", "mashed lists.esp",
+              "multipatch.esp"}
+_LINT_SKIP_CELLS = {"ashlands region (0, 0)"}   # the classic 0,0 exterior exception
+
+
+def _iter_tes3_records(raw):
+    """Yields (tag, body) for each top-level record. Bodies of record types
+    the caller doesn't care about are skipped over cheaply by size."""
+    n, i = len(raw), 0
+    while i + 16 <= n:
+        tag = bytes(raw[i:i + 4])
+        (sz,) = struct.unpack_from("<I", raw, i + 4)
+        yield tag, raw[i + 16:i + 16 + sz]
+        i += 16 + sz
+
+
+def _iter_subrecords(body):
+    n, i = len(body), 0
+    while i + 8 <= n:
+        tag = bytes(body[i:i + 4])
+        (sz,) = struct.unpack_from("<I", body, i + 4)
+        yield tag, body[i + 8:i + 8 + sz]
+        i += 8 + sz
+
+
+def _lint_zstr(b):
+    return b.split(b"\x00", 1)[0].decode("latin-1", "replace").strip()
+
+
+def lint_plugins(active_order, index, subset_names=None, origins=None, progress=None):
+    """Runs the ported checks over every active plugin and returns
+    (warnings, stats). Checks:
+
+    [EVLGMST]     evil GMSTs (name AND value match; see table above) -- fixed
+                  by cleaning the plugin (tes3cmd clean removes them).
+    [FOGBUG]      interior cell, not behave-like-exterior, AMBI fog density
+                  exactly 0.0 -- renders as a black void on some GPUs
+                  (tes3lint's FOGBUG; exact port of its DATA/AMBI logic).
+    [NO PATHGRID] an interior cell introduced by the load order has no PGRD
+                  record anywhere in it -- NPCs can't pathfind there
+                  (missing_pathgrids.pl, minus its false positives: the
+                  pathgrid may come from ANY plugin, not just earlier ones).
+    [HEADER]      custom plugin with a blank author and/or description
+                  (tes3lint MISSAUT/MISSDSC; customs only -- curated files
+                  are the list's business).
+
+    Vanilla masters and merged/multipatch artifacts are skipped, like the
+    reference scripts do. origins maps plugin_lower -> provenance for the
+    warning text.
+    """
+    subset_lower = {str(s).lower() for s in (subset_names or ())}
+    origins = origins or {}
+    warnings, stats = [], {"scanned": 0, "unreadable": 0}
+    interior_first = {}   # cell id lower -> (plugin, display name)
+    pathgrids = set()     # interior pathgrid cell ids seen anywhere
+
+    def tagfor(p):
+        o = origins.get(str(p).lower())
+        return f" [{o}]" if o else ""
+
+    for np, p in enumerate(active_order):
+        pl = str(p).lower()
+        if pl.endswith(".omwscripts") or pl in _LINT_SKIP:
+            continue
+        path = index.find(p) if index else None
+        if path is None:
+            continue
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            stats["unreadable"] += 1
+            continue
+        if raw[:4] != b"TES3":
+            continue
+        stats["scanned"] += 1
+        if progress:
+            progress(np, p)
+        is_custom = pl in subset_lower
+        evil_here = []
+        my_masters = set()
+        tb_hits, bm_hits = set(), set()
+        for tag, body in _iter_tes3_records(raw):
+            if is_custom and tag in (b"SCPT", b"INFO"):
+                # expansion-function dependency scan (tes3lint !TB-FUN/!BM-FUN)
+                want = b"SCTX" if tag == b"SCPT" else b"BNAM"
+                for st, sd in _iter_subrecords(body):
+                    if st == want and sd:
+                        text = sd.decode("latin-1", "replace")
+                        for mm in _RE_TB_FUN.finditer(text):
+                            tb_hits.add(mm.group(1))
+                        for mm in _RE_BM_FUN.finditer(text):
+                            bm_hits.add(mm.group(1))
+                continue
+            if tag == b"TES3":
+                for st, sd in _iter_subrecords(body):
+                    if st == b"MAST":
+                        my_masters.add(_lint_zstr(sd).lower())
+                if is_custom:
+                    for st, sd in _iter_subrecords(body):
+                        if st == b"HEDR" and len(sd) >= 296:
+                            auth = _lint_zstr(sd[8:40])
+                            desc = _lint_zstr(sd[40:296])
+                            missing = [w for w, v in (("author", auth), ("description", desc)) if not v]
+                            if missing:
+                                warnings.append(
+                                    f"[HEADER] '{p}'{tagfor(p)}: header has no "
+                                    f"{' and no '.join(missing)}.")
+                            break
+            elif tag == b"GMST":
+                name, vtag, vdata = None, None, b""
+                for st, sd in _iter_subrecords(body):
+                    if st == b"NAME":
+                        name = _lint_zstr(sd).lower()
+                    elif st in (b"STRV", b"INTV", b"FLTV"):
+                        vtag, vdata = st.decode(), sd
+                ev = _EVIL_GMSTS.get(name)
+                if ev and vtag == ev[0] and vdata.rstrip(b"\x00") == ev[1].rstrip(b"\x00"):
+                    evil_here.append(name)
+            elif tag == b"CELL":
+                name, data, ambi = "", None, None
+                for st, sd in _iter_subrecords(body):
+                    if st == b"NAME":
+                        name = _lint_zstr(sd)
+                    elif st == b"DATA" and data is None:
+                        data = sd
+                    elif st == b"AMBI":
+                        ambi = sd
+                if data is None or len(data) < 12:
+                    continue
+                (flags,) = struct.unpack_from("<I", data, 0)
+                if not flags & 1:
+                    continue                      # exterior
+                cid = name.lower()
+                if cid and cid not in _LINT_SKIP_CELLS and cid not in interior_first:
+                    interior_first[cid] = (p, name)
+                if not flags & 128:               # not behave-like-exterior
+                    if ambi is not None and len(ambi) == 16:
+                        (fog,) = struct.unpack_from("<f", ambi, 12)
+                    else:
+                        (fog,) = struct.unpack_from("<f", data, 8)
+                    if fog == 0.0:
+                        warnings.append(
+                            f"[FOGBUG] '{p}'{tagfor(p)}: interior cell '{name}' has fog "
+                            f"density 0.0 -- renders as a black void on some GPUs. Fix by "
+                            f"setting any nonzero fog density on the cell.")
+            elif tag == b"PGRD":
+                name, x, y = "", None, None
+                for st, sd in _iter_subrecords(body):
+                    if st == b"NAME":
+                        name = _lint_zstr(sd)
+                    elif st == b"DATA" and len(sd) >= 8:
+                        x, y = struct.unpack_from("<ii", sd, 0)
+                if x == 0 and y == 0 and name:    # interiors carry grid (0,0)
+                    pathgrids.add(name.lower())
+        if evil_here:
+            warnings.append(
+                f"[EVLGMST] '{p}'{tagfor(p)}: {len(evil_here)} evil GMST(s): "
+                f"{', '.join(sorted(evil_here))} -- stale expansion defaults copied in "
+                f"by an old Construction Set; tes3cmd clean removes them.")
+        if tb_hits and "tribunal.esm" not in my_masters and "bloodmoon.esm" not in my_masters:
+            warnings.append(
+                f"[EXP-DEP] '{p}'{tagfor(p)}: scripts use Tribunal function(s) "
+                f"{', '.join(sorted(tb_hits))} but the plugin doesn't master Tribunal.esm -- "
+                f"fragile on non-expansion setups (tes3lint !TB-FUN).")
+        if bm_hits and "bloodmoon.esm" not in my_masters:
+            warnings.append(
+                f"[EXP-DEP] '{p}'{tagfor(p)}: scripts use Bloodmoon function(s) "
+                f"{', '.join(sorted(bm_hits))} but the plugin doesn't master Bloodmoon.esm -- "
+                f"fragile on non-expansion setups (tes3lint !BM-FUN).")
+
+    for cid, (plug, name) in sorted(interior_first.items()):
+        if cid not in pathgrids:
+            warnings.append(
+                f"[NO PATHGRID] '{plug}'{tagfor(plug)}: new interior cell '{name}' has no "
+                f"pathgrid anywhere in the load order -- NPCs can't pathfind there.")
+
+    # scripts-twin check (customs only): an active .omwaddon/.esp shipped
+    # next to an .omwscripts of the same stem (or vice versa) almost always
+    # needs BOTH declared -- a missing twin silently disables the mod's Lua
+    # half (or leaves scripts without their content). This was the real cause
+    # behind a batch of user-reported ORPHAN confusion.
+    active_lower = {str(p).lower() for p in active_order}
+    for p in active_order:
+        pl = str(p).lower()
+        if pl not in subset_lower:
+            continue
+        path = index.find(p) if index else None
+        if path is None:
+            continue
+        path = Path(path)
+        stem = path.name.rsplit(".", 1)[0]
+        if pl.endswith((".omwaddon", ".esp")):
+            twin = path.with_name(stem + ".omwscripts")
+            if twin.exists() and twin.name.lower() not in active_lower:
+                warnings.append(
+                    f"[TWIN] '{p}'{tagfor(p)}: '{twin.name}' sits in the same folder but "
+                    f"isn't in the load order -- the mod's Lua half is disabled. Add it "
+                    f"(or confirm it's optional).")
+        elif pl.endswith(".omwscripts"):
+            for ext in (".omwaddon", ".esp"):
+                twin = path.with_name(stem + ext)
+                if twin.exists() and twin.name.lower() not in active_lower:
+                    warnings.append(
+                        f"[TWIN] '{p}'{tagfor(p)}: '{twin.name}' sits in the same folder but "
+                        f"isn't in the load order -- scripts may reference content that "
+                        f"never loads. Add it (or confirm it's optional).")
+                    break
+
+    stats["warnings"] = len(warnings)
+    stats["interior_cells"] = len(interior_first)
+    stats["pathgrids"] = len(pathgrids)
+    return warnings, stats
+
+
 def flatten_dict(d, parent_key="", sep="."):
     """Flatten a nested record dict into dotted keys (lists kept as whole
     values) -- ported from TES3 Conflictsolver so field comparison matches it."""
@@ -1505,6 +1830,20 @@ def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
     def anchor(gx, gy):
         return f"e_{gx}_{gy}".replace("-", "m")
 
+    def modattr(mods):
+        # exact-match token list for the focus filter: |a.esp|b.esp|
+        return _html_escape("|" + "|".join(m.lower() for m in mods) + "|")
+
+    # every mod that touches any cell, customs first -- for the focus dropdown
+    all_mods = {}
+    for mods in list(ext.values()) + list(inte.values()):
+        for m in mods:
+            all_mods.setdefault(m.lower(), m)
+    focus_opts = "".join(
+        f'<option value="{_html_escape(low)}">{_html_escape(all_mods[low])}'
+        f'{" ★" if low in subl else ""}</option>'
+        for low in sorted(all_mods, key=lambda x: (x not in subl, x)))
+
     grid = '<p class="sub">No exterior cells touched.</p>'
     if ext_ok:
         xs = [k[0] for k in ext_ok]
@@ -1523,7 +1862,8 @@ def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
             rects.append(
                 f'<rect x="{px}" y="{py}" width="{SIZE}" height="{SIZE}" '
                 f'fill="{_cell_heat(len(mods))}"{stroke} class="cell" '
-                f'data-t="{_html_escape(tip)}" onclick="jump(\'{anchor(gx, gy)}\')"></rect>')
+                f'data-t="{_html_escape(tip)}" data-m="{modattr(mods)}" '
+                f'onclick="jump(\'{anchor(gx, gy)}\')"></rect>')
         svg = (f'<svg width="{w*STEP}" height="{h*STEP}" viewBox="0 0 {w*STEP} {h*STEP}" '
                f'xmlns="http://www.w3.org/2000/svg">' + "".join(rects) + "</svg>")
         grid = f'<div class="mapwrap">{svg}</div>'
@@ -1532,13 +1872,15 @@ def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
     for (gx, gy), mods in sorted(ext_ok.items(), key=lambda kv: (-len(kv[1]), kv[0])):
         custom = any(m.lower() in subl for m in mods)
         cls = ' class="cust"' if custom else ""
-        ext_rows.append(f'<tr id="{anchor(gx,gy)}"{cls}><td>({gx}, {gy})</td><td>{len(mods)}</td>'
+        ext_rows.append(f'<tr id="{anchor(gx,gy)}"{cls} data-m="{modattr(mods)}">'
+                        f'<td>({gx}, {gy})</td><td>{len(mods)}</td>'
                         f'<td>{_html_escape(", ".join(mods))}</td></tr>')
     int_rows = []
     for name, mods in sorted(inte.items(), key=lambda kv: (-len(kv[1]), kv[0].lower())):
         custom = any(m.lower() in subl for m in mods)
         cls = ' class="cust"' if custom else ""
-        int_rows.append(f'<tr{cls}><td>{_html_escape(name)}</td><td>{len(mods)}</td>'
+        int_rows.append(f'<tr{cls} data-m="{modattr(mods)}"><td>{_html_escape(name)}</td>'
+                        f'<td>{len(mods)}</td>'
                         f'<td>{_html_escape(", ".join(mods))}</td></tr>')
     ext = ext_ok
     n_ext_conf = sum(1 for m in ext.values() if len(m) > 1)
@@ -1565,6 +1907,11 @@ def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
  .list th{{color:#9a9a9a;position:sticky;top:0;background:#101013;}} tr.cust td{{color:#ff9b6b;}}
  tr.hl td{{background:#3a2a10;}}
  input.f{{background:#1c1c22;color:#ddd;border:1px solid #3a3a3a;padding:6px;width:320px;margin:6px 0;}}
+ .focusbar{{margin-top:10px;}}
+ .focusbar select{{background:#1c1c22;color:#ddd;border:1px solid #3a3a3a;padding:5px;max-width:420px;}}
+ .focusbar button{{background:#20242a;color:#ddd;border:1px solid #3a3a3a;padding:5px 10px;margin-left:6px;cursor:pointer;}}
+ #focusinfo{{margin-top:4px;max-width:900px;}}
+ rect.cell.dim{{opacity:.13;}}
 </style></head><body>
 <div id="tt"></div>
 <h1>{_html_escape(title)}</h1>
@@ -1575,6 +1922,10 @@ def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
  <span style="background:#2f4a63;color:#fff;">1</span><span style="background:#7a5a1e;">2</span>
  <span style="background:#9c4a16;">3</span><span style="background:#b83a1a;color:#fff;">4</span>
  <span style="background:#d8342a;color:#fff;">5+</span> &nbsp;(north up; hover a cell for its mods, click it to jump to the list)</div>
+<div class="focusbar">Focus on mod:
+ <select id="focus" onchange="setFocus(this.value)"><option value="">— all mods —</option>{focus_opts}</select>
+ <button onclick="document.getElementById('focus').value='';setFocus('')">Clear</button>
+ <div id="focusinfo" class="sub"></div></div>
 <div class="tabs">
  <button id="b0" class="on" onclick="show(0)">Map</button>
  <button id="b1" onclick="show(1)">Exterior list ({len(ext)})</button>
@@ -1600,9 +1951,28 @@ def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
    tt.style.left=(e.clientX+12)+'px';tt.style.top=(e.clientY+12)+'px';}}}});
   document.addEventListener('mouseout',function(e){{var r=e.target;
    if(r&&r.classList&&r.classList.contains('cell')){{tt.style.display='none';}}}});}})();
- function ff(id){{var q=event.target.value.toLowerCase();
-  document.querySelectorAll('#'+id+' tbody tr').forEach(function(r){{
-   r.style.display=r.innerText.toLowerCase().indexOf(q)>-1?'':'none';}});}}
+ var Q={{xt:'',it:''}}, FOCUS='';
+ function match(r){{return !FOCUS||(r.getAttribute('data-m')||'').indexOf('|'+FOCUS+'|')>-1;}}
+ function apply(id){{document.querySelectorAll('#'+id+' tbody tr').forEach(function(r){{
+   var okQ=!Q[id]||r.innerText.toLowerCase().indexOf(Q[id])>-1;
+   r.style.display=(okQ&&match(r))?'':'none';}});}}
+ function ff(id){{Q[id]=event.target.value.toLowerCase();apply(id);}}
+ function setFocus(v){{FOCUS=(v||'').toLowerCase();
+  document.querySelectorAll('rect.cell').forEach(function(r){{
+   r.classList.toggle('dim',FOCUS&&!match(r));}});
+  apply('xt');apply('it');
+  var info=document.getElementById('focusinfo');
+  if(!FOCUS){{info.textContent='';return;}}
+  var nE=0,nI=0,co={{}};
+  document.querySelectorAll('#xt tbody tr').forEach(function(r){{if(match(r)){{nE++;countCo(r,co);}}}});
+  document.querySelectorAll('#it tbody tr').forEach(function(r){{if(match(r)){{nI++;countCo(r,co);}}}});
+  var names=Object.keys(co).sort(function(a,b){{return co[b]-co[a];}});
+  var top=names.slice(0,14).map(function(n){{return n+' ('+co[n]+')';}}).join(', ');
+  info.textContent='Touches '+nE+' exterior + '+nI+' interior cell(s). '+
+   (names.length?'Shares cells with '+names.length+' other mod(s): '+top+
+    (names.length>14?', …':''):'No other mod touches these cells.');}}
+ function countCo(r,co){{(r.getAttribute('data-m')||'').split('|').forEach(function(m){{
+   if(m&&m!=FOCUS){{co[m]=(co[m]||0)+1;}}}});}}
 </script>
 </body></html>
 """
@@ -2074,14 +2444,24 @@ def check_predicates(rules_text: str, final_order: list, subset_origins: dict = 
         if header_arg:
             message_lines.append(header_arg)  # mlox: header args are the message
         logic_text = ""
+        depth = 0   # unclosed brackets carried across lines
         for i, raw_line in enumerate(body.splitlines()):
             line = strip_comment(raw_line).strip()
             if not line:
                 continue
-            if i > 0 and raw_line[:1] in (" ", "\t"):
+            # An indented line is message text ONLY when no bracket expression
+            # is open: mlox expressions like  [ALL A.esp\n\t[NOT B.esp]\n\tC.esm]
+            # continue across indented lines, and treating those continuations
+            # as message text truncated the condition -- e.g. the Uvirith's
+            # Legacy / Children of Morrowind note fired for people without
+            # Children of Morrowind because its [ALL ...] lost two conjuncts.
+            if i > 0 and depth == 0 and raw_line[:1] in (" ", "\t"):
                 message_lines.append(line)
             else:
                 logic_text += " " + line
+                depth += line.count("[") - line.count("]")
+                if depth < 0:
+                    depth = 0
 
         message = " ".join(message_lines).strip()
         ast = parse_mlox_lisp(tokenize_mlox_logic(logic_text))
@@ -2475,7 +2855,11 @@ def extract_subset_from_toml(toml_path: Path):
                 if listname:
                     subset_listnames[m.group(1)] = listname
 
-    subset = sorted(set(subset), key=str.lower)
+    # de-dupe case-insensitively but PRESERVE the file's declaration order --
+    # for mods no rule or dependency constrains, "where it appears in my file"
+    # is the order the user chose, and alphabetizing it away was a bug
+    _seen = set()
+    subset = [s for s in subset if not (s.lower() in _seen or _seen.add(s.lower()))]
     return subset, data_inserts, replace_dest_names, subset_listnames
 
 # ---------------------------------------------------------------------------
@@ -2750,11 +3134,521 @@ def toml_value(v: str) -> str:
     return "'" + v + "'"
 
 
+def read_savegame_content_files(path):
+    """Content files an OpenMW .omwsave depends on. Saves are ESM3 files: a
+    TES3 header record, then a SAVE record whose DEPE subrecords each carry
+    one content filename (components/esm3/savedgame.cpp). Returns
+    (files, error): files is None on failure."""
+    try:
+        raw = Path(path).read_bytes()
+    except OSError as e:
+        return None, f"can't read save: {e}"
+    if raw[:4] != b"TES3":
+        return None, "not an OpenMW save (no TES3 header)"
+    for tag, body in _iter_tes3_records(raw):
+        if tag == b"SAVE":
+            files = [sd.rstrip(b"\x00").decode("utf-8", "replace")
+                     for st, sd in _iter_subrecords(body) if st == b"DEPE"]
+            return files, None
+    return None, "no SAVE record found -- not a savegame?"
+
+
+def check_savegame_against_order(save_path, active_order):
+    """(save_files, missing, error): which of the save's content files are
+    absent from the given load order. A missing file means OpenMW will refuse
+    to load (or badly degrade) that save."""
+    files, err = read_savegame_content_files(save_path)
+    if files is None:
+        return None, None, err
+    active_lower = {str(n).lower() for n in active_order}
+    missing = [f for f in files if f.lower() not in active_lower]
+    return files, missing, None
+
+
+BACKUP_PATTERNS = (
+    ".preclean.bak",      # ours: original before a staged tes3cmd clean
+    ".masterfix.bak",     # ours: original before a master-size resync
+)
+
+
+def scan_backups(dirs, cfg_path=None, max_depth=4):
+    """Find backup files this tool (and tes3cmd / the Configurator) leave
+    behind: *.preclean.bak, *.masterfix.bak, tes3cmd's 'name~1.ext', and
+    timestamped '*.bak-YYYYMMDD-HHMMSS' / Configurator '*.backup.*' copies.
+    Returns [(backup_path, original_path_or_None, kind)]."""
+    import re as _re
+    out, seen = [], set()
+    re_tilde = _re.compile(r"^(.+)~\d+(\.[^.]+)$", _re.IGNORECASE)
+    re_stamp = _re.compile(r"^(.+)\.bak-\d{8}-\d{6}$", _re.IGNORECASE)
+    re_cfgbk = _re.compile(r"^(.+)\.backup\.", _re.IGNORECASE)
+
+    roots = [Path(d) for d in dirs if d]
+    if cfg_path:
+        roots.append(Path(cfg_path).parent)
+    for root in roots:
+        if not root.is_dir():
+            continue
+        base_depth = len(root.parts)
+        for dirpath, dirnames, filenames in os.walk(root):
+            if len(Path(dirpath).parts) - base_depth >= max_depth:
+                dirnames[:] = []
+            for fn in filenames:
+                p = Path(dirpath) / fn
+                key = str(p).lower()
+                if key in seen:
+                    continue
+                orig, kind = None, None
+                for suf in BACKUP_PATTERNS:
+                    if fn.lower().endswith(suf):
+                        orig, kind = p.with_name(fn[:-len(suf)]), suf.lstrip(".")
+                        break
+                if kind is None:
+                    m = re_tilde.match(fn)
+                    if m:
+                        orig, kind = p.with_name(m.group(1) + m.group(2)), "tes3cmd ~N"
+                    else:
+                        m = re_stamp.match(fn)
+                        if m:
+                            orig, kind = p.with_name(m.group(1)), "timestamped .bak"
+                        else:
+                            m = re_cfgbk.match(fn)
+                            if m:
+                                orig, kind = p.with_name(m.group(1)), "configurator .backup"
+                if kind is not None:
+                    seen.add(key)
+                    out.append((p, orig if (orig and orig.exists()) else orig, kind))
+    out.sort(key=lambda t: str(t[0]).lower())
+    return out
+
+
+USER_RULES_HEADER = (
+    ";; Personal mlox rules -- written by you (with help from MLOX Subset Sort's\n"
+    ";; rule maker). Keep this file LAST in the rule-files list: later files win\n"
+    ";; rule conflicts, so your rules override mlox_base/mlox_user.\n"
+    ";; Syntax: https://morrowind-modding.github.io/modding-tools/sorting-plugin-load-order/mlox/mlox-rule-guidelines\n")
+
+
+def order_rule_frozen_conflicts(names, final_order, curated_lower):
+    """For a proposed [Order] rule, return the consecutive (earlier, later)
+    name pairs that CONTRADICT the frozen curated order: both names are
+    curated plugins the sort won't reorder, but the rule wants them opposite
+    to how they currently sit. mlox discards such edges as cycles (per the
+    rule guidelines: "whenever we encounter a rule that would cause a cycle,
+    it is discarded"), so the rule would silently not take effect for those
+    pairs. Wildcard/<VER> tokens are skipped -- they don't resolve to one
+    position. Purely advisory; used to warn before writing a rule."""
+    pos = {str(n).lower(): i for i, n in enumerate(final_order)}
+    cl = {str(c).lower() for c in curated_lower}
+    out = []
+    for a, b in zip(names, names[1:]):
+        al, bl = a.lower(), b.lower()
+        if pattern_has_meta(a) or pattern_has_meta(b):
+            continue
+        if al in cl and bl in cl and al in pos and bl in pos and pos[al] > pos[bl]:
+            out.append((a, b))
+    return out
+
+
+def append_user_rule(path, keyword, names, comment=None):
+    """Append one mlox ordering rule block to a personal rules file, creating
+    the file (with an explanatory header) if it doesn't exist yet.
+
+    keyword: 'order' (the names are a load-order chain, first loads first),
+    'nearstart' or 'nearend' (each name is an independent position hint).
+    Names may use mlox wildcards (*, ?, <VER>) but must end in a recognized
+    plugin extension -- the same validation the rule parser applies, so a rule
+    that gets written is a rule that will load. Returns the text written."""
+    kw = str(keyword).strip().lower()
+    titles = {"order": "Order", "nearstart": "NearStart", "nearend": "NearEnd"}
+    if kw not in titles:
+        raise ValueError(f"unsupported rule type: {keyword!r}")
+    clean = [str(n).strip() for n in names if str(n).strip()]
+    if not clean:
+        raise ValueError("no plugin names given")
+    if kw == "order" and len(clean) < 2:
+        raise ValueError("[Order] needs at least two plugin names (first loads first)")
+    seen = set()
+    for n in clean:
+        if any(c in n for c in "[];\n"):
+            raise ValueError(f"invalid character in name/pattern: {n!r}")
+        m = _RE_ORDER_NAME.match(n)
+        if not m or m.group(0) != n:
+            raise ValueError(f"{n!r} must end in a plugin extension "
+                             f"(.esp/.esm/.omwaddon/.omwgame/.omwscripts, optionally '*')")
+        if n.lower() in seen:
+            # a plugin listed twice orders it relative to itself -- a
+            # self-cycle mlox would discard; always a mistake
+            raise ValueError(f"'{n}' is listed more than once -- a plugin can't be "
+                             f"ordered relative to itself")
+        seen.add(n.lower())
+    parts = []
+    if comment and str(comment).strip():
+        parts += [f";; {l}" for l in str(comment).strip().splitlines()]
+    parts.append(f"[{titles[kw]}]")
+    parts += clean
+    text = "\n".join(parts) + "\n"
+    p = Path(path)
+    if p.exists():
+        existing = p.read_text(encoding="utf-8-sig", errors="replace")
+        sep = "" if existing.endswith("\n\n") else ("\n" if existing.endswith("\n") else "\n\n")
+        p.write_text(existing + sep + text, encoding="utf-8")
+    else:
+        p.write_text(USER_RULES_HEADER + "\n" + text, encoding="utf-8")
+    return text
+
+
+# Candidate sources for MOMW's plugin-order.yml (first that yields a valid
+# file wins). The canonical copy lives in the website repo at
+# momw/momw/data_seeds/data/plugin-order.yml; the GitLab API raw endpoint is
+# tried too since it sidesteps the web UI's occasional auth funkiness, then
+# MOMW's own Gitea mirror. Overridable via $MLOX_PLUGIN_ORDER_URL.
+PLUGIN_ORDER_URLS = (
+    "https://gitlab.com/modding-openmw/modding-openmw.com/-/raw/master/momw/momw/"
+    "data_seeds/data/plugin-order.yml?ref_type=heads&inline=false",
+    "https://gitlab.com/api/v4/projects/modding-openmw%2Fmodding-openmw.com/repository/files/"
+    "momw%2Fmomw%2Fdata_seeds%2Fdata%2Fplugin-order.yml/raw?ref=master",
+)
+
+
+def update_plugin_order_yml(path, urls=None, timeout=45):
+    """Download the current MOMW plugin-order.yml over the configured file.
+    STRICTLY validated before anything is touched: the download must parse
+    with parse_plugin_order_yml and contain a sane number of entries, so a
+    wrong URL / error page can never clobber the file. The old file is kept
+    as a timestamped .bak. Returns report lines."""
+    import urllib.request
+    import tempfile as _tf
+    p = Path(path)
+    # precedence: explicit urls param (e.g. the GUI's Sources setting) >
+    # $MLOX_PLUGIN_ORDER_URL > built-in candidates
+    env = os.environ.get("MLOX_PLUGIN_ORDER_URL")
+    cand = list(urls) if urls else ([env] if env else list(PLUGIN_ORDER_URLS))
+    report = []
+    for url in cand:
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as r:
+                data = r.read()
+        except Exception as e:
+            report.append(f"  {url}: {e}")
+            continue
+        if b"file_name" not in data or b"on_lists" not in data:
+            report.append(f"  {url}: response doesn't look like plugin-order.yml")
+            continue
+        # full validation through the real parser before touching anything
+        try:
+            with _tf.NamedTemporaryFile("wb", suffix=".yml", delete=False) as tf:
+                tf.write(data)
+                tmp = Path(tf.name)
+            entries = parse_plugin_order_yml(tmp)
+            tmp.unlink()
+        except Exception as e:
+            report.append(f"  {url}: downloaded but failed to parse ({e})")
+            continue
+        if len(entries) < 100:
+            report.append(f"  {url}: parsed but only {len(entries)} entries -- refusing")
+            continue
+        old = p.read_bytes() if p.exists() else b""
+        if old == data:
+            report.append(f"{p.name}: already up to date ({len(entries)} entries).")
+            return report
+        if p.exists():
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            p.with_name(p.name + f".bak-{stamp}").write_bytes(old)
+        p.write_bytes(data)
+        try:
+            old_entries = None
+            if old:
+                with _tf.NamedTemporaryFile("wb", suffix=".yml", delete=False) as tf:
+                    tf.write(old)
+                    tmp = Path(tf.name)
+                old_entries = len(parse_plugin_order_yml(tmp))
+                tmp.unlink()
+        except Exception:
+            old_entries = None
+        frm = f"{old_entries} -> " if old_entries is not None else ""
+        report.append(f"{p.name}: updated from {url} ({frm}{len(entries)} entries; "
+                      f"previous version kept as .bak).")
+        return report
+    report.insert(0, "FAILED: no source produced a valid plugin-order.yml:")
+    report.append("  (set $MLOX_PLUGIN_ORDER_URL if MOMW moved the file)")
+    return report
+
+
+RULES_REPO = "DanaePlays/mlox-rules"   # actively maintained; plox uses it, mlox 1.1+ auto-updates from it
+# {name} is replaced with the rule filename (mlox_base.txt / mlox_user.txt).
+# Users can point this at a fork/mirror via the GUI's Sources dialog or
+# $MLOX_RULES_URL_TEMPLATE.
+RULES_URL_TEMPLATE = "https://raw.githubusercontent.com/" + RULES_REPO + "/main/{name}"
+
+
+def update_rule_files(rule_paths, url_template=None, timeout=30):
+    """Download the current mlox_base.txt / mlox_user.txt from the maintained
+    rules repo over any configured rule file with a matching filename. The old
+    file is kept as a timestamped .bak. Only filenames the repo actually
+    manages are touched -- a personal rules file with another name is skipped.
+
+    url_template (or $MLOX_RULES_URL_TEMPLATE) overrides the source; it must
+    contain '{name}', which is replaced per file. Returns report lines."""
+    import urllib.request
+    template = (url_template or os.environ.get("MLOX_RULES_URL_TEMPLATE")
+                or RULES_URL_TEMPLATE)
+    if "{name}" not in template:
+        return [f"FAILED: rules URL template must contain '{{name}}': {template}"]
+    report = []
+    for p in rule_paths:
+        p = Path(p)
+        if p.name.lower() not in ("mlox_base.txt", "mlox_user.txt"):
+            report.append(f"skipped {p.name}: not an upstream-managed filename")
+            continue
+        url = template.format(name=p.name)
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as r:
+                data = r.read()
+        except Exception as e:
+            report.append(f"FAILED {p.name}: {e}")
+            continue
+        if not data or b"[Order]" not in data:
+            report.append(f"FAILED {p.name}: download doesn't look like an mlox rules file")
+            continue
+        old = p.read_bytes() if p.exists() else b""
+        if old == data:
+            report.append(f"{p.name}: already up to date ({len(data):,} bytes)")
+            continue
+        if p.exists():
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            p.with_name(p.name + f".bak-{stamp}").write_bytes(old)
+        p.write_bytes(data)
+        report.append(f"{p.name}: updated {len(old):,} -> {len(data):,} bytes "
+                      f"(previous version kept as .bak)")
+    return report
+
+
+def rule_file_ages(rule_paths):
+    """[(name, age_days or None)] for showing how stale the rule files are."""
+    out = []
+    now = datetime.now().timestamp()
+    for p in rule_paths:
+        p = Path(p)
+        try:
+            out.append((p.name, int((now - p.stat().st_mtime) // 86400)))
+        except OSError:
+            out.append((p.name, None))
+    return out
+
+
+def cfg_line_value(line):
+    """The value part of a cfg line, unquoted -- mirror of custom.go's
+    cfgLineValue(). Returns None for lines without '='."""
+    if "=" not in line:
+        return None
+    v = line.split("=", 1)[1].strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        v = v[1:-1]
+    return v
+
+
+def configurator_remove_matches(val, line):
+    """Mirror of custom.go's shouldRemoveLine(): path-like values (containing
+    a slash) compare against the line's VALUE (exact or '/'-suffix match);
+    everything else is a plain whole-line substring test."""
+    if "/" in val or "\\" in val:
+        lv = cfg_line_value(line)
+        if lv is None:
+            return False
+        lvn = lv.replace("\\", "/").strip()
+        vn = val.replace("\\", "/").strip()
+        is_abs = vn.startswith("/") or (len(vn) >= 3 and vn[1] == ":" and vn[2] == "/")
+        return lvn == vn or (not is_abs and lvn.endswith("/" + vn))
+    return val in line
+
+
+def simulate_configurator_apply(cfg_lines, toml_text, list_name=None):
+    """Faithful re-implementation of momw-configurator's ApplyCustomizations
+    (cfg/custom.go), so the emitted TOML can be dry-run against a cfg BEFORE
+    anyone runs the real Configurator. Mirrors, per the Go source:
+
+      * insert: after/before matched by whole-line substring; 0 matches ->
+        error per insert; >1 matches -> FATAL (the Go code returns a nil cfg);
+        after -> target_idx+1, before -> target_idx; prefix copied from the
+        matched line; insertBlock lines inserted sequentially.
+      * replace: whole-line substring; >1 matches -> error, entry skipped;
+        data lines get quoted values.
+      * remove: shouldRemoveLine semantics (see configurator_remove_matches);
+        EVERY matching line is removed, silently.
+      * append: groundcover= lines routed to the groundcover section (after
+        the last groundcover= line, or a new section), the rest to an
+        '# APPENDED LINES #' section at the end.
+      * apply order per block: inserts, replaces, removes, appends.
+
+    Template vars ({{.ModBaseDir}}) and $ENV vars are NOT expanded -- a note
+    is returned instead, since the preview can't know the Configurator's
+    config. Returns (new_lines_or_None, errors, notes); None means the run
+    would abort (ambiguous insert anchor)."""
+    try:
+        import tomllib as _toml
+    except ModuleNotFoundError:
+        try:
+            import tomli as _toml  # type: ignore
+        except ModuleNotFoundError:
+            return None, [], ["preview skipped: needs Python 3.11+ (tomllib) or 'pip install tomli'"]
+    try:
+        data = _toml.loads(toml_text)
+    except Exception as e:
+        return None, [f"emitted TOML failed to parse: {e}"], []
+
+    lines = list(cfg_lines)
+    errs, notes = [], []
+
+    def _check_templates(v):
+        if "{{" in v or "$" in v:
+            notes.append(f"'{v}': template/env var left unexpanded in the preview")
+
+    for cust in data.get("Customizations") or []:
+        if list_name and cust.get("listName") and cust.get("listName") != list_name:
+            continue
+
+        # 1) inserts
+        for st in cust.get("insert") or []:
+            insert, iblock = st.get("insert"), st.get("insertBlock")
+            after, before = st.get("after"), st.get("before")
+            target = after if after is not None else before
+            if (insert is None and iblock is None) or target is None:
+                errs.append("insert entry needs insert/insertBlock plus after or before")
+                continue
+            if after is not None and before is not None:
+                errs.append("after and before cannot be used together")
+                continue
+            matches = [i for i, l in enumerate(lines) if target in l]
+            if not matches:
+                errs.append(f"target line is not present in openmw.cfg: {target}")
+                continue
+            if len(matches) > 1:
+                errs.append(f"FATAL: multiple matches for anchor '{target}' -- the real "
+                            f"Configurator abandons the cfg here")
+                return None, errs, notes
+            idx = matches[0]
+            prefix = lines[idx].split("=")[0]
+            dest = idx + 1 if after is not None else idx
+            vals = [insert] if insert is not None else \
+                   [l.replace("\r", "") for l in iblock.split("\n") if l]
+            for v in vals:
+                _check_templates(v)
+                lines.insert(dest, f"{prefix}={v}")
+                dest += 1
+
+        # 2) replaces
+        for st in cust.get("replace") or []:
+            src, dst = st.get("source"), st.get("dest")
+            if src is None or dst is None:
+                errs.append("replace entry needs source and dest")
+                continue
+            matches = [i for i, l in enumerate(lines) if src in l]
+            if len(matches) > 1:
+                errs.append(f"replace source '{src}' matches more than one line -- skipped")
+                continue
+            if matches:
+                idx = matches[0]
+                prefix = lines[idx].split("=")[0]
+                _check_templates(dst)
+                lines[idx] = (f'{prefix}="{dst}"' if prefix == "data" else f"{prefix}={dst}")
+
+        # 3) removes (every match, silently)
+        rm = []
+        for key in ("removeData", "removeFallbackArchive", "removeContent",
+                    "removeFallback", "removeGroundcover"):
+            rm += list(cust.get(key) or [])
+        if rm:
+            lines = [l for l in lines if not any(configurator_remove_matches(v, l) for v in rm)]
+
+        # 4) appends
+        gc, other = [], []
+        for st in cust.get("append") or []:
+            vals = [st["append"]] if "append" in st else \
+                   [l.replace("\r", "") for l in st.get("appendBlock", "").split("\n") if l]
+            for v in vals:
+                _check_templates(v)
+                (gc if v.startswith("groundcover=") else other).append(v)
+        if gc:
+            last = max((i for i, l in enumerate(lines) if l.startswith("groundcover=")), default=-1)
+            if last >= 0:
+                for j, v in enumerate(gc):
+                    lines.insert(last + 1 + j, v)
+            else:
+                lines += ["", "#                   #", "# GROUNDCOVER FILES #", "#                   #"] + gc
+        if other:
+            lines += ["", "#                #", "# APPENDED LINES #", "#                #"] + other
+
+    return lines, errs, notes
+
+
+def preview_configurator_result(plan_lines, toml_text, expected_content_order,
+                                subset_names, user_data_norms=None, list_name=None):
+    """Dry-run the emitted TOML and verify the round trip.
+
+    The real Configurator applies customizations to a FRESH curated cfg (no
+    customs in it yet), so the simulation base is the current cfg with this
+    run's custom content= lines and custom data= paths stripped out.
+
+    Returns (ok, report_lines): ok is True when the simulated content= order
+    exactly matches what the sort computed (accounting for removals)."""
+    subset_lower = {str(s).lower() for s in subset_names or ()}
+    user_norms = {n for n in (user_data_norms or ()) if n}
+    base = []
+    for l in plan_lines:
+        m = re.match(r"^\s*content\s*=\s*(.+?)\s*$", l, re.IGNORECASE)
+        if m and m.group(1).lower() in subset_lower:
+            continue
+        m = re.match(r"^\s*data\s*=\s*(.+?)\s*$", l, re.IGNORECASE)
+        if m and normalize_data_path(m.group(1).strip().strip('"')) in user_norms:
+            continue
+        base.append(l)
+
+    report = []
+    sim, errs, notes = simulate_configurator_apply(base, toml_text, list_name=list_name)
+    for n in notes:
+        report.append(f"  NOTE: {n}")
+    for e in errs:
+        report.append(f"  WARNING: {e}")
+    if sim is None:
+        report.append("  PREVIEW ABORTED -- the real Configurator run would fail the same way.")
+        return False, report
+
+    sim_content = [m.group(1) for l in sim
+                   for m in [re.match(r"^\s*content\s*=\s*(.+?)\s*$", l, re.IGNORECASE)] if m]
+    # expected: the computed order, minus anything the TOML's removes catch
+    try:
+        import tomllib as _toml
+    except ModuleNotFoundError:
+        import tomli as _toml  # type: ignore
+    data = _toml.loads(toml_text)
+    rm = []
+    for cust in data.get("Customizations") or []:
+        for key in ("removeData", "removeFallbackArchive", "removeContent",
+                    "removeFallback", "removeGroundcover"):
+            rm += list(cust.get(key) or [])
+    expected = [n for n in expected_content_order
+                if not any(configurator_remove_matches(v, f"content={n}") for v in rm)]
+
+    if sim_content == expected:
+        report.append(f"  VERIFIED: simulated apply reproduces the sorted order exactly "
+                      f"({len(sim_content)} content= lines).")
+        return True, report
+    report.append("  MISMATCH: the simulated Configurator result differs from the sorted order!")
+    for i, (a, b) in enumerate(zip(sim_content, expected)):
+        if a != b:
+            report.append(f"    first difference at #{i}: simulated '{a}' vs expected '{b}'")
+            break
+    if len(sim_content) != len(expected):
+        report.append(f"    lengths differ: simulated {len(sim_content)} vs expected {len(expected)}")
+    return False, report
+
+
 def generate_customizations_toml(original_data, final_content_order, subset_set,
                                    original_content_values, data_result_tuples=None,
                                    raw_data_inserts=None, replace_dest_names=None,
                                    user_data_values=None, list_name=None,
-                                   remove_content=None, remove_data=None):
+                                   remove_content=None, remove_data=None,
+                                   custom_anchors=None):
     """
     original_data: parsed dict of the source momw-customizations.toml (listName,
       removeData/removeContent/removeFallback/removeGroundcover, replace, append
@@ -2807,6 +3701,8 @@ def generate_customizations_toml(original_data, final_content_order, subset_set,
                      "removeData": list(remove_data or [])}
 
     out = []
+    _anchors = []   # every after=/before=/source= value we emit, for the ambiguity check
+    _removes = []   # every remove* value we emit -- removal matching is SILENT
     for bi, block in enumerate(blocks):
         out.append("[[Customizations]]")
         name = list_name or block.get("listName")
@@ -2823,8 +3719,13 @@ def generate_customizations_toml(original_data, final_content_order, subset_set,
                     seen.add(x.lower())
                     merged.append(x)
             if merged:
-                items = ", ".join(toml_value(x) for x in merged)
-                out.append(f"{key} = [ {items} ]")
+                # one entry per line, matching the style of MOMW's own
+                # documentation examples -- a 25-entry single line is unreadable
+                out.append(f"{key} = [")
+                for x in merged:
+                    out.append(f"  {toml_value(x)},")
+                out.append("]")
+                _removes.extend(merged)
         out.append("")
 
         # 1) DATA INSERTS FIRST (Ensures paths are defined before plugins look for them)
@@ -2850,6 +3751,7 @@ def generate_customizations_toml(original_data, final_content_order, subset_set,
                     if prev_line is not None:
                         anchor = extract_data_path_value(prev_line) or prev_line.split("=", 1)[-1].strip().strip('"')
                         out.append(f"after = {toml_value(anchor)}")
+                        _anchors.append(anchor)
                     else:
                         out.append("# WARNING: this was the very first data= line -- no predecessor to anchor to")
                     out.append("")
@@ -2861,8 +3763,10 @@ def generate_customizations_toml(original_data, final_content_order, subset_set,
                 out.append(f"insert = {toml_value(d['value'])}")
                 if d.get("after"):
                     out.append(f"after = {toml_value(d['after'])}")
+                    _anchors.append(d["after"])
                 elif d.get("before"):
                     out.append(f"before = {toml_value(d['before'])}")
+                    _anchors.append(d["before"])
                 out.append("")
 
         # 2) CONTENT INSERTS SECOND
@@ -2874,6 +3778,21 @@ def generate_customizations_toml(original_data, final_content_order, subset_set,
             if name.lower() not in subset_set_lower or name in replace_dest_names:
                 continue
             value = original_content_values.get(name, name)
+            # Annotate WHY this mod sits here: the after=/before= below is its
+            # chained position (documented Configurator semantics), but the
+            # REAL reason comes from the sort -- a dependency/rule target, a
+            # NearStart/NearEnd hint, or nothing at all (positional only).
+            info = (custom_anchors or {}).get(name.lower())
+            if info:
+                how, anch = info
+                if how == "after":
+                    out.append(f"# constraint: must load after {toml_value(anch)}")
+                elif how == "before":
+                    out.append(f"# constraint: must load before {toml_value(anch)}")
+                elif how in ("nearstart", "nearend"):
+                    out.append(f"# constraint: mlox [{'NearStart' if how == 'nearstart' else 'NearEnd'}] hint")
+                else:
+                    out.append("# no ordering constraint -- positional only")
             out.append("[[Customizations.insert]]")
             out.append(f"insert = {toml_value(value)}")
             if i == 0:
@@ -2882,17 +3801,20 @@ def generate_customizations_toml(original_data, final_content_order, subset_set,
                 # ended up immediately following it instead
                 if len(final_content_order) > 1:
                     out.append(f"before = {toml_value(final_content_order[1])}")
+                    _anchors.append(final_content_order[1])
                 else:
                     out.append("# WARNING: this is the only content= plugin -- no anchor to write")
             else:
                 anchor = final_content_order[i - 1]
                 out.append(f"after = {toml_value(anchor)}")
+                _anchors.append(anchor)
             out.append("")
 
         for rep in block.get("replace", []):
             out.append("[[Customizations.replace]]")
             if "source" in rep:
                 out.append(f"source = {toml_value(rep['source'])}")
+                _anchors.append(rep["source"])
             if "dest" in rep:
                 out.append(f"dest = {toml_value(rep['dest'])}")
             out.append("")
@@ -2904,6 +3826,38 @@ def generate_customizations_toml(original_data, final_content_order, subset_set,
             if "appendBlock" in ap:
                 out.append(f"appendBlock = {toml_value(ap['appendBlock'])}")
             out.append("")
+
+    # Ambiguity checks (warn-only, output unchanged). Verified against
+    # momw-configurator's cfg/custom.go:
+    #  * after=/before=/source= values are matched with strings.Contains
+    #    against WHOLE cfg lines, and >1 match is a hard error (doInsert even
+    #    discards the cfg it was building) -- so a filename nested inside
+    #    another ('Incantation.omwscripts' in 'content=Incantation.omwscripts.esp')
+    #    breaks the configurator run.
+    #  * remove* values match the same way but with NO multi-match error --
+    #    doRemove silently deletes EVERY matching line, so a nested filename
+    #    would silently remove a mod the user never opted out. (Path-like
+    #    values instead match the line's value exactly or by /-suffix.)
+    haystack = [f"content={n}" for n in final_content_order]
+    if data_result_tuples:
+        haystack += [line for line, _, _ in data_result_tuples]
+
+    _line_value = cfg_line_value
+    _remove_matches = configurator_remove_matches
+
+    for a in dict.fromkeys(_anchors):        # dedupe, keep order
+        hits = [l for l in haystack if a in l]
+        if len(hits) > 1:
+            print(f"WARNING: anchor '{a}' in the emitted TOML matches "
+                  f"{len(hits)} openmw.cfg lines -- momw-configurator errors on "
+                  f"ambiguous matches. Colliding lines: "
+                  f"{'; '.join(hits[:4])}{' ...' if len(hits) > 4 else ''}")
+    for r in dict.fromkeys(_removes):
+        hits = [l for l in haystack if _remove_matches(r, l)]
+        if len(hits) > 1:
+            print(f"WARNING: remove entry '{r}' matches {len(hits)} openmw.cfg "
+                  f"lines -- momw-configurator removes ALL of them, silently. "
+                  f"Colliding lines: {'; '.join(hits[:4])}{' ...' if len(hits) > 4 else ''}")
 
     return "\n".join(out).rstrip() + "\n"
 
@@ -2943,7 +3897,7 @@ def _is_master_file(name):
 
 
 def build_and_sort(base_order_names, subset_names, rule_blocks, masters=None,
-                   nearstart=None, nearend=None):
+                   nearstart=None, nearend=None, anchor_out=None):
     # Guard against the same plugin becoming two different graph nodes just
     # because of a casing difference (OpenMW's VFS is case-insensitive, so
     # 'NewMod.esp' and 'newmod.esp' are the same file) -- canonicalize any
@@ -3261,6 +4215,14 @@ def build_and_sort(base_order_names, subset_names, rule_blocks, masters=None,
                f"unanchored (standalone / masters-only): {len(subset_names) - n_after - n_before} "
                f"/ {len(subset_names)} customs")
 
+    if anchor_out is not None:
+        # expose WHY each custom sits where it does -- ("after"|"before", anchor
+        # name) for real constraints, ("none", None) for positional-only -- so
+        # the TOML emitter can annotate its inserts
+        for n in subset_names:
+            _v, _a, _how = resolved[n]
+            anchor_out[n.lower()] = (_how, _a)
+
     # [NearStart]/[NearEnd] position hints (mlox semantics: pull each matching
     # plugin as close to the start/end as the edges allow -- NOT a chain).
     # Applied to CUSTOMS only (the curated list is frozen), and they override
@@ -3272,6 +4234,8 @@ def build_and_sort(base_order_names, subset_names, rule_blocks, masters=None,
                     continue
                 j = declared_end[n] - nb  # stable tie-break among hinted customs
                 pos[n] = (-1.0 + j * _EPS) if to_start else float(2 * nb + len(subset_names) + j)
+                if anchor_out is not None:
+                    anchor_out[n.lower()] = ("nearstart" if to_start else "nearend", None)
                 trace_sort(f"[sort]  [{label}] hint: '{n}' -> {'front' if to_start else 'very end'} "
                            f"(pos {pos[n]:.6g})")
 
@@ -3416,6 +4380,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--resource-conflicts", action="store_true",
                      help="Scan the cfg's data= folders for loose-file (VFS) conflicts: the same relative "
                           "path in 2+ folders (later wins), like MO2's Data conflicts. Read-only.")
+    ap.add_argument("--lint", action="store_true",
+                     help="After sorting, run tes3lint-style checks over the active plugins: evil "
+                          "GMSTs, the interior fog-density-0 bug, interior cells with no pathgrid, "
+                          "expansion-function use without the expansion mastered, omwaddon/omwscripts "
+                          "twin mismatches, and blank custom headers. Read-only; VFS-aware.")
     ap.add_argument("--resources-out", type=Path,
                      help="Write the full resource-conflict list to this CSV (with --resource-conflicts).")
     ap.add_argument("--exclude", nargs="*", default=[],
@@ -3550,7 +4519,11 @@ def compute_plan(args) -> dict:
                 import tomli as tomllib  # type: ignore
             original_toml_data = tomllib.loads(args.customizations.read_text(encoding="utf-8"))
 
-    subset = sorted(set(subset), key=str.lower)
+    # de-dupe case-insensitively, PRESERVING declaration order (scan order /
+    # the order written in the subset file or TOML). Unconstrained mods keep
+    # this order at the end of the load, instead of being alphabetized.
+    _seen = set()
+    subset = [s for s in subset if not (s.lower() in _seen or _seen.add(s.lower()))]
     if not subset and not data_inserts and not raw_toml_data_inserts:
         raise SystemExit("No subset plugins or data paths found -- nothing to do.")
 
@@ -3560,6 +4533,7 @@ def compute_plan(args) -> dict:
     final_order = None
     data_result = None
     predicate_warnings = []
+    custom_anchors = {}   # {custom_lower: (how, anchor_name)} from build_and_sort
 
     # --- plugin-order.yml: curated-vs-custom split (opt-in) -----------------
     # With a --list-name, curated plugins (those the yml says belong to that
@@ -3652,7 +4626,8 @@ def compute_plan(args) -> dict:
             masters = {}
 
         final_order = build_and_sort(base_order_names, subset, rule_blocks, masters=masters,
-                                     nearstart=nearstart_pats, nearend=nearend_pats)
+                                     nearstart=nearstart_pats, nearend=nearend_pats,
+                                     anchor_out=custom_anchors)
 
         # Drift check: the CURATED (non-custom) plugins must keep their exact cfg
         # order. Customs that were already in the cfg are expected to move, so
@@ -3740,6 +4715,36 @@ def compute_plan(args) -> dict:
     except Exception as e:
         print(f"  WARNING: master check failed: {e}", file=sys.stderr)
 
+    # --- merged-artifact staleness watchdog (read-only) ---------------------
+    # delta-plugin's merged leveled lists (and similar generated artifacts)
+    # only reflect the plugins that existed when the Configurator last ran.
+    # If newer plugins exist, the merge is stale and quietly wrong.
+    try:
+        _active_ws = final_order if final_order else base_order_names
+        _widx = PluginFileIndex(all_scan_dirs(data_order, raw_toml_data_inserts, data_inserts))
+        for _artifact in ("delta-merged.omwaddon", "deleted_groundcover.omwaddon",
+                          "S3LightFixes.esp"):
+            _ap = _widx.find(_artifact)
+            if _ap is None or _artifact.lower() not in {n.lower() for n in _active_ws}:
+                continue
+            _amtime = _ap.stat().st_mtime
+            _newer = []
+            for _n in _active_ws:
+                if _n.lower() == _artifact.lower() or _n.lower().endswith(".omwscripts"):
+                    continue
+                _np = _widx.find(_n)
+                try:
+                    if _np is not None and _np.stat().st_mtime > _amtime:
+                        _newer.append(_n)
+                except OSError:
+                    pass
+            if _newer:
+                print(f"\n[STALE] '{_artifact}' is older than {len(_newer)} active plugin(s) "
+                      f"(e.g. {', '.join(_newer[:3])}{', ...' if len(_newer) > 3 else ''}) -- "
+                      f"re-run momw-configurator so it gets rebuilt against the current load order.")
+    except Exception:
+        pass
+
     # --- TES3 record-level conflict scan (opt-in, read-only) ----------------
     conflicts = []
     want_conflicts = getattr(args, "check_conflicts", False)
@@ -3791,6 +4796,22 @@ def compute_plan(args) -> dict:
         if csession is not None:
             csession.cleanup()   # drop the temp JSON spool (no-op if --json-dump-dir kept it)
 
+    if getattr(args, "lint", False):
+        _section("LINT (tes3lint-style checks, read-only)")
+        _lactive = final_order if final_order else base_order_names
+        _lactive, _lexcl = filter_plugins(_lactive, getattr(args, "exclude", None))
+        if _lexcl:
+            print(f"  (excluded {len(_lexcl)} plugin(s) by --exclude)")
+        _lw, _ls = lint_plugins(_lactive, PluginFileIndex(conf_dirs),
+                                subset_names=subset, origins=subset_origins)
+        print(f"  Scanned {_ls.get('scanned', 0)} plugin(s); "
+              f"{_ls.get('interior_cells', 0)} interior cell(s), "
+              f"{_ls.get('pathgrids', 0)} interior pathgrid(s).")
+        for _w in _lw:
+            print(f"\n{_w}")
+        if not _lw:
+            print("\n  No lint findings.")
+
     if want_resources:
         _section("DATA-PATH RESOURCE (VFS) CONFLICTS (read-only)")
         subset_dirs = pending_custom_dirs(raw_toml_data_inserts, data_inserts)
@@ -3834,6 +4855,7 @@ def compute_plan(args) -> dict:
         "yml_warnings": yml_warnings,
         "master_warnings": master_warnings,
         "master_problem_plugins": master_problem_plugins,
+        "custom_anchors": custom_anchors,
         "original_content_values": original_content_values,
         "original_toml_data": original_toml_data,
         "replace_dest_names": replace_dest_names,
@@ -3941,7 +4963,22 @@ def write_plan(args, plan: dict, final_order: list = None, data_order: list = No
             list_name=getattr(args, "list_name", None),
             remove_content=remove_content,
             remove_data=remove_data,
+            custom_anchors=plan.get("custom_anchors"),
         )
+        # Dry-run the TOML through a faithful simulation of momw-configurator's
+        # apply logic and verify the result reproduces the sorted order.
+        _subsection("configurator preview (simulated apply)")
+        try:
+            _user_norms = [normalize_data_path(d["value"]) for d in (plan["data_inserts"] or [])
+                           if d.get("value")]
+            _ok, _rep = preview_configurator_result(
+                plan["lines"], toml_text, list(final_order or []),
+                subset, user_data_norms=_user_norms,
+                list_name=getattr(args, "list_name", None))
+            for _l in _rep:
+                print(_l)
+        except Exception as _e:
+            print(f"  WARNING: configurator preview failed: {_e}")
         if args.dry_run:
             print(f"\n  DRY RUN: would write {args.emit_toml}\n{toml_text}")
         else:

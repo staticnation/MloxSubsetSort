@@ -185,6 +185,13 @@ def apply_dark_theme(root):
     style.configure("TCheckbutton", background=DARK["bg"], foreground=DARK["fg"])
     style.map("TCheckbutton", background=[("active", DARK["bg"])],
               foreground=[("disabled", DARK["fg_dim"])])
+    # radiobuttons need the same treatment or the focused/active one renders
+    # with a white background on Windows' default theme
+    style.configure("TRadiobutton", background=DARK["bg"], foreground=DARK["fg"])
+    style.map("TRadiobutton",
+              background=[("active", DARK["bg"]), ("focus", DARK["bg"]),
+                          ("selected", DARK["bg"])],
+              foreground=[("disabled", DARK["fg_dim"])])
     style.configure("TEntry", fieldbackground=DARK["field_bg"], foreground=DARK["fg"],
                      insertcolor=DARK["fg"], bordercolor=DARK["border"])
     style.map("TEntry", fieldbackground=[("readonly", DARK["field_bg"])])
@@ -268,8 +275,9 @@ class Tooltip:
         if self.tip_window or not self.text:
             return
         try:
-            x = self.widget.winfo_rootx() + 14
-            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+            wx = self.widget.winfo_rootx()
+            wy = self.widget.winfo_rooty()
+            wh = self.widget.winfo_height()
         except tk.TclError:
             return
         tw = tk.Toplevel(self.widget)
@@ -279,12 +287,31 @@ class Tooltip:
             tw.attributes("-topmost", True)
         except tk.TclError:
             pass
-        tw.wm_geometry(f"+{x}+{y}")
         tk.Label(
             tw, text=self.text, justify="left", background="#2d2d30", foreground=DARK["fg"],
             relief="solid", borderwidth=1, wraplength=self.wraplength,
             font=("TkDefaultFont", 9), padx=6, pady=4,
         ).pack()
+        # Position AFTER the label exists so we know the real size, then clamp
+        # to the screen so a tooltip on a right-edge widget (fullscreen) isn't
+        # cut off. Preferred spot is below-left of the widget; flip/slide back
+        # onto the screen when it would overflow.
+        try:
+            tw.update_idletasks()
+            tw_w, tw_h = tw.winfo_reqwidth(), tw.winfo_reqheight()
+            sw, sh = tw.winfo_screenwidth(), tw.winfo_screenheight()
+            margin = 8
+            x = wx + 14
+            if x + tw_w > sw - margin:
+                x = sw - margin - tw_w          # slide left to fit
+            x = max(margin, x)
+            y = wy + wh + 6
+            if y + tw_h > sh - margin:
+                y = wy - tw_h - 6               # not enough room below -> above
+            y = max(margin, y)
+        except tk.TclError:
+            x, y = wx + 14, wy + wh + 6
+        tw.wm_geometry(f"+{x}+{y}")
 
     def _hide(self, event=None):
         self._unschedule()
@@ -466,16 +493,18 @@ class DragReorderListbox(tk.Listbox):
 # ---------------------------------------------------------------------------
 
 class RuleFilesPanel:
-    def __init__(self, parent, row):
+    def __init__(self, parent, row, on_new_rule=None, on_sources=None, get_rules_url=None):
+        self._get_rules_url = get_rules_url
         frame = ttk.LabelFrame(
             parent, text="Rule files (priority = order below, last = highest -- drag rows to reorder)")
         frame.grid(row=row, column=0, columnspan=3, sticky="nsew", pady=(8, 4))
         frame.columnconfigure(0, weight=1)
 
         list_frame = ttk.Frame(frame)
-        list_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        list_frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=(8, 0))
         frame.rowconfigure(0, weight=1)
         list_frame.columnconfigure(0, weight=1)
+        list_frame.rowconfigure(0, weight=1)   # let the listbox grow down to the buttons' bottom
 
         # single-select: dragging a multi-selection to a new spot is
         # ambiguous (which item does the cursor "carry"?), so keep it to one
@@ -483,6 +512,7 @@ class RuleFilesPanel:
         self.listbox = DragReorderListbox(list_frame, height=5, selectmode="browse",
                                            activestyle="dotbox", exportselection=False)
         style_plain_widget(self.listbox)
+        attach_typeahead(self.listbox)
         self.listbox.grid(row=0, column=0, sticky="nsew")
         add_tooltip(self.listbox,
                      "mlox rule files (mlox_base.txt, mlox_user.txt, ...), applied in this order.\n"
@@ -492,6 +522,10 @@ class RuleFilesPanel:
         scroll.grid(row=0, column=1, sticky="ns")
         self.listbox.configure(yscrollcommand=scroll.set)
 
+        # side column: just the list-management buttons (add / remove /
+        # reorder). The rule ACTIONS (New Rule / Update Rules / Sources) go in
+        # a horizontal row under the list so the side column stays short and
+        # doesn't create a tall dead-space next to a small list.
         btns = ttk.Frame(frame)
         btns.grid(row=0, column=1, sticky="n", padx=(0, 8), pady=8)
         add_btn = ttk.Button(btns, text="Add File(s)...", command=self.add_files)
@@ -507,12 +541,67 @@ class RuleFilesPanel:
         down_btn.pack(fill="x", pady=2)
         add_tooltip(down_btn, "Move the selected rule file later (higher priority).")
 
+        actions = ttk.Frame(frame)
+        actions.grid(row=1, column=0, columnspan=2, sticky="w", padx=8, pady=(3, 6))
+        if on_new_rule is not None:
+            new_btn = ttk.Button(actions, text="New Rule...", command=on_new_rule)
+            new_btn.pack(side="left", padx=(0, 6))
+            add_tooltip(new_btn,
+                         "Write your own mlox [Order]/[NearStart]/[NearEnd] rule without knowing "
+                         "the syntax: pick plugins (or grab the selected rows from the plugin "
+                         "panel), preview the rule, and append it to a personal rules file that "
+                         "loads LAST so it wins conflicts. This is how rules for modern mods get "
+                         "made -- consider contributing good ones upstream.")
+        upd_btn = ttk.Button(actions, text="Update Rules...", command=self._update_rules)
+        upd_btn.pack(side="left", padx=(0, 6))
+        add_tooltip(upd_btn,
+                     "Download the CURRENT mlox_base.txt / mlox_user.txt from the actively "
+                     f"maintained rules repo (github.com/{core.RULES_REPO} -- the same source "
+                     "plox uses, and mlox 1.1+ auto-updates from) over the matching files in "
+                     "this list. The old files are kept as timestamped .bak copies. Files "
+                     "with other names (your personal rules) are never touched. Source URL "
+                     "configurable via Sources...")
+        if on_sources is not None:
+            src_btn = ttk.Button(actions, text="Sources...", command=on_sources)
+            src_btn.pack(side="left", padx=(0, 6))
+            add_tooltip(src_btn,
+                         "Configure WHERE 'Update Rules...' and the plugin-order.yml "
+                         "'Update...' button download from -- point them at a fork or "
+                         "mirror if upstream moves. Blank fields use the built-in defaults.")
+
         if HAVE_DND:
             self.listbox.drop_target_register(DND_FILES)
             self.listbox.dnd_bind("<<Drop>>", self._on_drop)
         else:
-            ttk.Label(frame, text="(install tkinterdnd2 to drag files in from your file manager)",
-                      foreground=DARK["fg_dim"]).grid(row=1, column=0, columnspan=2, sticky="w", padx=8)
+            ttk.Label(actions, text="(install tkinterdnd2 to drag files in from your file manager)",
+                      foreground=DARK["fg_dim"]).pack(side="left", padx=(12, 0))
+
+    def _update_rules(self):
+        paths = self.get_paths()
+        managed = [p for p in paths
+                   if Path(p).name.lower() in ("mlox_base.txt", "mlox_user.txt")]
+        if not managed:
+            messagebox.showinfo("Update rules",
+                                "Add mlox_base.txt and/or mlox_user.txt to the list first.")
+            return
+        ages = core.rule_file_ages(managed)
+        age_txt = "\n".join(
+            f"  {n}: {'age unknown' if d is None else f'~{d} day(s) old'}" for n, d in ages)
+        if not messagebox.askyesno(
+                "Update rules",
+                f"Download the current rules from github.com/{core.RULES_REPO} over these "
+                f"files?\n\n{age_txt}\n\nTimestamped .bak copies of the old files are kept."):
+            return
+
+        custom = (self._get_rules_url() if self._get_rules_url else "") or None
+
+        def work():
+            try:
+                report = core.update_rule_files(managed, url_template=custom)
+            except Exception as e:
+                report = [f"FAILED: {e}"]
+            self.listbox.after(0, lambda: messagebox.showinfo("Update rules", "\n".join(report)))
+        threading.Thread(target=work, daemon=True).start()
 
     def _on_drop(self, event):
         for p in self.listbox.tk.splitlist(event.data):
@@ -553,6 +642,92 @@ class RuleFilesPanel:
 # computed order, applied at Export time.
 # ---------------------------------------------------------------------------
 
+def attach_typeahead(listbox, strip=None, feedback=None):
+    """Windows-Explorer-style type-to-jump for a Listbox: type letters to jump
+    to the first row whose name starts with what you typed (falls back to a
+    substring match), press one letter repeatedly to cycle through its
+    matches, Backspace edits, Esc clears. The buffer resets after a short
+    pause. `strip` maps display text back to the real name; `feedback` (if
+    given) is called with the current buffer for a UI hint."""
+    import time as _time
+    st = {"buf": "", "at": 0.0, "after": None}
+    strip = strip or (lambda s: s)
+
+    def _feedback():
+        if feedback:
+            try:
+                feedback(st["buf"])
+            except Exception:
+                pass
+
+    def _clear(_e=None):
+        st["buf"] = ""
+        _feedback()
+
+    def _schedule_reset():
+        if st["after"] is not None:
+            try:
+                listbox.after_cancel(st["after"])
+            except Exception:
+                pass
+        st["after"] = listbox.after(1200, _clear)
+
+    def _jump(idx):
+        listbox.selection_clear(0, "end")
+        listbox.selection_set(idx)
+        listbox.activate(idx)
+        listbox.see(idx)
+        listbox.event_generate("<<ListboxSelect>>")
+
+    def _on_key(e):
+        ks = e.keysym
+        if ks == "Escape":
+            _clear()
+            return "break"
+        if ks == "BackSpace":
+            if st["buf"]:
+                st["buf"] = st["buf"][:-1]
+                st["at"] = _time.time()
+                _feedback()
+                _schedule_reset()
+                return "break"
+            return None
+        ch = e.char
+        if not ch or not ch.isprintable() or (e.state & 0x0004):   # ignore Ctrl-chords
+            return None
+        now = _time.time()
+        if now - st["at"] > 1.2:
+            st["buf"] = ""
+        # leaving single-key cycling: start a fresh buffer with the new key
+        if len(st["buf"]) > 1 and set(st["buf"]) == {st["buf"][0]} and ch.lower() != st["buf"][0]:
+            st["buf"] = ""
+        st["at"] = now
+        cl = ch.lower()
+        items = [strip(listbox.get(i)).lower() for i in range(listbox.size())]
+        if st["buf"] and set(st["buf"]) == {cl}:
+            # same key again: cycle through rows starting with that letter
+            st["buf"] += cl
+            cur = listbox.curselection()
+            start = (cur[0] + 1) if cur else 0
+            for i in list(range(start, len(items))) + list(range(0, start)):
+                if items[i].startswith(cl):
+                    _jump(i)
+                    break
+        else:
+            st["buf"] += cl
+            buf = st["buf"]
+            hit = next((i for i, s in enumerate(items) if s.startswith(buf)), None)
+            if hit is None:
+                hit = next((i for i, s in enumerate(items) if buf in s), None)
+            if hit is not None:
+                _jump(hit)
+        _feedback()
+        _schedule_reset()
+        return "break"
+
+    listbox.bind("<KeyPress>", _on_key, add="+")
+
+
 class ReorderPanel:
     # "touched by this sort" row highlight. Deliberately a warm amber rather
     # than a blue -- blue was both low-contrast against the dark field bg and
@@ -590,6 +765,12 @@ class ReorderPanel:
         style_plain_widget(self.listbox)
         self.listbox.grid(row=0, column=0, sticky="nsew")
         self.listbox.bind("<Double-Button-1>", self._on_double, add="+")
+        # type-to-jump: click the list, then just start typing a plugin name;
+        # the panel title shows what you've typed
+        attach_typeahead(
+            self.listbox, strip=self._strip,
+            feedback=lambda buf, _f=frame, _t=title: _f.configure(
+                text=(_t + (f"   [find: {buf}]" if buf else ""))))
         if listbox_tooltip:
             add_tooltip(self.listbox, listbox_tooltip)
         scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.listbox.yview)
@@ -851,6 +1032,8 @@ class App:
             "list_name": self.list_name_var.get(), "plugin_order_yml": self.plugin_order_yml_var.get(),
             "tes3conv": self._tes3conv_override or "", "exclude": self.exclude_var.get(),
             "tes3cmd": self._tes3cmd_override or "",
+            "plugin_order_url": self.plugin_order_url_var.get(),
+            "rules_url_template": self.rules_url_var.get(),
             "rules": [str(p) for p in self.rules_panel.get_paths()],
             "write_toml_inplace": self.write_toml_inplace_var.get(),
             "dry_run": self.dry_run_var.get(), "write_cfg": self.write_cfg_var.get(),
@@ -871,6 +1054,8 @@ class App:
             "subset_file": self.subset_file_var, "emit_toml": self.emit_toml_var,
             "list_name": self.list_name_var, "plugin_order_yml": self.plugin_order_yml_var,
             "exclude": self.exclude_var,
+            "plugin_order_url": self.plugin_order_url_var,
+            "rules_url_template": self.rules_url_var,
         }
         for k, var in setters.items():
             if isinstance(d.get(k), str):
@@ -1039,6 +1224,8 @@ class App:
             start_row = 0
 
         self.cfg_var = tk.StringVar()
+        self.plugin_order_url_var = tk.StringVar()   # blank = built-in candidates
+        self.rules_url_var = tk.StringVar()          # blank = built-in template
         self.customizations_var = tk.StringVar()
         self.subset_file_var = tk.StringVar()
         self.emit_toml_var = tk.StringVar()
@@ -1098,7 +1285,13 @@ class App:
                           "are excluded from the sort (never reordered) so only your custom additions "
                           "are touched, and read-only warnings are emitted: redundant, orphan, "
                           "needs-cleaning, and a base-order drift check. PyYAML used if installed, "
-                          "else a built-in parser.")
+                          "else a built-in parser.",
+                  extra_button=("Update...", self.on_update_plugin_order_yml,
+                                "Download the current plugin-order.yml from MOMW over this file. "
+                                "The download is fully validated (must parse as plugin-order data "
+                                "with hundreds of entries) before anything is written, and the old "
+                                "file is kept as a timestamped .bak. Set $MLOX_PLUGIN_ORDER_URL "
+                                "to use a mirror."))
 
         inplace_chk = ttk.Checkbutton(
             top, text="Write directly back to customizations.toml (overwrite in place; "
@@ -1111,7 +1304,9 @@ class App:
                      "given above in place. A timestamped backup is made first (unless disabled), and "
                      "you'll get a confirmation prompt before it actually happens.")
 
-        self.rules_panel = RuleFilesPanel(top, start_row + 7)
+        self.rules_panel = RuleFilesPanel(top, start_row + 7, on_new_rule=self.on_rule_maker,
+                                          on_sources=self.on_sources,
+                                          get_rules_url=lambda: self.rules_url_var.get().strip())
 
         # options
         opts = ttk.LabelFrame(top, text="Options")
@@ -1194,69 +1389,84 @@ class App:
                      "Unchecked: keep the scanned list in memory just for this session and feed it "
                      "straight to the sort -- nothing is written to disk.")
 
-        # action row: Sort computes the plan (never writes anything) and
-        # populates the order panels on the left; Export writes using
-        # whatever order those panels are currently showing (the computed
-        # order, if they were never dragged) and stays disabled until a
-        # Sort succeeds
-        action_row = ttk.Frame(top)
-        action_row.grid(row=start_row + 9, column=0, columnspan=3, sticky="ew", pady=(8, 0))
-        action_row.columnconfigure(5, weight=1)
+        # action area: Sort computes the plan (never writes anything) and
+        # populates the order panels on the left; Export writes using whatever
+        # order those panels are currently showing. Two compact rows of
+        # left-aligned buttons -- primary + read-only analysis on top, tools
+        # below -- with the status label trailing on the first row.
+        action_area = ttk.Frame(top)
+        action_area.grid(row=start_row + 9, column=0, columnspan=3, sticky="ew", pady=(8, 0))
 
-        self.sort_button = ttk.Button(action_row, text="1. Sort", command=self.on_sort)
-        self.sort_button.grid(row=0, column=0, sticky="w")
-        add_tooltip(self.sort_button,
+        row1 = ttk.Frame(action_area)
+        row1.pack(fill="x")
+        row2 = ttk.Frame(action_area)
+        row2.pack(fill="x", pady=(4, 0))
+
+        def _btn(bar, text, cmd, tip, state="normal", pad=(0, 6)):
+            b = ttk.Button(bar, text=text, command=cmd, state=state)
+            b.pack(side="left", padx=pad)
+            add_tooltip(b, tip)
+            return b
+
+        self.sort_button = _btn(row1, "1. Sort", self.on_sort,
                      "Run mlox and populate the plugin/data order panels on the left. Never writes "
-                     "any files -- this is always safe to run.")
-        self.export_button = ttk.Button(action_row, text="2. Export", command=self.on_export, state="disabled")
-        self.export_button.grid(row=0, column=1, sticky="w", padx=(8, 0))
-        add_tooltip(self.export_button,
+                     "any files -- this is always safe to run.", pad=(0, 12))
+        self.export_button = _btn(row1, "2. Export", self.on_export,
                      "Write openmw.cfg and/or the customizations.toml, using whatever order the "
                      "panels on the left are currently showing (mlox's own order, unless you dragged "
                      "rows). Rows you disabled are left out -- new customs aren't inserted, and items "
                      "already in your cfg get a removeContent/removeData. Respects 'Dry run'. "
-                     "Disabled until a Sort succeeds.")
-        self.conflicts_button = ttk.Button(action_row, text="Check Conflicts",
-                                            command=self.on_check_conflicts, state="disabled")
-        self.conflicts_button.grid(row=0, column=2, sticky="w", padx=(8, 0))
-        add_tooltip(self.conflicts_button,
+                     "Disabled until a Sort succeeds.", state="disabled", pad=(0, 18))
+        self.conflicts_button = _btn(row1, "Check Conflicts", self.on_check_conflicts,
                      "Scan the sorted, enabled plugins for TES3 record-level conflicts -- where two or "
                      "more plugins edit the same record (the last in the load order wins), like "
                      "TES3View. Prints a report in the log and opens a conflicts window; point that "
                      "window at a tes3conv binary for a field-by-field diff of each conflicting record. "
                      "Read-only; needs the plugin files reachable via your cfg's data= folders. Runs "
-                     "after a Sort.")
-        self.cellmap_button = ttk.Button(action_row, text="Cell Map",
-                                          command=self.on_cell_map, state="disabled")
-        self.cellmap_button.grid(row=0, column=3, sticky="w", padx=(8, 0))
-        add_tooltip(self.cellmap_button,
+                     "after a Sort.", state="disabled")
+        self.cellmap_button = _btn(row1, "Cell Map", self.on_cell_map,
                      "Build a 'modmapper'-style cell map from the sorted, enabled plugins: an "
                      "exterior-cell SVG heatmap (brighter = more mods; click a cell to jump to its "
                      "list entry) plus exterior/interior cell lists, showing which mods touch which "
-                     "cells (your custom ones get a gold outline). The map is written to cell_map.html "
+                     "cells (your custom ones get a gold outline). A 'Focus on mod' dropdown dims "
+                     "everything one mod doesn't touch and lists its co-editors. The map is written "
+                     "to cell_map.html "
                      "and shown in an in-app window if pywebview or tkinterweb is installed, otherwise "
-                     "in your browser. Read-only.")
-        self.resource_button = ttk.Button(action_row, text="Resource Conflicts",
-                                           command=self.on_resource_conflicts, state="disabled")
-        self.resource_button.grid(row=0, column=4, sticky="w", padx=(8, 0))
-        add_tooltip(self.resource_button,
+                     "in your browser. Read-only.", state="disabled")
+        self.resource_button = _btn(row1, "Resource Conflicts", self.on_resource_conflicts,
                      "Scan the data= folders for loose-file (VFS) conflicts: the same relative path "
                      "(meshes/textures/scripts/...) provided by two or more mod folders. In OpenMW the "
                      "LATER data folder wins, so reorder the data-path panel to change the winner "
-                     "(like MO2's Data conflicts). Read-only; can be slow on a big install.")
-        self.tes3cmd_button = ttk.Button(action_row, text="tes3cmd",
-                                          command=self.on_tes3cmd_window)
-        self.tes3cmd_button.grid(row=0, column=5, sticky="w", padx=(8, 0))
-        add_tooltip(self.tes3cmd_button,
+                     "(like MO2's Data conflicts). Read-only; can be slow on a big install.",
+                     state="disabled")
+
+        self.status_var = tk.StringVar(value="Ready.")
+        ttk.Label(row1, textvariable=self.status_var, foreground=DARK["fg_dim"],
+                  anchor="e").pack(side="right", padx=(12, 2))
+
+        self.lint_button = _btn(row2, "Lint", self.on_lint,
+                     "tes3lint-style checks over the sorted, enabled plugins (native, "
+                     "VFS-aware): evil GMSTs (name AND value must match the known 72), "
+                     "the interior fog-density-0 'black void' bug, new interior cells with "
+                     "no pathgrid anywhere in the load order, expansion-function use without the "
+                     "expansion mastered, omwaddon/omwscripts twin mismatches, and customs with "
+                     "blank author/description. Read-only; reads every plugin file, so it can "
+                     "take a little while on a big install.", state="disabled")
+        self.tes3cmd_button = _btn(row2, "tes3cmd", self.on_tes3cmd_window,
                      "Frontend for tes3cmd (distributed with the MOMW Tools Pack): clean plugins "
                      "(staged with their masters so tes3cmd sees the full VFS), resync master "
                      "sizes in-app ([MASTER SIZE] notes), or view headers. Uses the compiled "
                      "tes3cmd.exe; the pure-perl script also works if perl is installed. "
                      "Modifying commands keep backups. (No multipatch: OpenMW setups use "
                      "delta-plugin for merged lists.)")
-
-        self.status_var = tk.StringVar(value="Ready.")
-        ttk.Label(action_row, textvariable=self.status_var, foreground=DARK["fg_dim"]).grid(row=0, column=6, sticky="e")
+        self.savecheck_button = _btn(row2, "Save Check", self.on_save_check,
+                     "Pick an OpenMW .omwsave and verify every content file it depends on is "
+                     "still in the (sorted, enabled) load order -- OpenMW refuses to load a "
+                     "save whose plugins are missing. Read-only.")
+        self.backups_button = _btn(row2, "Backups", self.on_backups,
+                     "List every backup left behind by this tool, tes3cmd and the Configurator "
+                     "(.preclean.bak, .masterfix.bak, name~1.esp, timestamped .bak / .backup "
+                     "copies) across the data folders, with restore/delete.")
 
     def _build_log(self, log_container):
         log_container.columnconfigure(0, weight=1)
@@ -1304,12 +1514,18 @@ class App:
         # milder heads-ups and stay orange
         if "[CONFLICT]" in line or "INTERNAL WARNING" in line:
             return "error"
+        if "MISMATCH:" in line or "PREVIEW ABORTED" in line:
+            return "error"
+        if "VERIFIED:" in line:
+            return "ok"
         # a missing or out-of-order master breaks the game at launch -- red
-        if "[MISSING MASTER]" in line or "[MASTER ORDER]" in line:
+        if "[MISSING MASTER]" in line or "[MASTER ORDER]" in line or "[MISSING SAVE DEP]" in line:
             return "error"
         if any(k in line for k in ("Traceback", "ERROR", "Error:")):
             return "error"
         if any(k in line for k in ("[REQUIRES]", "[NOTE]", "WARNING:", "NOTE:", "[MASTER SIZE]",
+                                    "[FOGBUG]", "[EVLGMST]", "[NO PATHGRID]", "[HEADER]",
+                                    "[EXP-DEP]", "[TWIN]", "[STALE]",
                                     "[REDUNDANT]", "[ORPHAN]", "[NEEDS CLEANING]", "[LIST ORDER]",
                                     # skipped-rule summary (mlox order overridden by the curated cfg)
                                     "ordering rule(s) not applied", "mlox wanted")):
@@ -1514,11 +1730,20 @@ class App:
         finally:
             self.root.after(0, self._sort_finished, plan, status)
 
+    def _cfg_snapshot(self):
+        """(mtime_ns, size) of the cfg file, for drift detection."""
+        try:
+            st = Path(self.cfg_var.get().strip()).stat()
+            return (st.st_mtime_ns, st.st_size)
+        except OSError:
+            return None
+
     def _sort_finished(self, plan, status):
         self.worker_running = False
         self.sort_button.configure(state="normal")
         self.status_var.set(status)
         self._current_plan = plan
+        self._cfg_at_sort = self._cfg_snapshot()   # detect drift before Export
         # carry the previous opt-outs forward across a re-Sort
         prev_disabled_p = self.order_panel.get_disabled()
         prev_disabled_d = self.data_order_panel.get_disabled()
@@ -1554,6 +1779,7 @@ class App:
         self.conflicts_button.configure(state="normal" if final_order else "disabled")
         self.cellmap_button.configure(state="normal" if final_order else "disabled")
         self.resource_button.configure(state="normal" if final_order else "disabled")
+        self.lint_button.configure(state="normal" if final_order else "disabled")
 
     def on_export(self):
         if self.worker_running or not self._current_plan:
@@ -1561,6 +1787,18 @@ class App:
         args = self._validate()  # re-read current write-related fields (write_cfg, emit_toml, dry_run, ...)
         if args is None:
             return
+
+        # cfg drift watchdog: if openmw.cfg changed since the Sort (e.g. the
+        # Configurator re-ran), everything on screen is based on stale contents
+        snap_then = getattr(self, "_cfg_at_sort", None)
+        if snap_then is not None and self._cfg_snapshot() != snap_then:
+            if not messagebox.askyesno(
+                    "openmw.cfg changed",
+                    "openmw.cfg has changed on disk since you ran '1. Sort' (did "
+                    "momw-configurator re-run?).\n\nThe order on screen was computed "
+                    "against the OLD contents. It's safer to re-Sort first.\n\n"
+                    "Export anyway?"):
+                return
 
         if self.write_toml_inplace_var.get() and not args.dry_run:
             backup_note = "" if self.no_backup_var.get() else " (a .bak-<timestamp> copy will be made first)"
@@ -1737,6 +1975,7 @@ class App:
         self.conflicts_button.configure(state="normal" if self._current_plan else "disabled")
         self.cellmap_button.configure(state="normal" if self._current_plan else "disabled")
         self.resource_button.configure(state="normal" if self._current_plan else "disabled")
+        self.lint_button.configure(state="normal" if self._current_plan else "disabled")
         self.status_var.set(status)
         self._conf_session = session
         self._conf_paths = (stats or {}).get("paths", {})
@@ -1809,7 +2048,8 @@ class App:
     def _cellmap_finished(self, path, status):
         self.worker_running = False
         self.sort_button.configure(state="normal")
-        for b in (self.export_button, self.conflicts_button, self.cellmap_button, self.resource_button):
+        for b in (self.export_button, self.conflicts_button, self.cellmap_button,
+                  self.resource_button, self.lint_button):
             b.configure(state="normal" if self._current_plan else "disabled")
         self.status_var.set(status)
         if not path:
@@ -1949,10 +2189,518 @@ class App:
     def _resource_finished(self, conflicts, stats, status):
         self.worker_running = False
         self.sort_button.configure(state="normal")
-        for b in (self.export_button, self.conflicts_button, self.cellmap_button, self.resource_button):
+        for b in (self.export_button, self.conflicts_button, self.cellmap_button,
+                  self.resource_button, self.lint_button):
             b.configure(state="normal" if self._current_plan else "disabled")
         self.status_var.set(status)
         self._show_resource_window(conflicts, stats)
+
+    # -- download sources dialog ---------------------------------------------
+
+    def on_sources(self):
+        win = getattr(self, "_src_win", None)
+        if win is not None and win.winfo_exists():
+            win.lift()
+            return
+        win = tk.Toplevel(self.root)
+        self._src_win = win
+        win.title("Download sources")
+        win.configure(bg=DARK["bg"])
+        win.geometry("780x300")
+        top = ttk.Frame(win, padding=12)
+        top.pack(fill="both", expand=True)
+        top.columnconfigure(1, weight=1)
+
+        ttk.Label(top, text="If upstream moves or a new fork takes over, point the updaters at "
+                            "the new location here. Blank = built-in defaults. Downloads are "
+                            "always validated before anything is overwritten.",
+                  foreground=DARK["fg_dim"], wraplength=720, justify="left"
+                  ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
+
+        ttk.Label(top, text="mlox rules URL template:").grid(row=1, column=0, sticky="w")
+        rent = ttk.Entry(top, textvariable=self.rules_url_var)
+        rent.grid(row=1, column=1, sticky="ew", padx=6, pady=2)
+        add_tooltip(rent, "Where 'Update Rules...' downloads from. Must contain {name}, which "
+                          "is replaced with mlox_base.txt / mlox_user.txt per file.\n"
+                          f"Default: {core.RULES_URL_TEMPLATE}")
+        ttk.Label(top, text=f"default: {core.RULES_URL_TEMPLATE}",
+                  foreground=DARK["fg_dim"]).grid(row=2, column=1, sticky="w", padx=6)
+
+        ttk.Label(top, text="plugin-order.yml URL:").grid(row=3, column=0, sticky="w", pady=(10, 0))
+        pent = ttk.Entry(top, textvariable=self.plugin_order_url_var)
+        pent.grid(row=3, column=1, sticky="ew", padx=6, pady=(10, 2))
+        add_tooltip(pent, "Where the plugin-order.yml 'Update...' button downloads from. "
+                          "Blank tries the built-in candidates in order.\n"
+                          f"Default: {core.PLUGIN_ORDER_URLS[0]}")
+        ttk.Label(top, text=f"default: {core.PLUGIN_ORDER_URLS[0][:96]}...",
+                  foreground=DARK["fg_dim"]).grid(row=4, column=1, sticky="w", padx=6)
+
+        row = ttk.Frame(top)
+        row.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(16, 0))
+
+        def _reset():
+            self.rules_url_var.set("")
+            self.plugin_order_url_var.set("")
+
+        def _close():
+            t = self.rules_url_var.get().strip()
+            if t and "{name}" not in t:
+                messagebox.showerror("Download sources",
+                                     "The rules URL template must contain {name} (it's replaced "
+                                     "with the rule filename).", parent=win)
+                return
+            self._save_settings()
+            win.destroy()
+
+        ttk.Button(row, text="Reset to defaults", command=_reset).pack(side="left")
+        ttk.Button(row, text="Save & Close", command=_close).pack(side="right")
+
+    # -- mlox user-rules maker -----------------------------------------------
+
+    def _default_rules_file(self):
+        """Prefill: an existing personal file already in the rules list, else
+        'mlox_my_rules.txt' next to the first rule file (or the cfg)."""
+        for p in self.rules_panel.get_paths():
+            if Path(p).name.lower() not in ("mlox_base.txt", "mlox_user.txt"):
+                return str(p)
+        paths = self.rules_panel.get_paths()
+        base = Path(paths[0]).parent if paths else Path(self._cfg_dir() or ".")
+        return str(base / "mlox_my_rules.txt")
+
+    def on_rule_maker(self):
+        win = getattr(self, "_rm_win", None)
+        if win is not None and win.winfo_exists():
+            win.lift()
+            return
+        win = tk.Toplevel(self.root)
+        self._rm_win = win
+        win.title("New mlox rule")
+        win.configure(bg=DARK["bg"])
+        win.geometry("720x600")
+        win.minsize(660, 560)
+        top = ttk.Frame(win, padding=10)
+        top.pack(fill="both", expand=True)
+        top.columnconfigure(1, weight=1)
+
+        ttk.Label(top, text="rules file:").grid(row=0, column=0, sticky="w")
+        self._rm_file_var = tk.StringVar(value=self._default_rules_file())
+        fent = ttk.Entry(top, textvariable=self._rm_file_var)
+        fent.grid(row=0, column=1, sticky="ew", padx=6)
+        add_tooltip(fent, "Personal rules file the rule is appended to (created with a header "
+                          "if new). Use your OWN file, not mlox_base/mlox_user -- those get "
+                          "overwritten by 'Update Rules...'. It's auto-added to the rule-files "
+                          "list LAST, so your rules win conflicts.")
+        ttk.Button(top, text="Browse...", command=lambda: (
+            (lambda p: self._rm_file_var.set(p) if p else None)(
+                filedialog.asksaveasfilename(title="Personal rules file",
+                                             initialfile="mlox_my_rules.txt",
+                                             defaultextension=".txt",
+                                             filetypes=(("Rules", "*.txt"),))))
+                   ).grid(row=0, column=2)
+
+        tf = ttk.LabelFrame(top, text="Rule type")
+        tf.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(8, 4))
+        self._rm_kind = tk.StringVar(value="order")
+        for i, (v, lbl) in enumerate((
+                ("order", "[Order] -- the plugins below load in this order (first loads first)"),
+                ("nearstart", "[NearStart] -- each plugin below is pulled toward the START"),
+                ("nearend", "[NearEnd] -- each plugin below is pulled toward the END"))):
+            ttk.Radiobutton(tf, text=lbl, value=v, variable=self._rm_kind,
+                            command=lambda: self._rm_refresh()).grid(row=i, column=0, sticky="w", padx=8, pady=1)
+
+        pf = ttk.LabelFrame(top, text="Plugins (drag order matters for [Order])")
+        pf.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=4)
+        top.rowconfigure(2, weight=1)
+        pf.columnconfigure(0, weight=1)
+        pf.rowconfigure(0, weight=1)
+        self._rm_list = DragReorderListbox(pf, selectmode="extended", exportselection=False,
+                                            activestyle="dotbox", height=5,
+                                            on_reorder=lambda: self._rm_refresh())
+        style_plain_widget(self._rm_list)
+        attach_typeahead(self._rm_list)
+        self._rm_list.grid(row=0, column=0, sticky="nsew", padx=(8, 0), pady=8)
+        rsc = ttk.Scrollbar(pf, orient="vertical", command=self._rm_list.yview)
+        rsc.grid(row=0, column=1, sticky="ns", pady=8)
+        self._rm_list.configure(yscrollcommand=rsc.set)
+
+        rbtns = ttk.Frame(pf)
+        rbtns.grid(row=0, column=2, sticky="n", padx=8, pady=8)
+        b = ttk.Button(rbtns, text="From plugin panel", command=self._rm_add_from_panel)
+        b.pack(fill="x", pady=2)
+        add_tooltip(b, "Add the rows currently SELECTED in the main plugin-order panel, in "
+                       "their displayed order (Ctrl/Shift-click there to multi-select first).")
+        ttk.Button(rbtns, text="Remove", command=self._rm_remove).pack(fill="x", pady=2)
+        ttk.Button(rbtns, text="Clear", command=lambda: (self._rm_list.delete(0, "end"),
+                                                          self._rm_refresh())).pack(fill="x", pady=2)
+        af = ttk.Frame(pf)
+        af.grid(row=1, column=0, columnspan=3, sticky="ew", padx=8, pady=(0, 8))
+        af.columnconfigure(0, weight=1)
+        self._rm_add_var = tk.StringVar()
+        aent = ttk.Entry(af, textvariable=self._rm_add_var)
+        aent.grid(row=0, column=0, sticky="ew")
+        add_tooltip(aent, "Type a plugin name or mlox pattern (wildcards * ? and <VER> allowed; "
+                          "must end in a plugin extension) and press Enter or Add.")
+        aent.bind("<Return>", lambda e: self._rm_add_typed())
+        ttk.Button(af, text="Add", command=self._rm_add_typed).grid(row=0, column=1, padx=(6, 0))
+
+        ttk.Label(top, text="comment (optional):").grid(row=3, column=0, sticky="w", pady=(4, 0))
+        self._rm_comment = tk.StringVar()
+        cent = ttk.Entry(top, textvariable=self._rm_comment)
+        cent.grid(row=3, column=1, columnspan=2, sticky="ew", padx=6, pady=(4, 0))
+        cent.bind("<KeyRelease>", lambda e: self._rm_refresh())
+        add_tooltip(cent, "Written above the rule as a ';;' comment. The mlox rule guidelines "
+                          "suggest citing your source, e.g. (Ref: the mod's readme) or "
+                          "(Ref: a forum URL ) -- surround URLs with spaces. Handy if you "
+                          "later contribute the rule upstream.")
+
+        vf = ttk.LabelFrame(top, text="Preview")
+        vf.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(8, 4))
+        self._rm_preview = tk.Text(vf, height=5, wrap="none", state="disabled",
+                                   background="#141414", foreground=DARK["fg"],
+                                   relief="flat", borderwidth=0,
+                                   highlightthickness=1, highlightbackground=DARK["border"])
+        self._rm_preview.pack(fill="x", padx=8, pady=8)
+
+        row = ttk.Frame(top)
+        row.grid(row=5, column=0, columnspan=3, sticky="ew")
+        ttk.Button(row, text="Append Rule", command=self._rm_append).pack(side="left")
+        ttk.Button(row, text="Close", command=win.destroy).pack(side="right")
+        self._rm_refresh()
+
+    def _rm_names(self):
+        return list(self._rm_list.get(0, "end"))
+
+    def _rm_add_from_panel(self):
+        sel = sorted(self.order_panel.listbox.curselection())
+        if not sel:
+            self.status_var.set("Select row(s) in the plugin-order panel first.")
+            return
+        have = {n.lower() for n in self._rm_names()}
+        for i in sel:
+            name = self.order_panel._strip(self.order_panel.listbox.get(i))
+            if name.lower() not in have:
+                self._rm_list.insert("end", name)
+        self._rm_refresh()
+
+    def _rm_add_typed(self):
+        v = self._rm_add_var.get().strip()
+        if v and v.lower() not in {n.lower() for n in self._rm_names()}:
+            self._rm_list.insert("end", v)
+            self._rm_add_var.set("")
+        self._rm_refresh()
+
+    def _rm_remove(self):
+        for i in reversed(self._rm_list.curselection()):
+            self._rm_list.delete(i)
+        self._rm_refresh()
+
+    def _rm_preview_text(self):
+        try:
+            import io as _io
+            names = self._rm_names()
+            if not names:
+                return "(add plugins above)"
+            # build without writing: validate via the same code path
+            kw = self._rm_kind.get()
+            titles = {"order": "Order", "nearstart": "NearStart", "nearend": "NearEnd"}
+            for n in names:
+                m = core._RE_ORDER_NAME.match(n)
+                if any(c in n for c in "[];") or not m or m.group(0) != n:
+                    return f"INVALID: {n!r} -- names must end in a plugin extension"
+            if kw == "order" and len(names) < 2:
+                return "(an [Order] rule needs at least two plugins)"
+            parts = []
+            c = self._rm_comment.get().strip()
+            if c:
+                parts += [f";; {l}" for l in c.splitlines()]
+            parts.append(f"[{titles[kw]}]")
+            parts += names
+            return "\n".join(parts)
+        except Exception as e:
+            return f"error: {e}"
+
+    def _rm_refresh(self):
+        txt = self._rm_preview_text()
+        self._rm_preview.configure(state="normal")
+        self._rm_preview.delete("1.0", "end")
+        self._rm_preview.insert("1.0", txt)
+        self._rm_preview.configure(state="disabled")
+
+    def _rm_append(self):
+        path = self._rm_file_var.get().strip()
+        if not path:
+            messagebox.showerror("New rule", "Set a rules file first.", parent=self._rm_win)
+            return
+        if Path(path).name.lower() in ("mlox_base.txt", "mlox_user.txt"):
+            messagebox.showerror("New rule",
+                                 "Don't append personal rules to mlox_base.txt / mlox_user.txt -- "
+                                 "'Update Rules...' overwrites those. Pick your own file "
+                                 "(e.g. mlox_my_rules.txt).", parent=self._rm_win)
+            return
+
+        # Cycle pre-check: for an [Order] rule, warn if it fights the frozen
+        # curated order (mlox would discard those edges as cycles, so the rule
+        # silently wouldn't take effect). Advisory only -- the user may be
+        # planning to install those mods, or know what they're doing.
+        names = self._rm_names()
+        if self._rm_kind.get() == "order" and self._current_plan:
+            final = self._current_plan.get("final_order") or []
+            subset_lower = {str(s).lower() for s in (self._current_plan.get("subset") or [])}
+            curated = {str(n).lower() for n in (self._current_plan.get("base_order_names") or [])
+                       if str(n).lower() not in subset_lower}
+            bad = core.order_rule_frozen_conflicts(names, final, curated)
+            if bad:
+                pairs = "\n".join(f"  '{a}'  before  '{b}'  (your cfg has them the other way)"
+                                  for a, b in bad)
+                if not messagebox.askyesno(
+                        "Rule conflicts with the curated order",
+                        f"This [Order] rule contradicts the frozen curated (MOMW) order for:\n\n"
+                        f"{pairs}\n\nmlox will DISCARD those orderings (it never reorders the "
+                        f"curated list), so the rule won't take effect for them. Write it "
+                        f"anyway?", parent=self._rm_win):
+                    return
+        try:
+            text = core.append_user_rule(path, self._rm_kind.get(), names,
+                                         comment=self._rm_comment.get())
+        except (ValueError, OSError) as e:
+            messagebox.showerror("New rule", str(e), parent=self._rm_win)
+            return
+        # make sure the file is in the rules list, LAST (= highest priority)
+        if str(path).lower() not in {str(p).lower() for p in self.rules_panel.get_paths()}:
+            self.rules_panel.listbox.insert("end", path)
+        self._rm_list.delete(0, "end")
+        self._rm_comment.set("")
+        self._rm_refresh()
+        self.status_var.set(f"Rule appended to {Path(path).name}. Re-run '1. Sort' to apply it.")
+
+    # -- plugin-order.yml updater --------------------------------------------
+
+    def on_update_plugin_order_yml(self):
+        p = self.plugin_order_yml_var.get().strip()
+        if not p:
+            messagebox.showinfo("Update plugin-order.yml",
+                                "Set the plugin-order.yml path first (or Browse to where you "
+                                "want it created).")
+            return
+        ages = core.rule_file_ages([p])
+        age = ages[0][1]
+        age_txt = "file doesn't exist yet -- it will be created" if age is None else \
+                  f"your copy is ~{age} day(s) old"
+        if not messagebox.askyesno(
+                "Update plugin-order.yml",
+                f"Download the current plugin-order.yml from MOMW?\n\n{age_txt}.\n\n"
+                f"The download is validated before anything is written; a timestamped "
+                f".bak of the old file is kept."):
+            return
+
+        custom = self.plugin_order_url_var.get().strip()
+        urls = [custom] if custom else None
+
+        def work():
+            try:
+                report = core.update_plugin_order_yml(p, urls=urls)
+            except Exception as e:
+                report = [f"FAILED: {e}"]
+            self.root.after(0, lambda: (
+                messagebox.showinfo("Update plugin-order.yml", "\n".join(report)),
+                self.status_var.set(report[0] if report else "")))
+        self.status_var.set("Downloading plugin-order.yml...")
+        threading.Thread(target=work, daemon=True).start()
+
+    # -- savegame dependency check -------------------------------------------
+
+    def on_save_check(self):
+        order = self.order_panel.get_enabled() if self.order_panel.has_order() else \
+            list((self._current_plan or {}).get("base_order_names") or [])
+        if not order:
+            self.status_var.set("Run '1. Sort' first so there's a load order to check against.")
+            return
+        start = Path.home() / "Documents" / "My Games" / "OpenMW"
+        p = filedialog.askopenfilename(
+            title="Choose an OpenMW save",
+            initialdir=str(start if start.is_dir() else (self._cfg_dir() or ".")),
+            filetypes=(("OpenMW saves", "*.omwsave"), ("All files", "*.*")))
+        if not p:
+            return
+        files, missing, err = core.check_savegame_against_order(p, order)
+        writer = QueueWriter(self.log_queue)
+        writer.write("\n" + "=" * 70 + f"\n SAVEGAME CHECK: {Path(p).name}\n" + "=" * 70 + "\n")
+        if err:
+            writer.write(f"  ERROR: {err}\n")
+            self.status_var.set(f"Save check failed: {err}")
+            return
+        writer.write(f"  Save depends on {len(files)} content file(s).\n")
+        if missing:
+            for m in missing:
+                writer.write(f"\n[MISSING SAVE DEP] '{m}' is required by this save but not in "
+                             f"the current load order -- OpenMW will refuse to load it.\n")
+            self.status_var.set(f"Save check: {len(missing)} missing dependencies! See the log.")
+            messagebox.showwarning(
+                "Save Check",
+                f"{Path(p).name} depends on {len(missing)} content file(s) that are NOT in "
+                f"the current load order:\n\n  " + "\n  ".join(missing[:12]) +
+                ("\n  ..." if len(missing) > 12 else "") +
+                "\n\nOpenMW will refuse to load this save. Re-enable those plugins (or don't "
+                "export this order if you want to keep playing that character).")
+        else:
+            writer.write("  All dependencies present -- this save is safe with this order.\n")
+            self.status_var.set(f"Save check: all {len(files)} dependencies present.")
+            messagebox.showinfo("Save Check",
+                                f"{Path(p).name}: all {len(files)} content files it needs are in "
+                                f"the current load order. Safe to export.")
+
+    # -- backup manager ------------------------------------------------------
+
+    def on_backups(self):
+        if self.worker_running:
+            return
+        dirs = self._plan_scan_dirs()
+        cfg = self.cfg_var.get().strip() or None
+        if not dirs and not cfg:
+            self.status_var.set("Set openmw.cfg (or run a Sort) so I know where to look.")
+            return
+        self.worker_running = True
+        self.status_var.set("Scanning for backups...")
+        threading.Thread(target=self._backups_worker, args=(dirs, cfg), daemon=True).start()
+
+    def _backups_worker(self, dirs, cfg):
+        try:
+            found = core.scan_backups(dirs, cfg_path=cfg)
+            status = f"Found {len(found)} backup file(s)."
+        except Exception as e:
+            found, status = [], f"Backup scan failed: {e}"
+        finally:
+            self.worker_running = False
+        self.root.after(0, self._show_backups_window, found, status)
+
+    def _show_backups_window(self, found, status):
+        self.status_var.set(status)
+        win = getattr(self, "_bk_win", None)
+        if win is not None and win.winfo_exists():
+            win.destroy()
+        win = tk.Toplevel(self.root)
+        self._bk_win = win
+        win.title("Backups")
+        win.configure(bg=DARK["bg"])
+        win.geometry("900x480")
+        top = ttk.Frame(win, padding=10)
+        top.pack(fill="both", expand=True)
+        top.columnconfigure(0, weight=1)
+        top.rowconfigure(1, weight=1)
+        ttk.Label(top, text=f"{len(found)} backup file(s). Restore copies the backup over its "
+                            f"original; Delete removes the backup file itself.",
+                  foreground=DARK["fg_dim"]).grid(row=0, column=0, columnspan=2, sticky="w")
+        lb = tk.Listbox(top, selectmode="extended", exportselection=False, activestyle="dotbox")
+        style_plain_widget(lb)
+        attach_typeahead(lb)
+        lb.grid(row=1, column=0, sticky="nsew", pady=8)
+        sc = ttk.Scrollbar(top, orient="vertical", command=lb.yview)
+        sc.grid(row=1, column=1, sticky="ns", pady=8)
+        lb.configure(yscrollcommand=sc.set)
+        self._bk_rows = found
+        for bpath, orig, kind in found:
+            tag = "" if (orig and Path(orig).exists()) else "   [original missing]"
+            lb.insert("end", f"[{kind}]  {bpath}{tag}")
+        self._bk_list = lb
+
+        btns = ttk.Frame(top)
+        btns.grid(row=2, column=0, sticky="w")
+
+        def _selected():
+            return [self._bk_rows[i] for i in lb.curselection()]
+
+        def _restore():
+            sel = [r for r in _selected() if r[1]]
+            if not sel:
+                return
+            if not messagebox.askyesno("Restore", f"Copy {len(sel)} backup(s) over their "
+                                                  f"originals (overwriting them)?", parent=win):
+                return
+            import shutil as _sh
+            ok = fail = 0
+            for bpath, orig, _k in sel:
+                try:
+                    _sh.copy2(bpath, orig)
+                    ok += 1
+                except OSError:
+                    fail += 1
+            self.status_var.set(f"Restored {ok} backup(s){f', {fail} failed' if fail else ''}. "
+                                f"Re-run '1. Sort' to refresh checks.")
+        def _delete():
+            sel = _selected()
+            if not sel:
+                return
+            if not messagebox.askyesno("Delete", f"Permanently delete {len(sel)} backup "
+                                                 f"file(s)?", parent=win):
+                return
+            ok = 0
+            for bpath, _o, _k in sel:
+                try:
+                    os.remove(bpath)
+                    ok += 1
+                except OSError:
+                    pass
+            self.status_var.set(f"Deleted {ok} backup file(s).")
+            win.destroy()
+            self.on_backups()
+
+        ttk.Button(btns, text="Restore Selected", command=_restore).pack(side="left", padx=(0, 6))
+        ttk.Button(btns, text="Delete Selected", command=_delete).pack(side="left", padx=(0, 6))
+        ttk.Button(btns, text="Refresh", command=lambda: (win.destroy(), self.on_backups())).pack(side="left")
+        ttk.Button(btns, text="Close", command=win.destroy).pack(side="right")
+
+    # -- lint (tes3lint-style native checks) ---------------------------------
+
+    def on_lint(self):
+        if self.worker_running or not self._current_plan:
+            return
+        order = self._apply_exclusions(self.order_panel.get_enabled())
+        if not order:
+            return
+        dirs = self._plan_scan_dirs()
+        subset = self._current_plan.get("subset") or []
+        self.worker_running = True
+        for b in (self.sort_button, self.export_button, self.conflicts_button,
+                  self.cellmap_button, self.resource_button, self.lint_button):
+            b.configure(state="disabled")
+        self.status_var.set("Linting plugins...")
+        threading.Thread(target=self._lint_worker, args=(order, dirs, subset), daemon=True).start()
+
+    def _lint_worker(self, order, dirs, subset):
+        writer = QueueWriter(self.log_queue)
+        stats = {}
+        try:
+            with redirect_stdout(writer), redirect_stderr(writer):
+                print("\n" + "=" * 70)
+                print(" LINT (tes3lint-style checks, native)")
+                print("=" * 70)
+                index = core.PluginFileIndex(dirs)
+                subset_origins = {str(s).lower(): "your mod" for s in subset}
+                warnings, stats = core.lint_plugins(order, index, subset_names=subset,
+                                                    origins=subset_origins)
+                print(f"  Scanned {stats.get('scanned', 0)} plugin(s); "
+                      f"{stats.get('interior_cells', 0)} interior cell(s), "
+                      f"{stats.get('pathgrids', 0)} interior pathgrid(s).")
+                if warnings:
+                    for w in warnings:
+                        print(f"\n{w}")
+                else:
+                    print("\n  No lint findings. Clean bill of health.")
+            n = stats.get("warnings", 0)
+            status = f"Lint: {n} finding(s). See the log." if n else "Lint: no findings."
+        except Exception:
+            writer.write("\nERROR: lint failed:\n" + traceback.format_exc())
+            status = "Lint failed -- see log."
+        finally:
+            self.root.after(0, self._lint_finished, status)
+
+    def _lint_finished(self, status):
+        self.worker_running = False
+        self.sort_button.configure(state="normal")
+        for b in (self.export_button, self.conflicts_button, self.cellmap_button,
+                  self.resource_button, self.lint_button):
+            b.configure(state="normal" if self._current_plan else "disabled")
+        self.status_var.set(status)
 
     # -- tes3cmd frontend ----------------------------------------------------
 
@@ -2020,6 +2768,7 @@ class App:
         self._t3_list = tk.Listbox(lf, selectmode="extended", exportselection=False,
                                    activestyle="dotbox")
         style_plain_widget(self._t3_list)
+        attach_typeahead(self._t3_list)
         self._t3_list.grid(row=0, column=0, sticky="nsew", padx=(8, 0), pady=8)
         sc = ttk.Scrollbar(lf, orient="vertical", command=self._t3_list.yview)
         sc.grid(row=0, column=1, sticky="ns", pady=8)

@@ -30,7 +30,7 @@ future Configurator rebuilds.
   [modding-openmw.com repo](https://gitlab.com/modding-openmw/modding-openmw.com/-/blob/master/momw/momw/data_seeds/data/plugin-order.yml).
 - `CREDITS.md` — acknowledgements for the projects this tool ports, references,
   and depends on (mlox, plox, tes3conv, modmapper, OpenMW, MOMW, and more).
-- `CHANGELOG.md` — what changed between releases (current: **2.2**).
+- `CHANGELOG.md` — what changed between releases (current: **2.3**).
 
 ---
 
@@ -143,12 +143,34 @@ resize any panel.
 | Skip mlox warnings | Skip evaluating `[Conflict]/[Requires]/[Note]`. |
 | Create subset text document | Controls **Scan...**: on = write a `.txt`; off = keep the scan in memory for this session only. |
 
-**Actions:**
+**Actions** sit in two compact rows below the options. Top row: the core loop
+(**Sort**, **Export**) plus the record/cell analysis buttons (**Check
+Conflicts**, **Cell Map**, **Resource Conflicts**), with the status text
+trailing. Bottom row: the plugin tools (**Lint**, **tes3cmd**, **Save Check**,
+**Backups**).
 
 1. **Sort** — runs mlox and fills the order panels. Never writes anything; always
-   safe. Highlighted rows are your custom additions.
+   safe. Red rows are your custom additions; **purple** rows have a missing or
+   mis-ordered master (see the MASTER CHECK section in the log).
 2. **Export** — writes `openmw.cfg` and/or the corrected TOML using whatever
-   order the panels currently show. (Uncheck *Dry run* to actually write.)
+   order the panels currently show. (Uncheck *Dry run* to actually write.) Every
+   TOML export runs a **Configurator preview**: the emitted customizations are
+   applied to a simulated fresh cfg using a faithful re-implementation of
+   momw-configurator's own apply logic, and the result is verified against the
+   sorted order — a green `VERIFIED` line means what the Configurator will do is
+   exactly what you sorted. Export also warns if `openmw.cfg` changed on disk
+   since the Sort (e.g. the Configurator re-ran underneath you).
+
+The **analysis** buttons (Check Conflicts, Cell Map, Resource Conflicts, Lint)
+run against the sorted, enabled plugins and never modify anything; the **tools**
+row covers tes3cmd (clean / resync / header, VFS-safe), Save Check (verify an
+`.omwsave`'s dependencies are still present), and Backups (restore or delete
+backups left by this tool, tes3cmd, and the Configurator).
+
+Every list in the app supports **type-to-jump**: click it and start typing a
+name — prefix match first, substring fallback, tap one letter repeatedly to
+cycle its matches, Backspace edits, Esc clears. The two sort panels show what
+you've typed in their title bar.
 
 ### Reordering rows
 
@@ -219,6 +241,103 @@ are genuinely your additions, and:
   - `[LIST ORDER]` — your base order has drifted from the list's canonical order.
 
 Works with or without PyYAML.
+
+**Keeping it current** — click **Update...** next to the plugin-order.yml field
+to download MOMW's latest. The download must parse as plugin-order data with
+hundreds of entries before a single byte is written (an error page or moved URL
+can never clobber your file), and the old copy is kept as a timestamped `.bak`.
+
+---
+
+## Master check, lint, and watchdogs
+
+Every **Sort** runs a **MASTER CHECK** automatically (read-only): each active
+plugin's TES3 header masters are verified against the load order.
+
+- `[MISSING MASTER]` — a required master is absent. Distinguishes "installed but
+  not in the load order" (enable it) from "not found in any data folder" (the
+  game will refuse to load).
+- `[MASTER ORDER]` — a master loads *after* its dependent.
+- `[MASTER SIZE]` — the installed master's size differs from what the plugin
+  recorded (built against a different version; a recorded size of `0` usually
+  means a failed `tes3cmd` sync — the tes3cmd window's in-app resync fixes it).
+
+Plugins with a missing/mis-ordered master are drawn in **purple** in the plugin
+panel.
+
+**Lint** (button, or `--lint`) runs tes3lint-style checks over the sorted,
+enabled plugins — natively, no perl needed:
+
+- `[EVLGMST]` — the 72 "evil GMSTs", flagged only when name **and** value match
+  (a deliberate change is left alone).
+- `[FOGBUG]` — an interior cell with fog density 0 (black-void bug).
+- `[NO PATHGRID]` — a new interior cell with no pathgrid anywhere in the load
+  order (NPCs can't pathfind).
+- `[EXP-DEP]` — scripts calling Tribunal/Bloodmoon functions in a plugin that
+  doesn't master the expansion.
+- `[TWIN]` — an active `.omwaddon`/`.esp` whose `.omwscripts` sibling (or vice
+  versa) sits in the same folder but isn't in the load order.
+- `[HEADER]` — a custom plugin with a blank author/description.
+
+**Watchdogs** — a `[STALE]` warning fires when a generated artifact
+(`delta-merged.omwaddon`, `deleted_groundcover.omwaddon`, `S3LightFixes.esp`) is
+older than active plugins, meaning the merge no longer reflects your load order;
+re-run the Configurator.
+
+---
+
+## tes3cmd frontend
+
+The **tes3cmd** button opens a front-end for tes3cmd (from the MOMW Tools Pack;
+the compiled `tes3cmd.exe` is preferred, the perl script works if perl is on
+`PATH`). Because tes3cmd only understands one flat `Data Files` directory, this
+tool **stages** each plugin into a private Morrowind-shaped folder with its
+masters (hardlinked, cached across runs) so tes3cmd sees the full VFS:
+
+- **clean** — removes junk (dup records, junk cells, evil GMSTs). Plugins whose
+  masters can't be found are skipped (cleaning without masters gives wrong
+  results). Files are cleaned masters-before-dependents in load order. A
+  "MOMW needs-cleaning" button queues exactly the plugins `plugin-order.yml`
+  flags. **Morrowind/Tribunal/Bloodmoon are never cleaned** — even a careful
+  clean rewrites bytes other content depends on.
+- **resync master sizes** — done **in-app**, VFS-aware. tes3cmd's own
+  `header --synchronize` writes *empty* sizes on a multi-folder OpenMW setup;
+  this resolves each master across all data folders and rewrites only the 8-byte
+  size fields (one-time `.masterfix.bak`, verified byte-exact).
+- **header** — view author/description/masters (read-only).
+
+### Making mlox rules (rule maker)
+
+The rule base is actively maintained at
+[github.com/DanaePlays/mlox-rules](https://github.com/DanaePlays/mlox-rules) —
+the same source plox uses and mlox 1.1+ auto-updates from. Two buttons on the
+rule-files panel keep you current and let you extend it:
+
+- **Update Rules...** downloads the current `mlox_base.txt`/`mlox_user.txt` over
+  the matching files in your list (timestamped `.bak` kept; files with other
+  names are never touched).
+- **New Rule...** writes your own `[Order]`/`[NearStart]`/`[NearEnd]` rule
+  without knowing the syntax: grab the selected rows from the plugin panel (their
+  order becomes the rule order) or type names (wildcards and `<VER>` allowed,
+  validated with the same regex the parser uses), preview, and append. Rules go
+  to a personal file that's auto-added **last** in the list so your rules win
+  conflicts — `mlox_base.txt`/`mlox_user.txt` are refused as targets since
+  "Update Rules..." overwrites them. Consider contributing good rules
+  [upstream](https://morrowind-modding.github.io/modding-tools/sorting-plugin-load-order/mlox/mlox-rule-guidelines).
+- **Sources...** points both updaters at a fork or mirror if upstream moves. The
+  rules field is a URL template containing `{name}`; the plugin-order.yml field
+  is a plain URL. Blank = built-in defaults; both persist in settings.
+
+### Save Check and Backups
+
+- **Save Check** — pick an OpenMW `.omwsave` and verify every content file it
+  depends on (the save's `DEPE` list) is still in the load order. OpenMW refuses
+  to load a save with missing plugins, so this catches it before an export
+  orphans a character.
+- **Backups** — lists every backup this tool, tes3cmd, and the Configurator
+  leave behind (`.preclean.bak`, `.masterfix.bak`, `name~1.esp`, timestamped
+  `.bak-*` / `.backup.*`) across the data folders, with restore-over-original
+  and delete.
 
 ---
 
@@ -366,7 +485,8 @@ Key flags:
 | `--json-dump-dir` | Keep the per-plugin tes3conv JSON spool in this folder (reused between runs). |
 | `--resource-conflicts` | Scan `data=` folders for loose-file (VFS) conflicts. |
 | `--resources-out` | Write the resource-conflict list to a CSV. |
-| `--exclude` | Glob patterns to skip in conflict/cell-map/resource scans. |
+| `--lint` | tes3lint-style checks (evil GMSTs, fog bug, missing pathgrids, expansion deps, twins, headers). |
+| `--exclude` | Glob patterns to skip in conflict/cell-map/resource/lint scans. |
 | `--cell-map` | Write an HTML cell-coverage heatmap (which mods touch which cells). |
 | `--no-predicate-warnings` | Skip `[Conflict]/[Requires]/[Note]` evaluation. |
 | `--no-backup` | Skip timestamped `.bak` copies. |

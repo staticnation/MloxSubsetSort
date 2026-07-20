@@ -425,6 +425,26 @@ install.
   **orange** in the double-click popout, vs grey for curated-list plugins), so you
   can tell at a glance which side of a conflict is yours. The popout has a
   **Word wrap** toggle for long values.
+- **Compiled scripts are disassembled, not shown as base64.** Two script fields
+  are decoded in that popout rather than displayed raw:
+  - **`bytecode`** — the compiled script (`SCDT`), rendered as named
+    instructions with their operands. Without this, *any* script edit looks like
+    a total rewrite, because the whole base64 blob changes.
+  - **`variables`** — the script's local variable names (`SCVR`), in declaration
+    order, so you can see *which* locals a mod added rather than just that the
+    blob differs.
+
+  The disassembly is deliberately honest about its limits. Morrowind's compiler
+  stores expressions (the `x == 1` in an `if`) as semi-textual data rather than
+  opcodes, so no table-driven disassembler can decode a whole script. Anything
+  unrecognised is printed verbatim as offset/hex/ASCII and the walker resyncs on
+  the next known opcode — it never desyncs and never invents an instruction. A
+  `; decoded: N%` header tells you how much of the stream was understood.
+
+  The opcode table is generated from MWEdit's `Functions.dat` (MIT). When the
+  record carries its source text, that is used to suppress false positives: an
+  opcode value that happens to occur inside expression data is only decoded if
+  the script really calls that function.
 - The **Cell map** is written to `cell_map.html` and shown in an in-app window if
   `pywebview` (best) or `tkinterweb` is installed, otherwise in your browser; the
   window has **Save HTML** / **Open in browser**.
@@ -551,3 +571,50 @@ Deliberately different from full mlox (by design):
 - Customizations aren't supported by the MOMW team — you're responsible for
   making sure your changes don't cause conflicts. This tool helps you *see* and
   *place* them; it doesn't guarantee they're conflict-free.
+
+---
+
+## Developing
+
+Only the standard library is needed to *run* the tool. The checks below need
+`ruff`, `black`, `mypy` and `pytest`.
+
+```bash
+python -m pytest                # 717 tests: no network, no Tk, no real mods needed
+python -m ruff check .          # PEP 8 style, naming, import order, security, perf
+python -m black --check .       # formatting
+python -m mypy                  # PEP 484 types; gates mlox_subset/
+```
+
+All four are expected to pass with zero findings. A few things worth knowing
+before changing anything:
+
+- **`tests/test_differential.py` is the safety net.** It pins 41 observations
+  of the engine's behaviour — the sorted order of a real 687-plugin list, rule
+  parsing, all 2,964 predicate bodies, the configurator simulation — to hashes
+  in `tests/baselines/`. If a refactor changes an answer, it fails loudly
+  rather than shipping a different load order. Regenerate deliberately, never
+  reflexively:
+
+  ```bash
+  python -m pytest tests/test_differential.py --update-baseline
+  ```
+
+- **`tests/test_standards.py` checks PEP conformance mechanically** — 15 PEPs
+  that define a standard for this codebase, including the one line of PEP 20
+  that can be checked (`except: pass` must say why).
+
+- **`tools/check_undefined.py`** reports every name a module uses but never
+  imports. A test run tells you the first one; this tells you all of them.
+  It complements the linter rather than replacing it — the two miss different
+  things, so run both.
+
+- **The GUI has no automated coverage** (no Tk in the test environment).
+  `SMOKE_TEST.md` is a scripted manual pass with log markers, so a broken
+  callback shows up as a *missing log line* rather than something you have to
+  notice by eye.
+
+`CODE_REVIEW.md` records the defects found so far and — more usefully — the
+reasoning behind decisions that look odd, including several linter suggestions
+that were deliberately **refused** because following them would have introduced
+bugs.

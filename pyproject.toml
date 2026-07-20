@@ -1,0 +1,245 @@
+# Tooling configuration for MLOX Subset Sort.
+#
+# The project ships as two entry-point scripts plus the mlox_subset package,
+# and is normally distributed as a PyInstaller binary rather than a wheel. This
+# file pins tool behaviour and declares standards metadata. Run:
+#     python -m ruff check .          # PEP 8 style, naming, import order
+#     python -m black --check .       # formatting
+#     python -m mypy                  # PEP 484 types (gates mlox_subset/)
+#     python -m pytest                # 717 tests
+
+# --- PEP 518 / 517 build system ----------------------------------------------
+# Required once [project] exists: PEP 518 makes this the declaration of what is
+# needed to build, and PEP 517 the interface used to do it. Without it a tool
+# has to guess, and the historical guess (setuptools, implicitly) is exactly
+# what those PEPs were written to stop.
+#
+# The tool normally ships as scripts and a PyInstaller binary, so this is here
+# for correctness and inspectability rather than because a wheel is published.
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Explicit, because the flat layout puts two top-level modules beside the
+# package and auto-discovery refuses to choose between them.
+packages = [
+    "mlox_subset",
+    "mlox_subset.configurator",
+    "mlox_subset.mwscript",
+    "mlox_subset.net",
+    "mlox_subset.plugins",
+    "mlox_subset.rules",
+    "mlox_subset.sort",
+]
+py-modules = ["mlox_subset_sort", "mlox_subset_sort_gui"]
+
+[tool.setuptools.package-data]
+mlox_subset = ["py.typed"]
+
+# --- PEP 621 project metadata ------------------------------------------------
+# Declared even though the project ships as scripts and a compiled binary
+# rather than a wheel: PEP 621 is the standard place for this information, and
+# having it here means `python -m build`, dependency scanners and editors can
+# all read the same answer. tests/test_standards.py asserts that `version`
+# below and mlox_subset.__version__ never drift apart.
+[project]
+name = "mlox-subset-sort"
+version = "3.0.0"
+description = "Sort your own Morrowind mods into a frozen MOMW load order."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "License/LICENSE" }
+keywords = ["morrowind", "openmw", "mlox", "momw", "load-order"]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Games/Entertainment",
+    "Typing :: Typed",
+]
+# No install_requires: the tool runs on the standard library alone. The
+# optional extras below each enable one feature and degrade gracefully.
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["PyYAML"]          # faster plugin-order.yml parsing
+dnd = ["tkinterdnd2"]       # drag-and-drop into the GUI
+webview = ["pywebview"]     # in-app cell map
+zstd = ["zstandard"]        # tes3conv bytecode on Python < 3.14
+
+[project.scripts]
+mlox-subset-sort = "mlox_subset_sort:main"
+
+[tool.ruff]
+# The project ships as a compiled binary, so the interpreter is ours to
+# choose: 3.10+ (zip(strict=), match, PEP 604 unions, itertools.pairwise).
+target-version = "py310"
+line-length = 100
+# Vendored/reference third-party sources are read for format research, not
+# maintained here -- linting them is noise.
+extend-exclude = [
+    "mlox-master", "plox-main", "openmw-master", "modorganizer-master",
+    "tes3conv-master", "TES3Tool-master", "Tes3EditX-main", "modmapper-main",
+    "momw-configurator-master", "TES3 Conflictsolver", "output",
+    "tes3conv_json", "build",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "B",         # bugbear
+    "C4",        # comprehensions
+    "SIM",       # simplify
+    "RET",       # return
+    "PTH",       # pathlib
+    "UP",        # pyupgrade
+    "S",         # bandit (security)
+    "PERF",      # performance
+    "RUF",       # ruff-specific
+    "PIE", "ISC", "ICN", "INT", "TID", "A", "PL",
+    # PEP 257 docstrings and PEP 484 annotations. Enforced on mlox_subset/
+    # only -- see per-file-ignores for the legacy scripts and for the modules
+    # still awaiting their typing pass after being relocated verbatim.
+    "D",         # pydocstyle (PEP 257)
+    "ANN",       # flake8-annotations (PEP 484)
+    "N",         # pep8-naming (PEP 8 naming conventions)
+    "I",         # isort (PEP 8 import ordering)
+]
+ignore = [
+    # --- Deliberate, reviewed exemptions -------------------------------------
+    # Long descriptive strings (user-facing messages, embedded HTML/CSS for the
+    # cell map) are clearer unwrapped than split across lines.
+    "E501",
+    # This is a CLI + GUI tool: print() IS the user interface.
+    "T201",
+    # Every zip() call site is either an intentional offset pairing --
+    # zip(xs, xs[1:]) for consecutive pairs, where strict=True would raise on
+    # every call -- or a comparison that reports length mismatch itself with a
+    # better message than an exception. Reviewed individually, not blanket.
+    "B905",
+    # The trace/sort-trace log handles are deliberately long-lived: reopening
+    # per line made the sort engine crawl once it started logging thousands of
+    # steps. They are flushed per write and closed by set_trace_file().
+    "SIM115",
+    # Optional deps (tomli, yaml, tkinter extras) and heavy stdlib imports are
+    # imported inside functions on purpose, so a missing optional dependency
+    # degrades one feature instead of preventing startup.
+    "PLC0415",
+    # Cosmetic/never-critical failures (a tooltip that cannot render, a trace
+    # line that cannot be written) are swallowed on purpose so they can never
+    # take down a sort. The important paths report errors to the user.
+    "S110", "S112", "SIM105",
+    # Module-level trace state is a documented singleton for this script pair.
+    "PLW0603",
+    # Complexity limits: this is a domain tool whose sort/emit functions are
+    # inherently long and sequential; splitting them purely to satisfy a
+    # counter would hurt readability.
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR2004",
+    # Formatter-owned.
+    "COM812", "ISC001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests: assert is the point, and fixtures reuse loop names freely.
+# RUF012: test doubles use plain class-level lists as canned data; they are
+# never shared across instances, so ClassVar annotations would be noise.
+
+# The new mlox_subset/ package is held to a stricter standard than the legacy
+# scripts: full typing, PEP 257 docstrings with Args/Returns/Raises, and no
+# silent excepts. New code goes here; see CODE_REVIEW.md for the migration plan.
+"mlox_subset/*" = []
+# D/ANN apply to mlox_subset/ only. The legacy scripts and the tests predate
+# the convention; enforcing it there would bury real findings in noise.
+"mlox_subset_sort.py" = [
+    "D", "ANN",
+    # This module is the project's compatibility surface: the implementation
+    # lives in mlox_subset/, and everything imported here is re-exported so
+    # `core.<name>` keeps resolving for the GUI, the CLI and the tests.
+    # F401 ("unused import") is therefore the normal case in this file, not a
+    # finding -- and the imports sit after the section comments that explain
+    # each group, which is what E402 objects to.
+    "F401", "E402",
+]
+"mlox_subset_sort_gui.py" = [
+    "D", "ANN",
+    # PERF203: per-widget try/except is idiomatic and necessary in Tk -- a
+    # TclError on one widget (destroyed, or not supporting an option on this
+    # platform) must not abort styling or populating all the others. Hoisting
+    # the try out of the loop would make one bad widget blank the panel.
+    "PERF203",
+    # S603: every subprocess call here builds its own argument list from
+    # sys.executable and paths this code constructed. No shell, no user string
+    # interpolation.
+    "S603",
+]
+"tests/*" = ["S101", "PLR2004", "ARG001", "RUF012", "D", "ANN"]
+"tools/*" = ["ANN401"]
+# --- Documented debt, not a blanket exemption ----------------------------
+# These modules were relocated from the engine VERBATIM during the module
+# split. Moving them and retyping them in one step would have made a
+# behaviour change indistinguishable from a relocation error -- and this is
+# the code that decides load order and rewrites openmw.cfg, so that
+# distinction matters more than tidiness. Each is pinned by
+# tests/test_differential.py, so the typing pass can be done safely and
+# verifiably later; see CODE_REVIEW.md. Delete an entry when its module is
+# annotated -- the list is meant to shrink to nothing.
+# Generated from upstream opcode tables -- style is the generator's business.
+"mlox_subset/mwscript/opcodes.py" = ["ALL"]
+
+[tool.ruff.lint.isort]
+# Keep `from x import (a as b, c as d)` in ONE block. Without this, isort
+# splits every aliased import into its own statement, which both reads badly
+# and detaches any trailing `# noqa` from the lines it was meant to cover.
+combine-as-imports = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+# The codebase predates this config and uses single quotes in places where
+# they read better (TOML/mlox literals). Formatting is not enforced in CI --
+# see CONTRIBUTING notes in README before running a repo-wide reformat.
+quote-style = "preserve"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+force-exclude = true
+# opcodes.py is generated by tools/gen_opcodes.py; the generator owns its
+# layout, so reformatting it would just be undone on the next regeneration.
+extend-exclude = '''
+/(mlox-master|plox-main|openmw-master|modorganizer-master|tes3conv-master
+ |TES3Tool-master|Tes3EditX-main|modmapper-main|momw-configurator-master
+ |output|tes3conv_json|build)/
+ |mlox_subset/mwscript/opcodes\.py
+'''
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+
+# mlox_subset/ is fully annotated and mypy-clean, so PEP 484 conformance is
+# now CHECKED rather than assumed:
+#     python -m mypy mlox_subset/
+# It found 22 real errors when first enabled -- every one of them in
+# annotations that had been written by hand and never verified, including a
+# `Sequence` that the body concatenated and an int-typed dict holding floats.
+# A wrong type hint is worse than none, because it gets believed.
+files = ["mlox_subset"]
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+# The two legacy scripts are the compatibility shim and the Tk GUI. Neither is
+# annotated yet; including them would bury real findings under hundreds of
+# missing-hint notes. They are excluded explicitly rather than by silence, so
+# the gap is visible in the config that defines the gate.
+[[tool.mypy.overrides]]
+module = ["mlox_subset_sort", "mlox_subset_sort_gui"]
+ignore_errors = true

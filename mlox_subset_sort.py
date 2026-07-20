@@ -106,6 +106,10 @@ See README.md for the full feature tour (plugin-order.yml integration, the
 mods-folder scanner, and the GUI).
 """
 
+# PEP 563: annotations are strings, so a hint may name a type that is
+# only imported for type checking, and no annotation costs import time.
+from __future__ import annotations
+
 import argparse
 import fnmatch
 import os
@@ -113,90 +117,8 @@ import re
 import struct
 import sys
 from datetime import datetime
-from functools import lru_cache
+from itertools import pairwise
 from pathlib import Path
-
-PLUGIN_EXTS = (".esp", ".esm", ".omwaddon", ".omwgame", ".omwscripts")
-
-# --- lightweight trace log ---------------------------------------------------
-# Appends timestamped lines to a file with an immediate flush, so if a heavy
-# operation OOMs/hangs and the process dies, the last steps are still on disk.
-# Off unless set_trace_file() is called (the GUI turns it on at startup).
-_TRACE_PATH = None
-_TRACE_FH = None
-# The sort engine's play-by-play is very chatty and unrelated to the cell-map /
-# tes3conv traces, so it gets its OWN file (next to the main trace), truncated at
-# the start of each sort -- so a sort log is small, self-contained, and readable.
-_SORT_TRACE_PATH = None
-_SORT_TRACE_FH = None
-
-
-def set_trace_file(path):
-    global _TRACE_PATH, _TRACE_FH
-    if _TRACE_FH is not None:
-        try:
-            _TRACE_FH.close()
-        except Exception:
-            pass
-        _TRACE_FH = None
-    _TRACE_PATH = str(path) if path else None
-    if _TRACE_PATH:
-        try:
-            # truncate per session so the log doesn't grow unbounded across runs
-            _TRACE_FH = open(_TRACE_PATH, "w", encoding="utf-8")
-        except OSError:
-            _TRACE_FH = None
-        trace("=== trace start ===")
-
-
-def trace(msg):
-    # Keeps the file handle OPEN (reopening per call crawled once the sort engine
-    # started logging thousands of steps). Still flushes each line, so a crash/OOM
-    # leaves the last steps on disk.
-    global _TRACE_FH
-    if not _TRACE_PATH:
-        return
-    try:
-        if _TRACE_FH is None:
-            _TRACE_FH = open(_TRACE_PATH, "a", encoding="utf-8")
-        _TRACE_FH.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  {msg}\n")
-        _TRACE_FH.flush()
-    except OSError:
-        pass
-
-
-def sort_trace_begin():
-    """Open a FRESH (truncated) sort-trace file next to the main trace. Call once
-    at the start of a sort so its steps aren't mixed with map/tes3conv traces and
-    don't pile up across runs. No-op unless --trace is on."""
-    global _SORT_TRACE_PATH, _SORT_TRACE_FH
-    if _SORT_TRACE_FH is not None:
-        try:
-            _SORT_TRACE_FH.close()
-        except Exception:
-            pass
-        _SORT_TRACE_FH = None
-    if not _TRACE_PATH:
-        _SORT_TRACE_PATH = None
-        return
-    _SORT_TRACE_PATH = str(Path(_TRACE_PATH).with_name("mlox_subset_sort_sort_trace.log"))
-    try:
-        _SORT_TRACE_FH = open(_SORT_TRACE_PATH, "w", encoding="utf-8")
-    except OSError:
-        _SORT_TRACE_FH = None
-    trace(f"[sort] full sort play-by-play -> {_SORT_TRACE_PATH}")   # pointer in the MAIN log
-
-
-def trace_sort(msg):
-    """Write one line to the dedicated sort-trace file (see sort_trace_begin)."""
-    global _SORT_TRACE_FH
-    if not _TRACE_PATH or _SORT_TRACE_FH is None:
-        return
-    try:
-        _SORT_TRACE_FH.write(f"{datetime.now().strftime('%H:%M:%S')}  {msg}\n")
-        _SORT_TRACE_FH.flush()
-    except OSError:
-        pass
 
 # ---------------------------------------------------------------------------
 # mlox-exact plugin filename matching (ported from mlox's
@@ -213,37 +135,32 @@ def trace_sort(msg):
 # any installed plugin, and every ordering edge those rules would have created
 # was lost. This restores them.
 # ---------------------------------------------------------------------------
+# Pattern translation now lives in mlox_subset/rules/patterns.py. It is
+# re-exported here so every existing caller (and the GUI) keeps working
+# unchanged; behaviour is pinned by tests/test_differential.py.
+from mlox_subset.rules import (
+    MLOX_VERSION_PATTERN as _MLOX_VER,
+    mlox_pattern_to_regex,
+    pattern_has_meta,
+)
 
-_MLOX_VER = r'(\d+(?:[_.-]?\d+)*[a-zA-Z]?)'    # mlox's plugin_version regex
-_re_escape_meta = re.compile(r'([()+.])')       # mlox escapes ONLY these
-_re_plugin_meta = re.compile(r'([*?])')         # * and ?
-_re_plugin_metaver = re.compile(r'(<VER>)', re.IGNORECASE)
-
-
-def pattern_has_meta(pattern: str) -> bool:
-    """True if a pattern needs regex expansion (has *, ?, or a <VER> token).
-    Plain filenames skip the regex entirely for speed and exactness."""
-    return ("*" in pattern) or ("?" in pattern) or ("<ver>" in pattern.lower())
-
-
-@lru_cache(maxsize=None)
-def mlox_pattern_to_regex(pattern: str):
-    """Compile one mlox filename pattern to a case-insensitive anchored regex,
-    exactly as mlox's _filename_to_regex does (escape ()+. ; * -> .* ; ? -> .? ;
-    <VER> -> version regex). Cached because the same rule patterns recur across
-    thousands of edges."""
-    pat = "^%s$" % _re_escape_meta.sub(r'\\\1', pattern)
-    pat = _re_plugin_meta.sub(r'.\1', pat)          # * -> .*  and  ? -> .?
-    pat = _re_plugin_metaver.sub('<VER>', pat)      # normalize any <ver> casing
-    pat = pat.replace('<VER>', _MLOX_VER)           # <VER> -> version number
-    try:
-        return re.compile(pat, re.IGNORECASE)
-    except re.error:
-        # A malformed rule token slipped past parsing (mlox escapes only ()+. ,
-        # so a stray bracket etc. could still be invalid). Fall back to a fully
-        # literal, anchored match rather than crashing the whole sort.
-        return re.compile("^" + re.escape(pattern) + "$", re.IGNORECASE)
-
+# Tracing now lives in mlox_subset/tracing.py; re-exported so core.trace(),
+# core.set_trace_file() etc. keep working for the GUI and CLI unchanged.
+# ---------------------------------------------------------------------------
+# Re-exports from mlox_subset/.
+#
+# The split moved the implementation into packages, but this module stays the
+# public surface the GUI, the CLI and the test suite import from -- so every
+# name they used still resolves as `core.<name>`. The F401 suppressions below
+# are therefore load-bearing, not laziness: these imports exist to be re-
+# exported, and removing an "unused" one would break a caller.
+# ---------------------------------------------------------------------------
+from mlox_subset.tracing import (
+    set_trace_file,
+    sort_trace_begin,
+    trace,
+    trace_sort,
+)
 
 # ---------------------------------------------------------------------------
 # mlox [VER]/[SIZE]/[DESC] predicate functions (ported from mlox's ruleParser).
@@ -255,94 +172,7 @@ def mlox_pattern_to_regex(pattern: str):
 # rather than guessing, so we never invent a warning we can't substantiate.
 # ---------------------------------------------------------------------------
 
-_re_ver_delim = re.compile(r'[_.-]')
-_re_alpha_tail = re.compile(r'(\d+)([a-zA-Z])', re.IGNORECASE)
-_re_filename_version = re.compile(r'\D%s\D*\.es[mp]' % _MLOX_VER, re.IGNORECASE)
-_re_header_version = re.compile(r'\b(?:version\b\D+|v(?:er)?\.?\s*)%s' % _MLOX_VER, re.IGNORECASE)
 # atomic function forms, matched against a single token produced by the tokenizer
-_re_ver_fun = re.compile(r'^\[\s*VER\s*([=<>])\s*%s\s*([^\]]+?)\s*\]$' % _MLOX_VER, re.IGNORECASE)
-_re_size_fun = re.compile(
-    r'^\[\s*SIZE\s*(!?)(\d+)\s+(\S.*?\.(?:es[mp]|omwaddon|omwgame|omwscripts)\b)\s*\]$',
-    re.IGNORECASE)
-_re_desc_fun = re.compile(r'^\[\s*DESC\s*(!?)/([^/]+)/\s+([^\]]+?)\s*\]$', re.IGNORECASE)
-_re_mwselua_fun = re.compile(r'^\[\s*MWSE-LUA\s*(!?)/([^/]+)/\s+([^\]]+?)\s*\]$', re.IGNORECASE)
-
-_TES3_MIN_PLUGIN_SIZE = 362
-
-
-class PluginFileIndex:
-    """Locates plugin files across the cfg's data= directories so [VER]/[SIZE]/
-    [DESC] predicates can read real version/size/description info. Built once,
-    lazily; if the directories can't be read (e.g. this is running somewhere the
-    mods aren't installed), lookups return None and callers fall back to mlox's
-    conservative behaviour."""
-
-    def __init__(self, data_dirs=None):
-        self._dirs = list(data_dirs or [])
-        self._index = None  # {lower_filename: Path}
-
-    def _build(self):
-        idx = {}
-        for d in self._dirs:
-            try:
-                p = Path(d)
-                if not p.is_dir():
-                    continue
-                for entry in p.iterdir():
-                    if entry.is_file() and entry.name.lower().endswith(PLUGIN_EXTS):
-                        idx.setdefault(entry.name.lower(), entry)
-            except (OSError, PermissionError):
-                continue
-        self._index = idx
-
-    def find(self, plugin_name):
-        if self._index is None:
-            self._build()
-        return self._index.get(plugin_name.lower())
-
-    @property
-    def usable(self):
-        """True if at least one data= directory was actually readable -- i.e. we
-        can trust a 'file not found' to really mean absent, rather than just
-        'we can't see the mod folders from here'."""
-        if self._index is None:
-            self._build()
-        return bool(self._index)
-
-
-def _format_version(ver: str) -> str:
-    """Canonicalize a version string into a fixed-width, lexicographically
-    comparable form -- a direct port of mlox's format_version."""
-    v = _re_ver_delim.split(ver, 3)
-    m = _re_alpha_tail.match(v[-1])
-    alpha = "_"
-    if m:
-        v[-1] = m.group(1)
-        alpha = m.group(2)
-    try:
-        v = [int(x) for x in v]
-    except ValueError:
-        return ""
-    while len(v) < 3:
-        v.append(0)
-    return "%05d.%05d.%05d.%s" % (v[0], v[1], v[2], alpha)
-
-
-def _read_plugin_description(path) -> str:
-    """Read the description field from a TES3 plugin header (OpenMW is TES3
-    only). Any read problem yields '' rather than raising."""
-    try:
-        with open(path, "rb") as fh:
-            block = fh.read(4096)
-    except (OSError, PermissionError):
-        return ""
-    if block[:4] == b"TES3":
-        if len(block) < _TES3_MIN_PLUGIN_SIZE:
-            return ""
-        end = block.find(b"\x00", 64)
-        raw = block[64:end] if end != -1 else block[64:]
-        return raw.decode("latin-1", "replace")
-    return ""
 
 
 def read_plugin_masters(path):
@@ -351,20 +181,20 @@ def read_plugin_masters(path):
     must load AFTER every master it lists. Returns [] for non-TES3 files
     (.omwscripts) or any read problem. Works for .esm/.esp/.omwaddon/.omwgame."""
     try:
-        with open(path, "rb") as fh:
+        with Path(path).open("rb") as fh:
             if fh.read(4) != b"TES3":
                 return []
             data_size = struct.unpack("<I", fh.read(4))[0]
-            fh.read(8)                                  # header1 + flags
-            data = fh.read(min(data_size, 1 << 20))     # header is tiny; cap defensively
+            fh.read(8)  # header1 + flags
+            data = fh.read(min(data_size, 1 << 20))  # header is tiny; cap defensively
     except (OSError, struct.error):
         return []
     masters, i = [], 0
     while i + 8 <= len(data):
-        tag = data[i:i + 4]
+        tag = data[i : i + 4]
         sz = struct.unpack_from("<I", data, i + 4)[0]
         i += 8
-        chunk = data[i:i + sz]
+        chunk = data[i : i + sz]
         i += sz
         if tag == b"MAST":
             nm = chunk.split(b"\x00", 1)[0].decode("latin-1", "replace").strip()
@@ -380,21 +210,21 @@ def read_plugin_masters_with_sizes(path):
     was saved. tes3cmd uses the same pairing for its master-sync check.
     recorded_size is None when the DATA subrecord is absent/malformed."""
     try:
-        with open(path, "rb") as fh:
+        with Path(path).open("rb") as fh:
             if fh.read(4) != b"TES3":
                 return []
             data_size = struct.unpack("<I", fh.read(4))[0]
-            fh.read(8)                                  # header1 + flags
+            fh.read(8)  # header1 + flags
             data = fh.read(min(data_size, 1 << 20))
     except (OSError, struct.error):
         return []
     out, i = [], 0
     pending = None  # last MAST name waiting for its DATA size
     while i + 8 <= len(data):
-        tag = data[i:i + 4]
+        tag = data[i : i + 4]
         sz = struct.unpack_from("<I", data, i + 4)[0]
         i += 8
-        chunk = data[i:i + sz]
+        chunk = data[i : i + sz]
         i += sz
         if tag == b"MAST":
             if pending is not None:
@@ -432,20 +262,23 @@ def sync_plugin_master_sizes(path, index, make_backup=True):
         raw = bytearray(p.read_bytes())
     except OSError as e:
         return [], [], f"can't read: {e}"
-    if raw[:4] != b"TES3":
+    # A TES3 record header is 16 bytes (tag + size + header1 + flags). A file
+    # that starts with the magic but is shorter than that is truncated or
+    # corrupt -- reject it rather than unpacking past the buffer.
+    if len(raw) < 16 or raw[:4] != b"TES3":
         return [], [], "not a TES3 plugin (no TES3 header)"
     (data_size,) = struct.unpack_from("<I", raw, 4)
     end = min(16 + data_size, len(raw))
     i, updated, unresolved = 16, [], []
-    pending = None   # master name waiting for its DATA size field
+    pending = None  # master name waiting for its DATA size field
     while i + 8 <= end:
-        tag = bytes(raw[i:i + 4])
+        tag = bytes(raw[i : i + 4])
         (sz,) = struct.unpack_from("<I", raw, i + 4)
         off = i + 8
         if off + sz > end:
             break
         if tag == b"MAST":
-            pending = raw[off:off + sz].split(b"\x00", 1)[0].decode("latin-1", "replace").strip()
+            pending = raw[off : off + sz].split(b"\x00", 1)[0].decode("latin-1", "replace").strip()
         elif tag == b"DATA" and pending:
             if sz >= 8:
                 mpath = index.find(pending) if index else None
@@ -465,6 +298,7 @@ def sync_plugin_master_sizes(path, index, make_backup=True):
     if updated:
         if make_backup:
             import shutil as _sh
+
             bak = p.with_name(p.name + ".masterfix.bak")
             if not bak.exists():
                 try:
@@ -519,19 +353,22 @@ def check_missing_masters(active_order, index, subset_origins=None):
                 if mpath is None:
                     missing.append(
                         f"[MISSING MASTER] '{p}'{tag} requires '{m}' -- NOT FOUND in any data "
-                        f"folder. The game will fail to load with this plugin enabled.")
+                        f"folder. The game will fail to load with this plugin enabled."
+                    )
                 else:
                     missing.append(
                         f"[MISSING MASTER] '{p}'{tag} requires '{m}' -- installed but not in "
-                        f"the load order. Enable/add it (it must load before '{p}').")
+                        f"the load order. Enable/add it (it must load before '{p}')."
+                    )
                 problem_names.add(p)
                 continue
             if pos[ml] > pos[p.lower()]:
                 order_problems.append(
                     f"[MASTER ORDER] '{p}'{tag} loads BEFORE its master '{m}' -- "
-                    f"'{m}' must come first.")
+                    f"'{m}' must come first."
+                )
                 problem_names.add(p)
-            if rec_size is not None:   # 0 counts: a failed tes3cmd sync zeroes these
+            if rec_size is not None:  # 0 counts: a failed tes3cmd sync zeroes these
                 mpath = index.find(m) if index else None
                 if mpath is not None:
                     try:
@@ -539,30 +376,18 @@ def check_missing_masters(active_order, index, subset_origins=None):
                     except OSError:
                         actual = None
                     if actual is not None and actual != rec_size:
-                        hint = ("header records 0 bytes -- likely damaged by a tes3cmd "
-                                "sync that couldn't find the master"
-                                if rec_size == 0 else
-                                "made against a different version of the master (usually fine)")
+                        hint = (
+                            "header records 0 bytes -- likely damaged by a tes3cmd "
+                            "sync that couldn't find the master"
+                            if rec_size == 0
+                            else "made against a different version of the master (usually fine)"
+                        )
                         size_notes.append(
                             f"[MASTER SIZE] '{p}'{tag}: header says '{m}' was {rec_size} bytes, "
                             f"installed copy is {actual} -- {hint}. The tes3cmd window's "
-                            f"in-app resync fixes this.")
+                            f"in-app resync fixes this."
+                        )
     return missing, order_problems, size_notes, checked, problem_names
-
-
-def _plugin_version(plugin_name: str, index: "PluginFileIndex"):
-    """Best-effort canonical version for a plugin: from its TES3 header if the
-    file is reachable, else from the version number embedded in its filename.
-    Returns None if neither yields a version."""
-    path = index.find(plugin_name) if index else None
-    if path is not None:
-        m = _re_header_version.search(_read_plugin_description(path))
-        if m:
-            return _format_version(m.group(1))
-    m = _re_filename_version.search(plugin_name)
-    if m:
-        return _format_version(m.group(1))
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -594,32 +419,32 @@ def _tes3_record_key(rectype: str, blob: bytes):
     (None, deleted) if it has no id worth comparing on."""
     name = None
     cell_data = None
-    schd = None      # SCPT script header (name in first 32 bytes)
-    intv = None      # LAND grid coords
+    schd = None  # SCPT script header (name in first 32 bytes)
+    intv = None  # LAND grid coords
     deleted = False
     i, n = 0, len(blob)
     while i + 8 <= n:
-        tag = blob[i:i + 4]
+        tag = blob[i : i + 4]
         sz = struct.unpack_from("<I", blob, i + 4)[0]
-        data = blob[i + 8:i + 8 + sz]
+        data = blob[i + 8 : i + 8 + sz]
         i += 8 + sz
         if tag == b"NAME" and name is None:
             name = data
         elif tag == b"INAM" and rectype == "INFO" and name is None:
-            name = data          # dialogue response id
+            name = data  # dialogue response id
         elif tag == b"DELE":
             deleted = True
         elif tag == b"DATA" and rectype == "CELL" and cell_data is None:
             cell_data = data
         elif tag == b"SCHD" and rectype == "SCPT" and schd is None:
-            schd = data          # script: name is the first 32 bytes
+            schd = data  # script: name is the first 32 bytes
         elif tag == b"INTV" and rectype == "LAND" and intv is None:
-            intv = data          # landscape: keyed by exterior grid coords
+            intv = data  # landscape: keyed by exterior grid coords
     if rectype == "CELL":
         cname = _tes3_decode(name) if name else ""
         if cell_data is not None and len(cell_data) >= 12:
             flags, gx, gy = struct.unpack_from("<iii", cell_data, 0)
-            if flags & 0x01:     # interior
+            if flags & 0x01:  # interior
                 return (f"Interior: {cname}", deleted)
             return (f"Exterior ({gx}, {gy})" + (f" [{cname}]" if cname else ""), deleted)
         return (f"Interior: {cname}", deleted)
@@ -639,7 +464,7 @@ def parse_tes3_records(path):
     plugin (.esp/.esm/.omwaddon). Best-effort and fully guarded: a truncated or
     non-TES3 file just yields nothing rather than raising."""
     try:
-        fh = open(path, "rb")
+        fh = Path(path).open("rb")  # closed by the caller, not a context manager
     except (OSError, PermissionError):
         return
     with fh:
@@ -675,9 +500,9 @@ def _lual_script_paths(blob):
     (LuaScriptsCfg) record."""
     i, n = 0, len(blob)
     while i + 8 <= n:
-        tag = blob[i:i + 4]
+        tag = blob[i : i + 4]
         sz = struct.unpack_from("<I", blob, i + 4)[0]
-        data = blob[i + 8:i + 8 + sz]
+        data = blob[i + 8 : i + 8 + sz]
         i += 8 + sz
         if tag == b"LUAS":
             p = data.split(b"\x00", 1)[0].decode("cp1252", "replace").strip()
@@ -700,7 +525,7 @@ def parse_omwscripts(path):
         pos = line.find(":")
         if pos == -1:
             continue
-        spath = line[pos + 1:].strip().strip('"').strip("'")
+        spath = line[pos + 1 :].strip().strip('"').strip("'")
         if not spath.lower().endswith(".lua"):
             continue
         yield "LuaScript", spath.replace("\\", "/").lower().lstrip("/"), False
@@ -723,10 +548,12 @@ def parse_plugin_records(path):
 # plugins. Without it, the built-in binary parser still does record-level
 # detection -- just no field-level breakdown.
 
+
 def find_tes3conv(explicit=None, extra_dirs=None):
     """Locate a tes3conv executable. Order: explicit path, $MLOX_TES3CONV, PATH,
     then alongside this script / any extra dirs given. Returns a path or None."""
     import shutil
+
     names = ["tes3conv", "tes3conv.exe"]
     cands = []
     if explicit:
@@ -739,17 +566,16 @@ def find_tes3conv(explicit=None, extra_dirs=None):
         if found:
             cands.append(found)
     search_dirs = [Path(__file__).resolve().parent]
-    for d in (extra_dirs or []):
-        if d:
-            search_dirs.append(Path(d))
-    for d in search_dirs:
-        for nm in names:
-            cands.append(str(d / nm))
+    search_dirs.extend(Path(d) for d in (extra_dirs or []) if d)
+    cands.extend(str(d / nm) for d in search_dirs for nm in names)
     for c in cands:
         try:
             if c and Path(c).is_file():
                 return c
-        except OSError:
+        except OSError:  # noqa: PERF203
+            # Per-candidate isolation is the point: one unreadable path (a
+            # dead network share, a permission-denied dir) must not stop the
+            # search for the others.
             continue
     return None
 
@@ -761,7 +587,8 @@ def find_tes3cmd(explicit=None, extra_dirs=None):
     see tes3cmd_invocation). Order: explicit path, $MLOX_TES3CMD, PATH, then
     alongside this script / any extra dirs given. Returns a path or None."""
     import shutil
-    names = ["tes3cmd.exe", "tes3cmd.bat", "tes3cmd"]   # compiled build first
+
+    names = ["tes3cmd.exe", "tes3cmd.bat", "tes3cmd"]  # compiled build first
     cands = []
     if explicit:
         cands.append(str(explicit))
@@ -773,17 +600,16 @@ def find_tes3cmd(explicit=None, extra_dirs=None):
         if found:
             cands.append(found)
     search_dirs = [Path(__file__).resolve().parent]
-    for d in (extra_dirs or []):
-        if d:
-            search_dirs.append(Path(d))
-    for d in search_dirs:
-        for nm in names:
-            cands.append(str(d / nm))
+    search_dirs.extend(Path(d) for d in (extra_dirs or []) if d)
+    cands.extend(str(d / nm) for d in search_dirs for nm in names)
     for c in cands:
         try:
             if c and Path(c).is_file():
                 return c
-        except OSError:
+        except OSError:  # noqa: PERF203
+            # Per-candidate isolation is the point: one unreadable path (a
+            # dead network share, a permission-denied dir) must not stop the
+            # search for the others.
             continue
     return None
 
@@ -796,6 +622,7 @@ def tes3cmd_invocation(path):
     PATH -- with a clear error if there isn't one, since end users normally
     have the compiled build and shouldn't need perl."""
     import shutil
+
     p = Path(path)
     if p.suffix.lower() in (".exe", ".bat", ".cmd"):
         return [str(p)], None
@@ -806,9 +633,11 @@ def tes3cmd_invocation(path):
     if head.startswith(b"#!") or b"perl" in head.lower():
         perl = shutil.which("perl")
         if not perl:
-            return None, (f"'{p.name}' is the pure-perl tes3cmd but no perl interpreter was found "
-                          f"on PATH. Point this at the compiled tes3cmd.exe from the MOMW Tools "
-                          f"Pack instead (or install perl).")
+            return None, (
+                f"'{p.name}' is the pure-perl tes3cmd but no perl interpreter was found "
+                f"on PATH. Point this at the compiled tes3cmd.exe from the MOMW Tools "
+                f"Pack instead (or install perl)."
+            )
         return [perl, str(p)], None
     return [str(p)], None
 
@@ -837,6 +666,7 @@ def stage_for_tes3cmd(staging_root, plugin_path, index, quiet=False):
     gives wrong results (the classic batch files refuse too).
     """
     import shutil as _sh
+
     root = Path(staging_root)
     df = root / "Data Files"
     df.mkdir(parents=True, exist_ok=True)
@@ -850,14 +680,14 @@ def stage_for_tes3cmd(staging_root, plugin_path, index, quiet=False):
             if dest.exists():
                 s, d = src.stat(), dest.stat()
                 if d.st_size == s.st_size and int(d.st_mtime) == int(s.st_mtime):
-                    return dest            # cached from a previous run
+                    return dest  # cached from a previous run
                 dest.unlink()
             if allow_link:
                 try:
-                    os.link(src, dest)     # same-volume: instant, no disk cost
+                    os.link(src, dest)  # same-volume: instant, no disk cost
                     return dest
                 except OSError:
-                    pass                   # cross-volume etc. -> copy
+                    pass  # cross-volume etc. -> copy
             _sh.copy2(src, dest)
             return dest
         except OSError as e:
@@ -878,13 +708,15 @@ def stage_for_tes3cmd(staging_root, plugin_path, index, quiet=False):
     staged_plugin = df / p.name
     if staged_plugin.exists():
         staged_plugin.unlink()
-    _sh.copy2(p, staged_plugin)            # always a private copy
+    _sh.copy2(p, staged_plugin)  # always a private copy
     staged_names.append(p.name)
 
     ini = root / "Morrowind.ini"
-    ini.write_text("[Game Files]\n" +
-                   "".join(f"GameFile{i}={n}\n" for i, n in enumerate(staged_names)),
-                   encoding="latin-1", errors="replace")
+    ini.write_text(
+        "[Game Files]\n" + "".join(f"GameFile{i}={n}\n" for i, n in enumerate(staged_names)),
+        encoding="latin-1",
+        errors="replace",
+    )
     return staged_plugin, missing
 
 
@@ -900,108 +732,163 @@ def stage_for_tes3cmd(staging_root, plugin_path, index, quiet=False):
 # override expansion behaviour with stale defaults. A GMST is only flagged
 # when BOTH the name and the recorded value match tes3lint's table (a mod
 # deliberately changing one of these settings to a new value is fine).
+#
+# The 72 name/value pairs below are reproduced from tes3lint:
+#
+#   tes3lint - a diagnostic tool for TES3/Morrowind plugins
+#   Copyright 2009 by John Moonsugar
+#   Distributed as part of the mlox project under the MIT License.
+#
+# Retained here to satisfy the MIT notice requirement: this table is research
+# (which values the buggy CS actually wrote), not something we rediscovered.
 _EVIL_GMSTS = {
-    'fcombatdistancewerewolfmod': ('FLTV', b'\x9a\x99\x99>'),
-    'ffleedistance': ('FLTV', b'\x00\x80;E'),
-    'fwerewolfacrobatics': ('FLTV', b'\x00\x00\x16C'),
-    'fwerewolfagility': ('FLTV', b'\x00\x00\x16C'),
-    'fwerewolfalchemy': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfalteration': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfarmorer': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfathletics': ('FLTV', b'\x00\x00\x16C'),
-    'fwerewolfaxe': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfblock': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfbluntweapon': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfconjuration': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfdestruction': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfenchant': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfendurance': ('FLTV', b'\x00\x00\x16C'),
-    'fwerewolffatigue': ('FLTV', b'\x00\x00\xc8C'),
-    'fwerewolfhandtohand': ('FLTV', b'\x00\x00\xc8B'),
-    'fwerewolfhealth': ('FLTV', b'\x00\x00\x00@'),
-    'fwerewolfheavyarmor': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfillusion': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfintellegence': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolflightarmor': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolflongblade': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfluck': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfmagicka': ('FLTV', b'\x00\x00\xc8B'),
-    'fwerewolfmarksman': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfmediumarmor': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfmerchantile': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfmysticism': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfpersonality': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfrestoration': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfrunmult': ('FLTV', b'\x00\x00\xc0?'),
-    'fwerewolfsecurity': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfshortblade': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfsilverweapondamagemult': ('FLTV', b'\x00\x00\xc0?'),
-    'fwerewolfsneak': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfspear': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfspeechcraft': ('FLTV', b'\x00\x00\x80?'),
-    'fwerewolfspeed': ('FLTV', b'\x00\x00\x16C'),
-    'fwerewolfstrength': ('FLTV', b'\x00\x00\x16C'),
-    'fwerewolfunarmored': ('FLTV', b'\x00\x00\xc8B'),
-    'fwerewolfwillpower': ('FLTV', b'\x00\x00\x80?'),
-    'iwerewolfbounty': ('INTV', b"\x10'\x00\x00"),
-    'iwerewolffightmod': ('INTV', b'd\x00\x00\x00'),
-    'iwerewolffleemod': ('INTV', b'd\x00\x00\x00'),
-    'iwerewolfleveltoattack': ('INTV', b'\x14\x00\x00\x00'),
-    'scompanionshare': ('STRV', b'Companion Share'),
-    'scompanionwarningbuttonone': ('STRV', b'Let the mercenary quit.'),
-    'scompanionwarningbuttontwo': ('STRV', b'Return to Companion Share display.'),
-    'scompanionwarningmessage': ('STRV', b'Your mercenary is poorer now than when he contracted with you.  Your mercenary will quit if you do not give him gold or goods to bring his Profit Value to a positive value.'),
-    'sdeletenote': ('STRV', b'Delete Note?'),
-    'seditnote': ('STRV', b'Edit Note'),
-    'seffectsummoncreature01': ('STRV', b'sEffectSummonCreature01'),
-    'seffectsummoncreature02': ('STRV', b'sEffectSummonCreature02'),
-    'seffectsummoncreature03': ('STRV', b'sEffectSummonCreature03'),
-    'seffectsummoncreature04': ('STRV', b'sEffectSummonCreature04'),
-    'seffectsummoncreature05': ('STRV', b'sEffectSummonCreature05'),
-    'seffectsummonfabricant': ('STRV', b'sEffectSummonFabricant'),
-    'slevitatedisabled': ('STRV', b'Levitation magic does not work here.'),
-    'smagiccreature01id': ('STRV', b'sMagicCreature01ID'),
-    'smagiccreature02id': ('STRV', b'sMagicCreature02ID'),
-    'smagiccreature03id': ('STRV', b'sMagicCreature03ID'),
-    'smagiccreature04id': ('STRV', b'sMagicCreature04ID'),
-    'smagiccreature05id': ('STRV', b'sMagicCreature05ID'),
-    'smagicfabricantid': ('STRV', b'Fabricant'),
-    'smaxsale': ('STRV', b'Max Sale'),
-    'sprofitvalue': ('STRV', b'Profit Value'),
-    'steleportdisabled': ('STRV', b'Teleportation magic does not work here.'),
-    'swerewolfalarmmessage': ('STRV', b'You have been detected changing from a werewolf state.'),
-    'swerewolfpopup': ('STRV', b'Werewolf'),
-    'swerewolfrefusal': ('STRV', b'You cannot do this as a werewolf.'),
-    'swerewolfrestmessage': ('STRV', b'You cannot rest in werewolf form.'),
+    "fcombatdistancewerewolfmod": ("FLTV", b"\x9a\x99\x99>"),
+    "ffleedistance": ("FLTV", b"\x00\x80;E"),
+    "fwerewolfacrobatics": ("FLTV", b"\x00\x00\x16C"),
+    "fwerewolfagility": ("FLTV", b"\x00\x00\x16C"),
+    "fwerewolfalchemy": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfalteration": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfarmorer": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfathletics": ("FLTV", b"\x00\x00\x16C"),
+    "fwerewolfaxe": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfblock": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfbluntweapon": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfconjuration": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfdestruction": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfenchant": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfendurance": ("FLTV", b"\x00\x00\x16C"),
+    "fwerewolffatigue": ("FLTV", b"\x00\x00\xc8C"),
+    "fwerewolfhandtohand": ("FLTV", b"\x00\x00\xc8B"),
+    "fwerewolfhealth": ("FLTV", b"\x00\x00\x00@"),
+    "fwerewolfheavyarmor": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfillusion": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfintellegence": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolflightarmor": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolflongblade": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfluck": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfmagicka": ("FLTV", b"\x00\x00\xc8B"),
+    "fwerewolfmarksman": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfmediumarmor": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfmerchantile": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfmysticism": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfpersonality": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfrestoration": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfrunmult": ("FLTV", b"\x00\x00\xc0?"),
+    "fwerewolfsecurity": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfshortblade": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfsilverweapondamagemult": ("FLTV", b"\x00\x00\xc0?"),
+    "fwerewolfsneak": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfspear": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfspeechcraft": ("FLTV", b"\x00\x00\x80?"),
+    "fwerewolfspeed": ("FLTV", b"\x00\x00\x16C"),
+    "fwerewolfstrength": ("FLTV", b"\x00\x00\x16C"),
+    "fwerewolfunarmored": ("FLTV", b"\x00\x00\xc8B"),
+    "fwerewolfwillpower": ("FLTV", b"\x00\x00\x80?"),
+    "iwerewolfbounty": ("INTV", b"\x10'\x00\x00"),
+    "iwerewolffightmod": ("INTV", b"d\x00\x00\x00"),
+    "iwerewolffleemod": ("INTV", b"d\x00\x00\x00"),
+    "iwerewolfleveltoattack": ("INTV", b"\x14\x00\x00\x00"),
+    "scompanionshare": ("STRV", b"Companion Share"),
+    "scompanionwarningbuttonone": ("STRV", b"Let the mercenary quit."),
+    "scompanionwarningbuttontwo": ("STRV", b"Return to Companion Share display."),
+    "scompanionwarningmessage": (
+        "STRV",
+        b"Your mercenary is poorer now than when he contracted with you.  Your mercenary will quit if you do not give him gold or goods to bring his Profit Value to a positive value.",
+    ),
+    "sdeletenote": ("STRV", b"Delete Note?"),
+    "seditnote": ("STRV", b"Edit Note"),
+    "seffectsummoncreature01": ("STRV", b"sEffectSummonCreature01"),
+    "seffectsummoncreature02": ("STRV", b"sEffectSummonCreature02"),
+    "seffectsummoncreature03": ("STRV", b"sEffectSummonCreature03"),
+    "seffectsummoncreature04": ("STRV", b"sEffectSummonCreature04"),
+    "seffectsummoncreature05": ("STRV", b"sEffectSummonCreature05"),
+    "seffectsummonfabricant": ("STRV", b"sEffectSummonFabricant"),
+    "slevitatedisabled": ("STRV", b"Levitation magic does not work here."),
+    "smagiccreature01id": ("STRV", b"sMagicCreature01ID"),
+    "smagiccreature02id": ("STRV", b"sMagicCreature02ID"),
+    "smagiccreature03id": ("STRV", b"sMagicCreature03ID"),
+    "smagiccreature04id": ("STRV", b"sMagicCreature04ID"),
+    "smagiccreature05id": ("STRV", b"sMagicCreature05ID"),
+    "smagicfabricantid": ("STRV", b"Fabricant"),
+    "smaxsale": ("STRV", b"Max Sale"),
+    "sprofitvalue": ("STRV", b"Profit Value"),
+    "steleportdisabled": ("STRV", b"Teleportation magic does not work here."),
+    "swerewolfalarmmessage": ("STRV", b"You have been detected changing from a werewolf state."),
+    "swerewolfpopup": ("STRV", b"Werewolf"),
+    "swerewolfrefusal": ("STRV", b"You cannot do this as a werewolf."),
+    "swerewolfrestmessage": ("STRV", b"You cannot rest in werewolf form."),
 }
 
 # Script functions introduced by the expansions (from tes3lint's DATA lists).
 # A plugin calling one without listing the expansion as a master is fragile
 # on non-expansion setups and usually indicates a truncated master list.
 _TRIBUNAL_FUNCS = (
-    "AddToLevCreature", "AddToLevItem", "ClearForceJump", "ClearForceMoveJump",
-    "ClearForceRun", "DisableLevitation", "EnableLevitation", "ExplodeSpell",
-    "ForceJump", "ForceMoveJump", "ForceRun", "GetCollidingActor",
-    "GetCollidingPC", "GetForceJump", "GetForceMoveJump", "GetForceRun",
-    "GetPCJumping", "GetPCRunning", "GetPCSneaking", "GetScale",
-    "GetSpellReadied", "GetSquareRoot", "GetWaterLevel", "GetWeaponDrawn",
-    "GetWeaponType", "HasItemEquipped", "ModScale", "ModWaterLevel",
-    "PlaceItem", "PlaceItemCell", "RemoveFromLevCreature", "RemoveFromLevItem",
-    "SetDelete", "SetScale", "SetWaterLevel")
+    "AddToLevCreature",
+    "AddToLevItem",
+    "ClearForceJump",
+    "ClearForceMoveJump",
+    "ClearForceRun",
+    "DisableLevitation",
+    "EnableLevitation",
+    "ExplodeSpell",
+    "ForceJump",
+    "ForceMoveJump",
+    "ForceRun",
+    "GetCollidingActor",
+    "GetCollidingPC",
+    "GetForceJump",
+    "GetForceMoveJump",
+    "GetForceRun",
+    "GetPCJumping",
+    "GetPCRunning",
+    "GetPCSneaking",
+    "GetScale",
+    "GetSpellReadied",
+    "GetSquareRoot",
+    "GetWaterLevel",
+    "GetWeaponDrawn",
+    "GetWeaponType",
+    "HasItemEquipped",
+    "ModScale",
+    "ModWaterLevel",
+    "PlaceItem",
+    "PlaceItemCell",
+    "RemoveFromLevCreature",
+    "RemoveFromLevItem",
+    "SetDelete",
+    "SetScale",
+    "SetWaterLevel",
+)
 _BLOODMOON_FUNCS = (
-    "BecomeWerewolf", "GetPCInJail", "GetPCTraveling", "GetWerewolfKills",
-    "IsWerewolf", "PlaceAtMe", "SetWerewolfAcrobatics", "TurnMoonRed",
-    "TurnMoonWhite", "UndoWerewolf")
+    "BecomeWerewolf",
+    "GetPCInJail",
+    "GetPCTraveling",
+    "GetWerewolfKills",
+    "IsWerewolf",
+    "PlaceAtMe",
+    "SetWerewolfAcrobatics",
+    "TurnMoonRed",
+    "TurnMoonWhite",
+    "UndoWerewolf",
+)
 # mirror tes3lint's per-line matching: ignore comment text after ';'
-_RE_TB_FUN = re.compile(r"^[^;\n]*?\b(" + "|".join(_TRIBUNAL_FUNCS) + r")\b",
-                        re.IGNORECASE | re.MULTILINE)
-_RE_BM_FUN = re.compile(r"^[^;\n]*?\b(" + "|".join(_BLOODMOON_FUNCS) + r")\b",
-                        re.IGNORECASE | re.MULTILINE)
+_RE_TB_FUN = re.compile(
+    r"^[^;\n]*?\b(" + "|".join(_TRIBUNAL_FUNCS) + r")\b", re.IGNORECASE | re.MULTILINE
+)
+_RE_BM_FUN = re.compile(
+    r"^[^;\n]*?\b(" + "|".join(_BLOODMOON_FUNCS) + r")\b", re.IGNORECASE | re.MULTILINE
+)
 
-_LINT_SKIP = {"morrowind.esm", "tribunal.esm", "bloodmoon.esm",
-              "merged objects.esp", "merged lands.esp", "mashed lists.esp",
-              "multipatch.esp"}
-_LINT_SKIP_CELLS = {"ashlands region (0, 0)"}   # the classic 0,0 exterior exception
+_LINT_SKIP = {
+    "morrowind.esm",
+    "tribunal.esm",
+    "bloodmoon.esm",
+    "merged objects.esp",
+    "merged lands.esp",
+    "mashed lists.esp",
+    "multipatch.esp",
+}
+_LINT_SKIP_CELLS = {"ashlands region (0, 0)"}  # the classic 0,0 exterior exception
 
 
 def _iter_tes3_records(raw):
@@ -1009,18 +896,18 @@ def _iter_tes3_records(raw):
     the caller doesn't care about are skipped over cheaply by size."""
     n, i = len(raw), 0
     while i + 16 <= n:
-        tag = bytes(raw[i:i + 4])
+        tag = bytes(raw[i : i + 4])
         (sz,) = struct.unpack_from("<I", raw, i + 4)
-        yield tag, raw[i + 16:i + 16 + sz]
+        yield tag, raw[i + 16 : i + 16 + sz]
         i += 16 + sz
 
 
 def _iter_subrecords(body):
     n, i = len(body), 0
     while i + 8 <= n:
-        tag = bytes(body[i:i + 4])
+        tag = bytes(body[i : i + 4])
         (sz,) = struct.unpack_from("<I", body, i + 4)
-        yield tag, body[i + 8:i + 8 + sz]
+        yield tag, body[i + 8 : i + 8 + sz]
         i += 8 + sz
 
 
@@ -1052,8 +939,8 @@ def lint_plugins(active_order, index, subset_names=None, origins=None, progress=
     subset_lower = {str(s).lower() for s in (subset_names or ())}
     origins = origins or {}
     warnings, stats = [], {"scanned": 0, "unreadable": 0}
-    interior_first = {}   # cell id lower -> (plugin, display name)
-    pathgrids = set()     # interior pathgrid cell ids seen anywhere
+    interior_first = {}  # cell id lower -> (plugin, display name)
+    pathgrids = set()  # interior pathgrid cell ids seen anywhere
 
     def tagfor(p):
         o = origins.get(str(p).lower())
@@ -1101,11 +988,14 @@ def lint_plugins(active_order, index, subset_names=None, origins=None, progress=
                         if st == b"HEDR" and len(sd) >= 296:
                             auth = _lint_zstr(sd[8:40])
                             desc = _lint_zstr(sd[40:296])
-                            missing = [w for w, v in (("author", auth), ("description", desc)) if not v]
+                            missing = [
+                                w for w, v in (("author", auth), ("description", desc)) if not v
+                            ]
                             if missing:
                                 warnings.append(
                                     f"[HEADER] '{p}'{tagfor(p)}: header has no "
-                                    f"{' and no '.join(missing)}.")
+                                    f"{' and no '.join(missing)}."
+                                )
                             break
             elif tag == b"GMST":
                 name, vtag, vdata = None, None, b""
@@ -1130,11 +1020,11 @@ def lint_plugins(active_order, index, subset_names=None, origins=None, progress=
                     continue
                 (flags,) = struct.unpack_from("<I", data, 0)
                 if not flags & 1:
-                    continue                      # exterior
+                    continue  # exterior
                 cid = name.lower()
                 if cid and cid not in _LINT_SKIP_CELLS and cid not in interior_first:
                     interior_first[cid] = (p, name)
-                if not flags & 128:               # not behave-like-exterior
+                if not flags & 128:  # not behave-like-exterior
                     if ambi is not None and len(ambi) == 16:
                         (fog,) = struct.unpack_from("<f", ambi, 12)
                     else:
@@ -1143,7 +1033,8 @@ def lint_plugins(active_order, index, subset_names=None, origins=None, progress=
                         warnings.append(
                             f"[FOGBUG] '{p}'{tagfor(p)}: interior cell '{name}' has fog "
                             f"density 0.0 -- renders as a black void on some GPUs. Fix by "
-                            f"setting any nonzero fog density on the cell.")
+                            f"setting any nonzero fog density on the cell."
+                        )
             elif tag == b"PGRD":
                 name, x, y = "", None, None
                 for st, sd in _iter_subrecords(body):
@@ -1151,29 +1042,33 @@ def lint_plugins(active_order, index, subset_names=None, origins=None, progress=
                         name = _lint_zstr(sd)
                     elif st == b"DATA" and len(sd) >= 8:
                         x, y = struct.unpack_from("<ii", sd, 0)
-                if x == 0 and y == 0 and name:    # interiors carry grid (0,0)
+                if x == 0 and y == 0 and name:  # interiors carry grid (0,0)
                     pathgrids.add(name.lower())
         if evil_here:
             warnings.append(
                 f"[EVLGMST] '{p}'{tagfor(p)}: {len(evil_here)} evil GMST(s): "
                 f"{', '.join(sorted(evil_here))} -- stale expansion defaults copied in "
-                f"by an old Construction Set; tes3cmd clean removes them.")
+                f"by an old Construction Set; tes3cmd clean removes them."
+            )
         if tb_hits and "tribunal.esm" not in my_masters and "bloodmoon.esm" not in my_masters:
             warnings.append(
                 f"[EXP-DEP] '{p}'{tagfor(p)}: scripts use Tribunal function(s) "
                 f"{', '.join(sorted(tb_hits))} but the plugin doesn't master Tribunal.esm -- "
-                f"fragile on non-expansion setups (tes3lint !TB-FUN).")
+                f"fragile on non-expansion setups (tes3lint !TB-FUN)."
+            )
         if bm_hits and "bloodmoon.esm" not in my_masters:
             warnings.append(
                 f"[EXP-DEP] '{p}'{tagfor(p)}: scripts use Bloodmoon function(s) "
                 f"{', '.join(sorted(bm_hits))} but the plugin doesn't master Bloodmoon.esm -- "
-                f"fragile on non-expansion setups (tes3lint !BM-FUN).")
+                f"fragile on non-expansion setups (tes3lint !BM-FUN)."
+            )
 
     for cid, (plug, name) in sorted(interior_first.items()):
         if cid not in pathgrids:
             warnings.append(
                 f"[NO PATHGRID] '{plug}'{tagfor(plug)}: new interior cell '{name}' has no "
-                f"pathgrid anywhere in the load order -- NPCs can't pathfind there.")
+                f"pathgrid anywhere in the load order -- NPCs can't pathfind there."
+            )
 
     # scripts-twin check (customs only): an active .omwaddon/.esp shipped
     # next to an .omwscripts of the same stem (or vice versa) almost always
@@ -1196,7 +1091,8 @@ def lint_plugins(active_order, index, subset_names=None, origins=None, progress=
                 warnings.append(
                     f"[TWIN] '{p}'{tagfor(p)}: '{twin.name}' sits in the same folder but "
                     f"isn't in the load order -- the mod's Lua half is disabled. Add it "
-                    f"(or confirm it's optional).")
+                    f"(or confirm it's optional)."
+                )
         elif pl.endswith(".omwscripts"):
             for ext in (".omwaddon", ".esp"):
                 twin = path.with_name(stem + ext)
@@ -1204,7 +1100,8 @@ def lint_plugins(active_order, index, subset_names=None, origins=None, progress=
                     warnings.append(
                         f"[TWIN] '{p}'{tagfor(p)}: '{twin.name}' sits in the same folder but "
                         f"isn't in the load order -- scripts may reference content that "
-                        f"never loads. Add it (or confirm it's optional).")
+                        f"never loads. Add it (or confirm it's optional)."
+                    )
                     break
 
     stats["warnings"] = len(warnings)
@@ -1235,7 +1132,7 @@ def _rec_deleted(rec) -> bool:
     if isinstance(flags, str):
         return "delet" in flags.lower()
     if isinstance(flags, int):
-        return bool(flags & 0x20)     # TES3 deleted flag
+        return bool(flags & 0x20)  # TES3 deleted flag
     return bool(rec.get("deleted"))
 
 
@@ -1256,7 +1153,11 @@ def _tes3conv_record_key(rec):
         grid = rec.get("grid")
         if grid is None and isinstance(rec.get("data"), dict):
             grid = rec["data"].get("grid")
-        gx, gy = (grid[0], grid[1]) if isinstance(grid, (list, tuple)) and len(grid) >= 2 else (None, None)
+        gx, gy = (
+            (grid[0], grid[1])
+            if isinstance(grid, (list, tuple)) and len(grid) >= 2
+            else (None, None)
+        )
         cell = rec.get("cell") or rec.get("cell_name")
         if cell:
             # Cell-scoped records (e.g. PathGrid): INTERIOR pathgrids all carry
@@ -1276,13 +1177,14 @@ def _no_window_kwargs():
     when a windowed (GUI / auto-py-to-exe) build shells out to a console program
     like tes3conv -- otherwise you get one popup per plugin. No-op elsewhere."""
     import subprocess
+
     if os.name != "nt":
         return {}
-    kw = {"creationflags": 0x08000000}          # CREATE_NO_WINDOW
+    kw = {"creationflags": 0x08000000}  # CREATE_NO_WINDOW
     try:
         si = subprocess.STARTUPINFO()
         si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        si.wShowWindow = 0                       # SW_HIDE
+        si.wShowWindow = 0  # SW_HIDE
         kw["startupinfo"] = si
     except Exception:
         pass
@@ -1306,6 +1208,7 @@ class Tes3ConvSession:
 
     def __init__(self, exe, dump_dir=None, keep=False):
         import tempfile
+
         self.exe = exe
         # keep = leave the dump on disk when cleanup() runs. Location and lifetime
         # are independent: a session can dump to a STABLE folder (so its JSON is
@@ -1313,31 +1216,42 @@ class Tes3ConvSession:
         # when keep is False.
         self.keep = bool(keep)
         self._temp = dump_dir is None
-        self.dump_dir = Path(dump_dir) if dump_dir else Path(tempfile.mkdtemp(prefix="mlox_tes3conv_"))
+        self.dump_dir = (
+            Path(dump_dir) if dump_dir else Path(tempfile.mkdtemp(prefix="mlox_tes3conv_"))
+        )
         try:
             self.dump_dir.mkdir(parents=True, exist_ok=True)
         except OSError:
             pass
-        self._json_paths = {}   # plugin path(str) -> json file path on disk
+        self._json_paths = {}  # plugin path(str) -> json file path on disk
 
     def _json_for(self, path):
         import subprocess
+
         key = str(path)
         jp = self._json_paths.get(key)
         if jp and Path(jp).exists():
             return jp
         out = self.dump_dir / (Path(path).stem + ".json")
         if out.exists():
-            if not self._stale(out, path):     # reuse existing JSON -- don't re-run tes3conv
+            if not self._stale(out, path):  # reuse existing JSON -- don't re-run tes3conv
                 self._json_paths[key] = str(out)
                 trace(f"tes3conv: REUSE {out.name}")
                 return str(out)
             trace(f"tes3conv: STALE, re-convert {out.name} (plugin newer than json)")
         try:
             trace(f"tes3conv: CONVERT {Path(path).name} -> {out.name}")
-            subprocess.run([self.exe, str(path), str(out)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                           timeout=600, check=True, **_no_window_kwargs())
+            # S603: the argument list is built entirely here -- a resolved
+            # executable path plus two paths we constructed. No shell, no user
+            # string interpolation, so there is nothing to inject through.
+            subprocess.run(  # noqa: S603
+                [self.exe, str(path), str(out)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=600,
+                check=True,
+                **_no_window_kwargs(),
+            )
             self._json_paths[key] = str(out)
             return str(out)
         except Exception:
@@ -1345,11 +1259,12 @@ class Tes3ConvSession:
 
     def _records(self, path):
         import json
+
         jp = self._json_for(path)
         if not jp:
             return []
         try:
-            with open(jp, "r", encoding="utf-8", errors="replace") as fh:
+            with Path(jp).open(encoding="utf-8", errors="replace") as fh:
                 data = json.load(fh)
             return data if isinstance(data, list) else []
         except Exception:
@@ -1377,9 +1292,10 @@ class Tes3ConvSession:
 
     def _load_sidecar(self, side, path):
         import json
+
         if side.exists() and not self._stale(side, path):
             try:
-                with open(side, "r", encoding="utf-8", errors="replace") as fh:
+                with Path(side).open(encoding="utf-8", errors="replace") as fh:
                     obj = json.load(fh)
                 if isinstance(obj, dict) and obj.get("v") == self._SIDECAR_VER:
                     return [tuple(x) for x in obj.get("d", [])]
@@ -1395,14 +1311,19 @@ class Tes3ConvSession:
         then hits its fresh sidecar -- so Check Conflicts + Cell Map together read
         each big JSON once per run, not twice."""
         import json
+
         keys, cells, seen = [], [], set()
-        for rec in self._records(path):          # the single big-JSON read
+        for rec in self._records(path):  # the single big-JSON read
             if not isinstance(rec, dict):
                 continue
             # Lua scripts declared by an .omwaddon LuaScriptsCfg (keyless record)
             if str(rec.get("type", "")).lower().replace("_", "") in ("luascriptscfg", "lual"):
-                for s in (rec.get("scripts") or rec.get("mScripts") or []):
-                    sp = s.get("script_path") or s.get("path") or s.get("mScriptPath") if isinstance(s, dict) else (s if isinstance(s, str) else None)
+                for s in rec.get("scripts") or rec.get("mScripts") or []:
+                    sp = (
+                        s.get("script_path") or s.get("path") or s.get("mScriptPath")
+                        if isinstance(s, dict)
+                        else (s if isinstance(s, str) else None)
+                    )
                     if sp:
                         lk = ("LuaScript", str(sp).replace("\\", "/").lower().lstrip("/"))
                         if lk not in seen:
@@ -1417,8 +1338,11 @@ class Tes3ConvSession:
             if str(rtype).lower() == "cell":
                 data = rec.get("data") if isinstance(rec.get("data"), dict) else {}
                 flags = data.get("flags")
-                interior = bool(flags & 0x01) if isinstance(flags, int) else (
-                    flags is not None and "INTERIOR" in str(flags).upper())
+                interior = (
+                    bool(flags & 0x01)
+                    if isinstance(flags, int)
+                    else (flags is not None and "INTERIOR" in str(flags).upper())
+                )
                 if interior:
                     cells.append(["int", str(rec.get("id") or rec.get("name") or rid), None])
                 else:
@@ -1432,9 +1356,12 @@ class Tes3ConvSession:
         stem = Path(path).stem
         for name, payload in ((stem + ".keys.json", keys), (stem + ".cells.json", cells)):
             try:
-                with open(self.dump_dir / name, "w", encoding="utf-8") as fh:
+                with (self.dump_dir / name).open("w", encoding="utf-8") as fh:
                     json.dump({"v": self._SIDECAR_VER, "d": payload}, fh)
-            except OSError:
+            except OSError:  # noqa: PERF203
+                # Per-file isolation: failing to write one sidecar must not
+                # lose the other. The cache is an optimisation, never required
+                # for correctness, so a write failure is silently tolerated.
                 pass
         return [tuple(x) for x in keys], [tuple(x) for x in cells]
 
@@ -1463,6 +1390,7 @@ class Tes3ConvSession:
         stable dump on close."""
         if not self.keep:
             import shutil
+
             shutil.rmtree(self.dump_dir, ignore_errors=True)
 
     def lua_scripts(self, path):
@@ -1475,7 +1403,7 @@ class Tes3ConvSession:
                 continue
             if str(rec.get("type", "")).lower().replace("_", "") not in ("luascriptscfg", "lual"):
                 continue
-            for s in (rec.get("scripts") or rec.get("mScripts") or []):
+            for s in rec.get("scripts") or rec.get("mScripts") or []:
                 sp = None
                 if isinstance(s, dict):
                     sp = s.get("script_path") or s.get("path") or s.get("mScriptPath")
@@ -1535,7 +1463,7 @@ def detect_conflicts(active_order, index, subset_names=None, session=None):
              "engine": "tes3conv"|"builtin", "paths": {plugin: path}}.
     """
     subset_lower = {s.lower() for s in (subset_names or [])}
-    touch = {}          # (type, id) -> list of (plugin, deleted)
+    touch = {}  # (type, id) -> list of (plugin, deleted)
     unreadable, scanned, rec_count = [], 0, 0
     paths = {}
     for plugin in active_order:
@@ -1546,7 +1474,7 @@ def detect_conflicts(active_order, index, subset_names=None, session=None):
         scanned += 1
         paths[plugin] = str(path)
         is_omwscripts = str(path).lower().endswith(".omwscripts")
-        seen_here = set()   # collapse a record the same plugin defines twice
+        seen_here = set()  # collapse a record the same plugin defines twice
         if session is not None and not is_omwscripts:
             # tes3conv for TES3 records, plus any Lua scripts declared in an
             # .omwaddon's LuaScriptsCfg (so they line up with .omwscripts).
@@ -1575,19 +1503,25 @@ def detect_conflicts(active_order, index, subset_names=None, session=None):
         if len(plugs) < 2:
             continue
         names = [p for p, _ in plugs]
-        conflicts.append({
-            "type": rectype,
-            "id": rid,
-            "plugins": names,
-            "winner": names[-1],
-            "involves_subset": any(p.lower() in subset_lower for p in names),
-            "deleted_by": [p for p, d in plugs if d],
-        })
+        conflicts.append(
+            {
+                "type": rectype,
+                "id": rid,
+                "plugins": names,
+                "winner": names[-1],
+                "involves_subset": any(p.lower() in subset_lower for p in names),
+                "deleted_by": [p for p, d in plugs if d],
+            }
+        )
     conflicts.sort(key=lambda c: (not c["involves_subset"], c["type"], c["id"].lower()))
-    stats = {"scanned": scanned, "unreadable": unreadable,
-             "records": rec_count, "conflicts": len(conflicts),
-             "engine": "tes3conv" if session is not None else "builtin",
-             "paths": paths}
+    stats = {
+        "scanned": scanned,
+        "unreadable": unreadable,
+        "records": rec_count,
+        "conflicts": len(conflicts),
+        "engine": "tes3conv" if session is not None else "builtin",
+        "paths": paths,
+    }
     return conflicts, stats
 
 
@@ -1597,12 +1531,16 @@ def format_conflict_report(conflicts, stats, subset_only=False, limit=None) -> s
     shown = [c for c in conflicts if c["involves_subset"] or not subset_only]
     lines = []
     n_sub = sum(1 for c in conflicts if c["involves_subset"])
-    lines.append(f"Scanned {stats['scanned']} plugin(s), {stats['records']} record(s): "
-                 f"{stats['conflicts']} conflicting record(s), {n_sub} involving your custom mods.")
+    lines.append(
+        f"Scanned {stats['scanned']} plugin(s), {stats['records']} record(s): "
+        f"{stats['conflicts']} conflicting record(s), {n_sub} involving your custom mods."
+    )
     if stats["unreadable"]:
-        lines.append(f"NOTE: {len(stats['unreadable'])} plugin(s) could not be read "
-                     f"(not found on disk / unreadable): {', '.join(stats['unreadable'][:8])}"
-                     + (" ..." if len(stats['unreadable']) > 8 else ""))
+        lines.append(
+            f"NOTE: {len(stats['unreadable'])} plugin(s) could not be read "
+            f"(not found on disk / unreadable): {', '.join(stats['unreadable'][:8])}"
+            + (" ..." if len(stats["unreadable"]) > 8 else "")
+        )
     capped = shown if not limit else shown[:limit]
     for c in capped:
         star = "* " if c["involves_subset"] else "  "
@@ -1611,7 +1549,9 @@ def format_conflict_report(conflicts, stats, subset_only=False, limit=None) -> s
         if c["deleted_by"]:
             lines.append(f"      deleted by: {', '.join(c['deleted_by'])}")
     if limit and len(shown) > limit:
-        lines.append(f"  ... and {len(shown) - limit} more (raise the limit or save the full report).")
+        lines.append(
+            f"  ... and {len(shown) - limit} more (raise the limit or save the full report)."
+        )
     if not capped:
         lines.append("  No conflicts to show.")
     return "\n".join(lines)
@@ -1621,14 +1561,30 @@ def write_conflict_csv(path, conflicts):
     """Write the full conflict list to a CSV (type, id, winner, involves_custom,
     deleted_by, plugins-in-load-order)."""
     import csv
-    with open(path, "w", newline="", encoding="utf-8") as fh:
+
+    with Path(path).open("w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(["record_type", "record_id", "winner", "involves_custom",
-                    "deleted_by", "plugins_load_order"])
+        w.writerow(
+            [
+                "record_type",
+                "record_id",
+                "winner",
+                "involves_custom",
+                "deleted_by",
+                "plugins_load_order",
+            ]
+        )
         for c in conflicts:
-            w.writerow([c["type"], c["id"], c["winner"],
-                        "yes" if c["involves_subset"] else "no",
-                        "; ".join(c["deleted_by"]), " -> ".join(c["plugins"])])
+            w.writerow(
+                [
+                    c["type"],
+                    c["id"],
+                    c["winner"],
+                    "yes" if c["involves_subset"] else "no",
+                    "; ".join(c["deleted_by"]),
+                    " -> ".join(c["plugins"]),
+                ]
+            )
 
 
 def filter_plugins(active_order, patterns):
@@ -1642,8 +1598,9 @@ def filter_plugins(active_order, patterns):
     kept, excl = [], []
     for name in active_order:
         low = name.lower()
-        hit = any(fnmatch.fnmatch(low, p) or (("*" not in p and "?" not in p) and p in low)
-                  for p in pats)
+        hit = any(
+            fnmatch.fnmatch(low, p) or (("*" not in p and "?" not in p) and p in low) for p in pats
+        )
         (excl if hit else kept).append(name)
     return kept, excl
 
@@ -1653,6 +1610,7 @@ def dump_tes3conv_json(session, plugins, paths, outdir):
     spool) to outdir/<plugin>.json. Returns the number written. Creates outdir if
     needed. Needs a Tes3ConvSession."""
     import json
+
     if session is None:
         return 0
     outdir = Path(outdir)
@@ -1665,7 +1623,8 @@ def dump_tes3conv_json(session, plugins, paths, outdir):
         try:
             recs = session._records(path)
             (outdir / (Path(p).stem + ".json")).write_text(
-                json.dumps(recs, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+                json.dumps(recs, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
+            )
             n += 1
         except OSError:
             continue
@@ -1679,6 +1638,7 @@ def dump_tes3conv_json(session, plugins, paths, outdir):
 # change the winner. This is what MO2's "Data" conflicts show for a mod list.
 # ---------------------------------------------------------------------------
 
+
 def detect_resource_conflicts(data_dirs, subset_dirs=None, exclude_exts=None):
     """data_dirs: the data= folders in load order (winner last). Returns
     (conflicts, stats). conflicts: [{path, providers:[dirs in order], winner,
@@ -1686,7 +1646,7 @@ def detect_resource_conflicts(data_dirs, subset_dirs=None, exclude_exts=None):
     files are skipped (they're ordered by content=, not the VFS)."""
     subset_norm = {str(s).replace("\\", "/").rstrip("/").lower() for s in (subset_dirs or [])}
     exclude_exts = {e.lower() for e in (exclude_exts or [])}
-    providers = {}     # rel_path -> [dir_index in order]
+    providers = {}  # rel_path -> [dir_index in order]
     dirs = []
     for d in data_dirs:
         try:
@@ -1700,10 +1660,14 @@ def detect_resource_conflicts(data_dirs, subset_dirs=None, exclude_exts=None):
         try:
             for root, _sub, files in os.walk(p):
                 for fn in files:
-                    ext = os.path.splitext(fn)[1].lower()
+                    ext = Path(fn).suffix.lower()
                     if ext in PLUGIN_EXTS or ext in exclude_exts:
                         continue
-                    rel = os.path.relpath(os.path.join(root, fn), p).replace("\\", "/").lower()
+                    # os.path.relpath has no pathlib equivalent that tolerates
+                    # a non-subpath (Path.relative_to raises), so the join stays
+                    # os.path too rather than mixing idioms mid-expression.
+                    joined = os.path.join(root, fn)  # noqa: PTH118
+                    rel = os.path.relpath(joined, p).replace("\\", "/").lower()
                     lst = providers.get(rel)
                     if lst is None:
                         providers[rel] = [di]
@@ -1717,8 +1681,9 @@ def detect_resource_conflicts(data_dirs, subset_dirs=None, exclude_exts=None):
             continue
         prov = [dirs[i] for i in idxs]
         involves = any(pv.replace("\\", "/").rstrip("/").lower() in subset_norm for pv in prov)
-        conflicts.append({"path": rel, "providers": prov, "winner": prov[-1],
-                          "involves_subset": involves})
+        conflicts.append(
+            {"path": rel, "providers": prov, "winner": prov[-1], "involves_subset": involves}
+        )
     conflicts.sort(key=lambda c: (not c["involves_subset"], c["path"]))
     return conflicts, {"dirs": len(dirs), "files": len(providers), "conflicts": len(conflicts)}
 
@@ -1726,8 +1691,10 @@ def detect_resource_conflicts(data_dirs, subset_dirs=None, exclude_exts=None):
 def format_resource_report(conflicts, stats, subset_only=False, limit=200):
     shown = [c for c in conflicts if c["involves_subset"] or not subset_only]
     n_sub = sum(1 for c in conflicts if c["involves_subset"])
-    lines = [f"Scanned {stats['dirs']} data folder(s), {stats['files']} loose file(s): "
-             f"{stats['conflicts']} conflicting file(s), {n_sub} involving your custom data paths."]
+    lines = [
+        f"Scanned {stats['dirs']} data folder(s), {stats['files']} loose file(s): "
+        f"{stats['conflicts']} conflicting file(s), {n_sub} involving your custom data paths."
+    ]
     for c in (shown[:limit] if limit else shown):
         star = "* " if c["involves_subset"] else "  "
         lines.append(f"{star}{c['path']}   ({len(c['providers'])} providers, wins: {c['winner']})")
@@ -1738,12 +1705,20 @@ def format_resource_report(conflicts, stats, subset_only=False, limit=200):
 
 def write_resource_csv(path, conflicts):
     import csv
-    with open(path, "w", newline="", encoding="utf-8") as fh:
+
+    with Path(path).open("w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(["file_path", "providers", "winner", "involves_custom", "provider_folders"])
         for c in conflicts:
-            w.writerow([c["path"], len(c["providers"]), c["winner"],
-                        "yes" if c["involves_subset"] else "no", " -> ".join(c["providers"])])
+            w.writerow(
+                [
+                    c["path"],
+                    len(c["providers"]),
+                    c["winner"],
+                    "yes" if c["involves_subset"] else "no",
+                    " -> ".join(c["providers"]),
+                ]
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -1752,6 +1727,7 @@ def write_resource_csv(path, conflicts):
 # via either engine; interior/exterior is told apart the way modmapper does
 # (interior = the cell's flags bit 0x01, or "INTERIOR" in the flags).
 # ---------------------------------------------------------------------------
+
 
 def _iter_cells(path, session=None):
     """Yield ('ext', gx, gy) or ('int', name, None) for each CELL in a plugin."""
@@ -1766,7 +1742,7 @@ def _iter_cells(path, session=None):
             if mm:
                 yield ("ext", int(mm.group(1)), int(mm.group(2)))
             elif rid.startswith("Interior: "):
-                yield ("int", rid[len("Interior: "):], None)
+                yield ("int", rid[len("Interior: ") :], None)
 
 
 def build_cell_coverage(active_order, index, subset_names=None, session=None):
@@ -1792,8 +1768,13 @@ def build_cell_coverage(active_order, index, subset_names=None, session=None):
                 if nm not in si:
                     si.add(nm)
                     inte.setdefault(nm, []).append(plugin)
-    return {"exterior": ext, "interior": inte, "scanned": scanned,
-            "unreadable": unreadable, "subset_lower": subset_lower}
+    return {
+        "exterior": ext,
+        "interior": inte,
+        "scanned": scanned,
+        "unreadable": unreadable,
+        "subset_lower": subset_lower,
+    }
 
 
 def _cell_heat(count):
@@ -1804,8 +1785,13 @@ def _cell_heat(count):
 
 
 def _html_escape(s):
-    return (str(s).replace("&", "&amp;").replace("<", "&lt;")
-            .replace(">", "&gt;").replace('"', "&quot;"))
+    return (
+        str(s)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
 
 
 def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
@@ -1823,8 +1809,12 @@ def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
     # bounds. The map is drawn as an SVG that only emits a <rect> for each TOUCHED
     # cell (sparse -- bounded by plugin count), so absolute placement gives uniform
     # squares in every column, and there's no dense billion-cell table to OOM on.
-    SANE = 4096
-    ext_ok = {k: v for k, v in ext.items() if -SANE <= k[0] <= SANE and -SANE <= k[1] <= SANE}
+    ext_ok = {
+        k: v
+        for k, v in ext.items()
+        if -CELL_GRID_LIMIT <= k[0] <= CELL_GRID_LIMIT
+        and -CELL_GRID_LIMIT <= k[1] <= CELL_GRID_LIMIT
+    }
     dropped = len(ext) - len(ext_ok)
 
     def anchor(gx, gy):
@@ -1842,7 +1832,8 @@ def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
     focus_opts = "".join(
         f'<option value="{_html_escape(low)}">{_html_escape(all_mods[low])}'
         f'{" ★" if low in subl else ""}</option>'
-        for low in sorted(all_mods, key=lambda x: (x not in subl, x)))
+        for low in sorted(all_mods, key=lambda x: (x not in subl, x))
+    )
 
     grid = '<p class="sub">No exterior cells touched.</p>'
     if ext_ok:
@@ -1851,37 +1842,43 @@ def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
         minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
         w, h = (maxx - minx + 1), (maxy - miny + 1)
         trace(f"cell map: {len(ext_ok)} ext cells, bbox {w}x{h}, dropped {dropped}")
-        STEP, SIZE = 13, 12                     # 12px square + 1px gutter
         rects = []
         for (gx, gy), mods in ext_ok.items():
-            px = (gx - minx) * STEP
-            py = (maxy - gy) * STEP             # north (max y) at the top
+            px = (gx - minx) * CELL_MAP_STEP_PX
+            py = (maxy - gy) * CELL_MAP_STEP_PX  # north (max y) at the top
             custom = any(m.lower() in subl for m in mods)
             tip = f"({gx}, {gy}) — {len(mods)} mod(s): " + ", ".join(mods)
             stroke = ' stroke="#ffd24a" stroke-width="1.4"' if custom else ""
             rects.append(
-                f'<rect x="{px}" y="{py}" width="{SIZE}" height="{SIZE}" '
+                f'<rect x="{px}" y="{py}" width="{CELL_MAP_CELL_PX}" height="{CELL_MAP_CELL_PX}" '
                 f'fill="{_cell_heat(len(mods))}"{stroke} class="cell" '
                 f'data-t="{_html_escape(tip)}" data-m="{modattr(mods)}" '
-                f'onclick="jump(\'{anchor(gx, gy)}\')"></rect>')
-        svg = (f'<svg width="{w*STEP}" height="{h*STEP}" viewBox="0 0 {w*STEP} {h*STEP}" '
-               f'xmlns="http://www.w3.org/2000/svg">' + "".join(rects) + "</svg>")
+                f"onclick=\"jump('{anchor(gx, gy)}')\"></rect>"
+            )
+        svg = (
+            f'<svg width="{w*CELL_MAP_STEP_PX}" height="{h*CELL_MAP_STEP_PX}" viewBox="0 0 {w*CELL_MAP_STEP_PX} {h*CELL_MAP_STEP_PX}" '
+            f'xmlns="http://www.w3.org/2000/svg">' + "".join(rects) + "</svg>"
+        )
         grid = f'<div class="mapwrap">{svg}</div>'
 
     ext_rows = []
     for (gx, gy), mods in sorted(ext_ok.items(), key=lambda kv: (-len(kv[1]), kv[0])):
         custom = any(m.lower() in subl for m in mods)
         cls = ' class="cust"' if custom else ""
-        ext_rows.append(f'<tr id="{anchor(gx,gy)}"{cls} data-m="{modattr(mods)}">'
-                        f'<td>({gx}, {gy})</td><td>{len(mods)}</td>'
-                        f'<td>{_html_escape(", ".join(mods))}</td></tr>')
+        ext_rows.append(
+            f'<tr id="{anchor(gx,gy)}"{cls} data-m="{modattr(mods)}">'
+            f"<td>({gx}, {gy})</td><td>{len(mods)}</td>"
+            f'<td>{_html_escape(", ".join(mods))}</td></tr>'
+        )
     int_rows = []
     for name, mods in sorted(inte.items(), key=lambda kv: (-len(kv[1]), kv[0].lower())):
         custom = any(m.lower() in subl for m in mods)
         cls = ' class="cust"' if custom else ""
-        int_rows.append(f'<tr{cls} data-m="{modattr(mods)}"><td>{_html_escape(name)}</td>'
-                        f'<td>{len(mods)}</td>'
-                        f'<td>{_html_escape(", ".join(mods))}</td></tr>')
+        int_rows.append(
+            f'<tr{cls} data-m="{modattr(mods)}"><td>{_html_escape(name)}</td>'
+            f"<td>{len(mods)}</td>"
+            f'<td>{_html_escape(", ".join(mods))}</td></tr>'
+        )
     ext = ext_ok
     n_ext_conf = sum(1 for m in ext.values() if len(m) > 1)
     n_int_conf = sum(1 for m in inte.values() if len(m) > 1)
@@ -1982,8 +1979,56 @@ def generate_cell_map_html(coverage, title="MLOX Subset Sort — Cell Map"):
 # openmw.cfg handling
 # ---------------------------------------------------------------------------
 
+#: openmw.cfg is normally UTF-8, but it can legitimately contain bytes that
+#: are not (a cp1252 accented mod folder, a hand edit in Notepad). Decoding
+#: with ``surrogateescape`` maps those bytes to lone surrogates and encoding
+#: with it restores them exactly, so a read/write round-trip is byte-
+#: preserving. ``errors="replace"`` used to destroy them permanently, breaking
+#: the user's data= path.
+#: Largest exterior cell coordinate treated as real. Beyond this a plugin is
+#: almost certainly corrupt, and plotting it would stretch the map to nothing.
+CELL_GRID_LIMIT = 4096
+
+#: Cell-map geometry: a 12px square on a 13px pitch, leaving a 1px gutter.
+CELL_MAP_CELL_PX = 12
+CELL_MAP_STEP_PX = 13
+
+CFG_READ_ENCODING = "utf-8-sig"
+CFG_WRITE_ENCODING = "utf-8"
+CFG_ERRORS = "surrogateescape"
+
+
+def read_user_text(path: Path, encoding: str = "utf-8-sig") -> str:
+    """Read a user-supplied text file without losing undecodable bytes.
+
+    Plugin names and mod paths can contain bytes that are not valid UTF-8
+    (a cp1252 accented folder, a hand-edited file). ``surrogateescape``
+    preserves them, which also matches how Python decodes filenames from the
+    filesystem -- so a name read here still compares equal to the same name
+    listed from disk.
+    """
+    return Path(path).read_text(encoding=encoding, errors=CFG_ERRORS)
+
+
+def read_toml_text(path: Path) -> str:
+    """Read a TOML file, which the spec requires to be UTF-8.
+
+    Raises:
+        SystemExit: with an actionable message if it is not valid UTF-8,
+            rather than surfacing a raw UnicodeDecodeError.
+    """
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise SystemExit(
+            f"{path} is not valid UTF-8 (byte 0x{exc.object[exc.start]:02x} at "
+            f"position {exc.start}). TOML files must be UTF-8 -- re-save the "
+            f"file as UTF-8 in your editor."
+        ) from exc
+
+
 def read_cfg(path: Path):
-    lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    lines = path.read_text(encoding=CFG_READ_ENCODING, errors=CFG_ERRORS).splitlines()
     content_positions, content_order = [], []
     data_positions, data_order = [], []
     for i, line in enumerate(lines):
@@ -2007,7 +2052,11 @@ def backup_file(path: Path, no_backup: bool):
         return
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup = path.with_suffix(path.suffix + f".bak-{stamp}")
-    backup.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    # Copy BYTES, not decoded text: a backup must be byte-identical. Decoding
+    # and re-encoding used to raise UnicodeDecodeError on a cfg containing
+    # non-UTF-8 bytes (e.g. a cp1252 accented mod folder), which meant the
+    # user could not back up -- or export -- at all.
+    backup.write_bytes(path.read_bytes())
     print(f"Backup written: {backup}")
 
 
@@ -2043,7 +2092,11 @@ def write_cfg(path: Path, lines, segments, dry_run, no_backup):
         return
 
     backup_file(path, no_backup)
-    path.write_text("\n".join(new_lines_out) + "\n", encoding="utf-8")
+    path.write_text(
+        "\n".join(new_lines_out) + "\n",
+        encoding=CFG_WRITE_ENCODING,
+        errors=CFG_ERRORS,
+    )
     print(f"Wrote updated: {path}")
 
 
@@ -2051,128 +2104,67 @@ def write_cfg(path: Path, lines, segments, dry_run, no_backup):
 # mlox rule parsing (Order / NearStart / NearEnd only)
 # ---------------------------------------------------------------------------
 
-TOP_KEYWORDS = ("Order", "NearStart", "NearEnd", "Requires", "Conflict", "Patch", "Note", "Version")
-# A rule header must sit at the START of a line (mlox: ^\[(order|...) ; plox:
-# line.starts_with("[order")). Matching anywhere in the line -- the old
-# behaviour -- turned mentions like "see the [Order] section" inside a rule's
-# message text into phantom rule starts, silently corrupting block boundaries.
-# The header's optional arguments must stay on the same line, and the closing
-# bracket is required (same as both reference parsers).
-TOP_RE = re.compile(r"^\[(" + "|".join(TOP_KEYWORDS) + r")\b([^\]\n]*)\]",
-                    re.IGNORECASE | re.MULTILINE)
-
-
-def strip_comment(line: str) -> str:
-    # mlox comments run from ';' to end of line (outside quotes, which is
-    # good enough here since Order/NearStart/NearEnd blocks are just filenames)
-    idx = line.find(";")
-    return line[:idx] if idx != -1 else line
-
-
-# One plugin name/pattern on an [Order]/[NearStart]/[NearEnd] body line.
-# Follows the reference parsers: a name starts at the first non-space, runs
-# non-greedily to a recognized plugin extension (mlox: `^(\S.*?\.es[mp]\b)`,
-# here extended with the OpenMW extensions like plox), may carry a trailing
-# '*', and must be followed by whitespace or end-of-line. Names routinely
-# contain spaces, '&', '-', parens, wildcards (*, ?) and <VER> -- all pass
-# through untouched. finditer supports plox-style multiple names per line
-# (extension-delimited); trailing junk after a name is dropped like mlox does.
-_RE_ORDER_NAME = re.compile(
-    r"\S[^\n]*?\.(?:esp|esm|omwaddon|omwgame|omwscripts)\*?(?=\s|$)",
-    re.IGNORECASE)
-
-
-def parse_mlox_file(path: Path):
-    """Returns list of blocks: (keyword, [plugin_pattern, ...]) for the
-    ordering keywords (order / nearstart / nearend). Keywords are separated --
-    an [Order] body is an ordering CHAIN, while [NearStart]/[NearEnd] bodies
-    are independent position hints; conflating them creates bogus edges."""
-    # utf-8-sig: a BOM would otherwise hide a header on the very first line
-    raw = path.read_text(encoding="utf-8-sig", errors="replace")
-    lines = [strip_comment(l) for l in raw.splitlines()]
-    text = "\n".join(lines)
-
-    matches = list(TOP_RE.finditer(text))
-    blocks = []
-    skipped = 0
-    for idx, m in enumerate(matches):
-        keyword = m.group(1)
-        start = m.end()
-        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
-        body = text[start:end]
-        if keyword.lower() in ("order", "nearstart", "nearend"):
-            names = []
-            for ln in body.splitlines():
-                ln = ln.strip()
-                if not ln:
-                    continue
-                if ln.startswith("["):
-                    # conditional/bracketed entry (e.g. "[DESC /.../ Foo.esp]"
-                    # qualifiers that appear in a few mlox_base Order blocks)
-                    # or a malformed header. mlox treats these as phantom
-                    # names that match nothing, so the ordering chain simply
-                    # bridges over them -- which is what skipping does here.
-                    skipped += 1
-                    continue
-                found = _RE_ORDER_NAME.findall(ln)
-                if found:
-                    names.extend(found)
-                else:
-                    # a non-empty line with no recognizable plugin name --
-                    # same phantom treatment as above
-                    skipped += 1
-            if names:
-                blocks.append((keyword.lower(), names))
-    if skipped:
-        print(f"NOTE: {path.name}: {skipped} conditional/unrecognized line(s) inside "
-              f"ordering rules treated as not-installed and bridged over (mlox does the same).")
-    return blocks
-
-
-def load_rule_blocks(rule_paths):
-    """
-    Returns (order_blocks, nearstart_patterns, nearend_patterns):
-      order_blocks       -- [(names, priority)] ordering chains from [Order]
-                            blocks, names in rule order; priority = index of
-                            the file on the command line (later files win
-                            conflicts, like mlox reading mlox_user first)
-      nearstart_patterns -- flat pattern list from [NearStart] blocks
-      nearend_patterns   -- flat pattern list from [NearEnd] blocks
-
-    NearStart/NearEnd are per-plugin position hints ("as close to the start/
-    end as the constraints allow"), NOT ordering chains -- chaining them (the
-    old behaviour) invented edges between unrelated plugins (mlox_base's
-    [NearEnd] block alone linked Merged Objects.esp -> Mashed Lists.esp -> ...).
-
-    Keeping each whole ordered block (rather than pre-zipping it into a<b
-    pairs) lets build_and_sort bridge over plugins you don't have: in
-    [Order] A,B,C where B isn't installed, chaining A->C directly preserves
-    the A-before-C constraint instead of losing it -- matching how the real
-    mlox engine keeps a not-installed plugin as a phantom bridge node (see
-    pluggraph). Pre-zipping would have produced A->B and B->C, both of which
-    vanish when B expands to nothing.
-    """
-    blocks_out = []
-    nearstart, nearend = [], []
-    for priority, p in enumerate(rule_paths):
-        p = Path(p)
-        files = [p] if p.is_file() else sorted(p.glob("*.txt"))
-        for f in files:
-            try:
-                blocks = parse_mlox_file(f)
-            except Exception as e:
-                print(f"WARNING: could not parse rule file {f}: {e}", file=sys.stderr)
-                continue
-            for keyword, names in blocks:
-                if keyword == "order":
-                    blocks_out.append((names, priority))
-                elif keyword == "nearstart":
-                    nearstart.extend(names)
-                elif keyword == "nearend":
-                    nearend.extend(names)
-            print(f"Loaded {sum(len(n) for _, n in blocks)} plugin refs from {f.name}")
-    return blocks_out, nearstart, nearend
-
+# Rule-file parsing now lives in mlox_subset/rules/parser.py, re-exported so
+# existing callers keep working. Behaviour pinned by tests/test_differential.py.
+from mlox_subset.configurator import (
+    REMOVE_KEYS,
+    cfg_line_value,
+    configurator_remove_matches,
+    customization_string_list,
+    detect_data_quoting,
+    extract_data_path_value,
+    find_anchor_index,
+    format_data_line,
+    generate_customizations_toml,
+    infer_data_path_anchors,
+    insert_data_paths,
+    normalize_data_path,
+    preview_configurator_result,
+    simulate_configurator_apply,
+    toml_value,
+)
+from mlox_subset.momw import (
+    base_order_matches_yml,
+    curated_for_list,
+    needs_cleaning_set,
+    parse_plugin_order_yml,
+)
+from mlox_subset.net import (
+    ALLOWED_URL_SCHEMES,
+    MAX_DOWNLOAD_BYTES,
+    PLUGIN_ORDER_URLS,
+    RULES_URL_TEMPLATE,
+    fetch_url_bytes,
+    rule_file_ages,
+    update_plugin_order_yml,
+    update_rule_files,
+)
+from mlox_subset.plugins import (
+    PLUGIN_EXTS,
+    TES3_MIN_PLUGIN_SIZE as _TES3_MIN_PLUGIN_SIZE,
+    PluginFileIndex,
+    list_plugins_in_dir,
+    plugin_version as _plugin_version,
+    read_plugin_description as _read_plugin_description,
+)
+from mlox_subset.rules import (
+    ORDER_NAME_RE as _RE_ORDER_NAME,
+    TOP_KEYWORDS,
+    TOP_RE,
+    check_predicates,
+    describe_node,
+    evaluate_node,
+    get_triggered_plugins,
+    load_rule_blocks,
+    load_rules_raw_text,
+    parse_mlox_file,
+    parse_mlox_lisp,
+    strip_comment,
+    tokenize_mlox_logic,
+)
+from mlox_subset.versions import (
+    format_version as _format_version,
+)
 
 # ---------------------------------------------------------------------------
 # mlox predicate evaluation (Requires / Conflict / Note) -- read-only,
@@ -2181,330 +2173,8 @@ def load_rule_blocks(rule_paths):
 # mlox engine -- good enough to flag likely problems, not to be trusted blindly.
 # ---------------------------------------------------------------------------
 
-def tokenize_mlox_logic(text: str) -> list:
-    """Splits a [Requires]/[Conflict]/[Note] body into brackets, logic
-    keywords, /DESC message/ strings, plugin filenames (with wildcards), and
-    the atomic [VER]/[SIZE]/[DESC]/[MWSE-LUA] function forms (captured whole so
-    they become single leaf nodes the evaluator can dispatch on, rather than
-    being split into '[' + garbage + ']')."""
-    # DESC/MWSE-LUA carry a /regex/ which may itself contain ']' (e.g.
-    # /[Tt]ribunal/), so those forms consume the /.../ part explicitly
-    # before looking for the closing bracket; VER/SIZE bodies can't
-    # contain brackets.
-    func = (r'\[\s*VER\b[^\]\n]*\]|'
-            r'\[\s*SIZE\b[^\]\n]*\]|'
-            r'\[\s*DESC\s*!?\s*/[^/\n]*/[^\]\n]*\]|'
-            r'\[\s*MWSE-LUA\s*!?\s*/[^/\n]*/[^\]\n]*\]')
-    pattern = (func + r'|\[|\]|\bALL\b|\bANY\b|\bNOT\b|/[^/]+/|'
-               r'[^\[\]\n]+?\.(?:esp|esm|omwaddon|omwgame|omwscripts)\*?')
-    tokens = re.findall(pattern, text, re.IGNORECASE)
-    return [t.strip() for t in tokens if t.strip()]
-
 
 # --- [VER]/[SIZE]/[DESC]/[MWSE-LUA] function-token evaluation ---------------
-
-def _eval_ver(op, want_raw, plugin_pat, active_plugins, index) -> bool:
-    want = _format_version(want_raw)
-    rx = mlox_pattern_to_regex(plugin_pat)
-    matched = [p for p in active_plugins if rx.match(p)]
-    if not matched:
-        return False  # the plugin the rule is about isn't even active
-    for p in matched:
-        pv = _plugin_version(p, index)
-        if pv is None:
-            if op == "=":
-                return True  # mlox: version unknowable -> assume '=' holds
-            continue
-        if op == "=" and pv == want:
-            return True
-        if op == "<" and pv < want:
-            return True
-        if op == ">" and pv > want:
-            return True
-    return False
-
-
-def _eval_size(bang, want_size, plugin_pat, active_plugins, index) -> bool:
-    rx = mlox_pattern_to_regex(plugin_pat)
-    matched = [p for p in active_plugins if rx.match(p)]
-    if not matched:
-        return False
-    for p in matched:
-        path = index.find(p) if index else None
-        if path is None:
-            return True  # mlox: no datadir -> assume true (mere existence)
-        try:
-            actual = path.stat().st_size
-        except (OSError, PermissionError):
-            return True
-        b = (actual == want_size)
-        if bang == "!":
-            b = not b
-        if b:
-            return True
-    return False
-
-
-def _eval_desc(bang, pat, plugin_pat, active_plugins, index) -> bool:
-    rx = mlox_pattern_to_regex(plugin_pat)
-    matched = [p for p in active_plugins if rx.match(p)]
-    if not matched:
-        return False
-    for p in matched:
-        path = index.find(p) if index else None
-        if path is None:
-            return True  # mlox: no datadir -> assume true
-        desc = _read_plugin_description(path)
-        try:
-            b = re.search(pat, desc) is not None
-        except re.error:
-            b = False
-        if bang == "!":
-            b = not b
-        if b:
-            return True
-    return False
-
-
-def _eval_func_token(token, active_plugins, index) -> bool:
-    """Evaluate one atomic [VER]/[SIZE]/[DESC]/[MWSE-LUA] token."""
-    m = _re_ver_fun.match(token)
-    if m:
-        return _eval_ver(m.group(1), m.group(2), m.group(3).strip(), active_plugins, index)
-    m = _re_size_fun.match(token)
-    if m:
-        return _eval_size(m.group(1), int(m.group(2)), m.group(3).strip(), active_plugins, index)
-    m = _re_desc_fun.match(token)
-    if m:
-        return _eval_desc(m.group(1), m.group(2), m.group(3).strip(), active_plugins, index)
-    if _re_mwselua_fun.match(token):
-        return False  # MWSE-Lua content doesn't exist under OpenMW
-    return False  # unrecognized bracketed token -> can't assert it holds
-
-
-def _func_token_matches(token, active_plugins) -> set:
-    """The active plugins named by a function token's inner plugin pattern --
-    used to attribute a warning to a specific plugin."""
-    for rx in (_re_ver_fun, _re_size_fun, _re_desc_fun, _re_mwselua_fun):
-        m = rx.match(token)
-        if m:
-            prx = mlox_pattern_to_regex(m.group(3).strip())
-            return {p for p in active_plugins if prx.match(p)}
-    return set()
-
-
-def parse_mlox_lisp(tokens: list) -> list:
-    """Recursively builds a nested-list AST from bracketed mlox logic tokens."""
-    if not tokens:
-        return []
-    ast = []
-    while tokens:
-        token = tokens.pop(0)
-        if token == "[":
-            ast.append(parse_mlox_lisp(tokens))
-        elif token == "]":
-            return ast
-        else:
-            ast.append(token)
-    return ast
-
-
-def evaluate_node(node, active_plugins: set, index=None) -> bool:
-    """Evaluates one AST node (a plugin pattern, an ALL/ANY/NOT/DESC group, or
-    an atomic [VER]/[SIZE]/[DESC]/[MWSE-LUA] function) against the set of
-    plugins active in final_order. index (a PluginFileIndex) lets the function
-    predicates read real plugin version/size/description; None falls back to
-    mlox's conservative behaviour."""
-    if isinstance(node, str):
-        if node.startswith("["):  # atomic [VER]/[SIZE]/[DESC]/[MWSE-LUA] token
-            return _eval_func_token(node, active_plugins, index)
-        if node.startswith("/") and node.endswith("/"):
-            return True  # /DESC message/ strings carry no truth value
-        rx = mlox_pattern_to_regex(node)
-        return any(rx.match(p) for p in active_plugins)
-
-    if isinstance(node, list) and node:
-        op = node[0].upper() if isinstance(node[0], str) else ""
-        if op == "ALL":
-            return all(evaluate_node(arg, active_plugins, index) for arg in node[1:])
-        elif op == "ANY":
-            return any(evaluate_node(arg, active_plugins, index) for arg in node[1:])
-        elif op == "NOT":
-            return len(node) >= 2 and not evaluate_node(node[1], active_plugins, index)
-        elif op == "DESC":
-            return evaluate_node(node[-1], active_plugins, index)
-        else:
-            # a flat list with no leading operator implies ANY in mlox
-            return any(evaluate_node(arg, active_plugins, index) for arg in node)
-    return False
-
-
-def get_triggered_plugins(node, active_plugins: set, index=None) -> set:
-    """Names of active plugins that actually matched inside an AST node --
-    used to make the printed warning say which plugin(s) triggered it."""
-    found = set()
-    if isinstance(node, str):
-        if node.startswith("["):  # atomic function token
-            return _func_token_matches(node, active_plugins)
-        if node.startswith("/") and node.endswith("/"):
-            return found  # /DESC message/ strings match no plugin
-        rx = mlox_pattern_to_regex(node)
-        for p in active_plugins:
-            if rx.match(p):
-                found.add(p)
-    elif isinstance(node, list) and node:
-        for arg in node[1:]:
-            found.update(get_triggered_plugins(arg, active_plugins, index))
-    return found
-
-
-def describe_node(node) -> str:
-    """Renders an AST node back to a short human-readable string -- used to
-    name a MISSING dependency in a [Requires] warning, since a missing
-    plugin can't be looked up in active_plugins to get its real name back."""
-    if isinstance(node, str):
-        return node
-    if isinstance(node, list) and node:
-        if isinstance(node[0], str) and node[0].upper() in ("ALL", "ANY", "NOT", "DESC"):
-            op, rest = node[0].upper(), node[1:]
-        else:
-            op, rest = "ANY", node
-        return f"{op}({', '.join(describe_node(n) for n in rest)})"
-    return "?"
-
-
-def load_rules_raw_text(rule_paths):
-    """Concatenates the raw (uncommented, unsplit) text of every rule file,
-    in the same file-discovery order as load_rule_edges -- used so the
-    predicate evaluator can see the original [Requires]/[Conflict]/[Note]
-    bodies, including their DESC message text."""
-    chunks = []
-    for p in rule_paths:
-        p = Path(p)
-        files = [p] if p.is_file() else sorted(p.glob("*.txt"))
-        for f in files:
-            try:
-                chunks.append(f.read_text(encoding="utf-8-sig", errors="replace"))
-            except Exception as e:
-                print(f"WARNING: could not read rule file {f} for predicate checks: {e}", file=sys.stderr)
-    return "\n".join(chunks)
-
-
-def check_predicates(rules_text: str, final_order: list, subset_origins: dict = None,
-                     data_dirs=None) -> list:
-    """Extracts and evaluates [Conflict], [Requires], and [Note] blocks
-    against the final active plugin list. Returns a list of warning strings.
-
-    data_dirs (optional): the cfg's data= directories, used to locate plugin
-    files so [VER]/[SIZE]/[DESC] predicates can read real version/size/
-    description info. If omitted or unreadable, those predicates fall back to
-    mlox's conservative behaviour.
-    Purely read-only -- never affects sorting or what gets written.
-
-    subset_origins (optional): {plugin_name_lower: "where this came from"},
-    e.g. "customizations.toml -> 'total-overhaul'" or "subset file (foo.txt)"
-    -- lets a warning say "NewMod.esp [customizations.toml -> 'total-overhaul']"
-    instead of just "NewMod.esp", making it obvious which of YOUR mods (as
-    opposed to something already sitting in the frozen openmw.cfg base) is
-    the one to go fix. Plugins with no entry here are printed unannotated.
-    """
-    subset_origins = subset_origins or {}
-    active_set = set(final_order)
-    index = PluginFileIndex(data_dirs)
-    warnings = []
-
-    def annotate(name: str) -> str:
-        origin = subset_origins.get(name.lower())
-        return f"{name} [{origin}]" if origin else name
-
-    def annotate_all(names) -> str:
-        return ", ".join(annotate(n) for n in sorted(names))
-
-    matches = list(TOP_RE.finditer(rules_text))
-    for idx, m in enumerate(matches):
-        keyword = m.group(1).title()
-        if keyword not in ("Conflict", "Requires", "Note"):
-            continue
-
-        start = m.end()
-        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(rules_text)
-        body = rules_text[start:end]
-
-        # Split lines into "logic" (expressions) vs. message text the way the
-        # real mlox does: a line that starts with WHITESPACE is message text
-        # (mlox's re_message = ^\s), everything else is an expression line.
-        # The first body line is the remainder of the header line itself, so
-        # it's always logic. (The old heuristic classified by content --
-        # "contains brackets or a plugin extension" -- which turned the
-        # thousands of indented message lines in mlox_base that happen to
-        # mention a plugin name into phantom logic operands, producing false
-        # conflict/note warnings.)
-        message_lines = []
-        header_arg = (m.group(2) or "").strip()
-        if header_arg:
-            message_lines.append(header_arg)  # mlox: header args are the message
-        logic_text = ""
-        depth = 0   # unclosed brackets carried across lines
-        for i, raw_line in enumerate(body.splitlines()):
-            line = strip_comment(raw_line).strip()
-            if not line:
-                continue
-            # An indented line is message text ONLY when no bracket expression
-            # is open: mlox expressions like  [ALL A.esp\n\t[NOT B.esp]\n\tC.esm]
-            # continue across indented lines, and treating those continuations
-            # as message text truncated the condition -- e.g. the Uvirith's
-            # Legacy / Children of Morrowind note fired for people without
-            # Children of Morrowind because its [ALL ...] lost two conjuncts.
-            if i > 0 and depth == 0 and raw_line[:1] in (" ", "\t"):
-                message_lines.append(line)
-            else:
-                logic_text += " " + line
-                depth += line.count("[") - line.count("]")
-                if depth < 0:
-                    depth = 0
-
-        message = " ".join(message_lines).strip()
-        ast = parse_mlox_lisp(tokenize_mlox_logic(logic_text))
-        if not ast:
-            continue
-
-        if keyword == "Conflict":
-            # a [Conflict] block is a flat list of mutually-exclusive
-            # items/groups -- warn if more than one is simultaneously active
-            true_nodes = [n for n in ast if evaluate_node(n, active_set, index)]
-            if len(true_nodes) > 1:
-                triggered_by = set()
-                for n in true_nodes:
-                    triggered_by.update(get_triggered_plugins(n, active_set, index))
-                warning_msg = f"[CONFLICT] {message}"
-                if triggered_by:
-                    warning_msg += f"\n    Caused by: {annotate_all(triggered_by)}"
-                warnings.append(warning_msg)
-
-        elif keyword == "Requires":
-            # first item is the "target", the rest are its dependencies
-            if len(ast) >= 2 and evaluate_node(ast[0], active_set, index):
-                target_names = get_triggered_plugins(ast[0], active_set, index)
-                missing = [n for n in ast[1:] if not evaluate_node(n, active_set, index)]
-                if missing:
-                    warning_msg = f"[REQUIRES] {message}"
-                    if target_names:
-                        warning_msg += f"\n    Needed by: {annotate_all(target_names)}"
-                    warning_msg += f"\n    Missing: {', '.join(describe_node(n) for n in missing)}"
-                    warnings.append(warning_msg)
-
-        elif keyword == "Note":
-            # notes fire when everything listed is simultaneously true
-            if all(evaluate_node(n, active_set, index) for n in ast):
-                triggered_by = set()
-                for n in ast:
-                    triggered_by.update(get_triggered_plugins(n, active_set, index))
-                warning_msg = f"[NOTE] {message}"
-                if triggered_by:
-                    warning_msg += f"\n    About: {annotate_all(triggered_by)}"
-                warnings.append(warning_msg)
-
-    return warnings
 
 
 # ---------------------------------------------------------------------------
@@ -2520,119 +2190,6 @@ def check_predicates(rules_text: str, final_order: list, subset_origins: dict = 
 # as before.
 # ---------------------------------------------------------------------------
 
-def parse_plugin_order_yml(path: Path):
-    """Returns a list of {file_name, for_mod, on_lists:[...], needs_cleaning:bool}
-    entries, in file order (which is the canonical load order). Prefers PyYAML
-    if it's installed (robust), but falls back to a focused line parser for this
-    file's very regular structure so the feature works with a stdlib-only Python
-    -- MOMW users won't necessarily have PyYAML. The fallback deliberately
-    ignores the nested `depends:` blocks some entries carry (their indented
-    `- file_name:` items must NOT be mistaken for top-level plugin entries)."""
-    text = path.read_text(encoding="utf-8", errors="replace")
-
-    try:
-        import yaml  # PyYAML, if available
-        raw = yaml.safe_load(text) or []
-        entries = []
-        for e in raw:
-            if not isinstance(e, dict):
-                continue
-            fn = e.get("file_name")
-            if not fn:
-                continue
-            entries.append({
-                "file_name": str(fn),
-                "for_mod": e.get("for_mod"),
-                "on_lists": [str(x) for x in (e.get("on_lists") or [])],
-                "needs_cleaning": bool(e.get("needs_cleaning")),
-            })
-        return entries
-    except ImportError:
-        pass  # fall through to the hand parser
-
-    def apply_kv(entry, s):
-        if ":" not in s:
-            return
-        k, v = s.split(":", 1)
-        k, v = k.strip(), v.strip().strip('"').strip("'")
-        if k == "file_name" and entry["file_name"] is None:
-            entry["file_name"] = v
-        elif k == "for_mod":
-            entry["for_mod"] = v
-        elif k == "needs_cleaning":
-            entry["needs_cleaning"] = v.lower() in ("true", "yes", "1")
-
-    entries, cur, mode = [], None, None
-    for line in text.splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        if line.startswith("- "):  # top-level list item = new plugin entry
-            if cur and cur["file_name"]:
-                entries.append(cur)
-            cur = {"file_name": None, "for_mod": None, "on_lists": [], "needs_cleaning": False}
-            mode = None
-            apply_kv(cur, line[2:])
-            continue
-        if cur is None:
-            continue
-        indent = len(line) - len(line.lstrip(" "))
-        stripped = line.strip()
-        if indent == 2 and ":" in line:
-            key = stripped.split(":", 1)[0].strip()
-            mode = key if key in ("on_lists", "depends") else None
-            if mode is None:
-                apply_kv(cur, stripped)
-        elif indent >= 4 and stripped.startswith("- ") and mode == "on_lists":
-            val = stripped[2:].strip().strip('"').strip("'")
-            if val:
-                cur["on_lists"].append(val)
-        # anything else (incl. nested depends: items) is ignored
-    if cur and cur["file_name"]:
-        entries.append(cur)
-    return entries
-
-
-def curated_for_list(entries, list_name: str):
-    """Returns (curated_lower_set, curated_ordered_names) for one mod list:
-    the plugins whose on_lists contains list_name, as a lowercase set (for
-    membership tests) and as a file-order list of their real names (the
-    canonical load order for that list)."""
-    ln = (list_name or "").lower()
-    curated_set, curated_order = set(), []
-    if not ln:
-        return curated_set, curated_order
-    for e in entries:
-        if any(l.lower() == ln for l in e["on_lists"]):
-            curated_set.add(e["file_name"].lower())
-            curated_order.append(e["file_name"])
-    return curated_set, curated_order
-
-
-def needs_cleaning_set(entries):
-    return {e["file_name"].lower() for e in entries if e["needs_cleaning"]}
-
-
-def base_order_matches_yml(base_order_names, curated_order):
-    """Read-only check: does the relative order of the curated plugins in the
-    cfg match the yml's canonical order for the list? Returns a list of
-    warning strings (empty if consistent). Only compares plugins present in
-    BOTH, so extra custom plugins interleaved in the cfg don't trip it."""
-    curated_lower_order = [n.lower() for n in curated_order]
-    rank = {n: i for i, n in enumerate(curated_lower_order)}
-    cfg_curated = [n for n in base_order_names if n.lower() in rank]
-    warnings = []
-    prev_rank, prev_name = -1, None
-    for name in cfg_curated:
-        r = rank[name.lower()]
-        if r < prev_rank:
-            warnings.append(
-                f"[LIST ORDER] '{name}' appears after '{prev_name}' in your cfg, but the "
-                f"curated list order has it BEFORE. Your base order may have drifted from the "
-                f"canonical list order (or a tool reordered it).")
-            break  # one clear report is enough; the rest usually cascade from it
-        prev_rank, prev_name = r, name
-    return warnings
-
 
 # ---------------------------------------------------------------------------
 # mod folder scan -- generate a subset file directly from a mods directory
@@ -2646,10 +2203,20 @@ def base_order_matches_yml(base_order_names, curated_order):
 # extract_subset_from_subset_file already consumes.
 # ---------------------------------------------------------------------------
 
-SCAN_ASSET_FOLDERS = frozenset({
-    "icons", "meshes", "scripts", "sound", "textures",
-    "bookart", "music", "fonts", "splash", "video",
-})
+SCAN_ASSET_FOLDERS = frozenset(
+    {
+        "icons",
+        "meshes",
+        "scripts",
+        "sound",
+        "textures",
+        "bookart",
+        "music",
+        "fonts",
+        "splash",
+        "video",
+    }
+)
 
 
 def scan_mod_directories(start_path, output_path=None):
@@ -2667,11 +2234,15 @@ def scan_mod_directories(start_path, output_path=None):
         lower_dirs = {d.lower() for d in dirs}
         has_asset_folder = any(f in lower_dirs for f in SCAN_ASSET_FOLDERS)
         plugins = sorted(
-            (f for f in files if os.path.splitext(f)[1].lower() in PLUGIN_EXTS),
+            (f for f in files if Path(f).suffix.lower() in PLUGIN_EXTS),
             key=str.lower,
         )
         if has_asset_folder or plugins:
-            lines.append(os.path.abspath(root))
+            # abspath normalizes WITHOUT resolving symlinks. Path.resolve()
+            # follows them, which would rewrite the displayed path of every
+            # MO2 junction / symlinked mod folder -- common in Morrowind
+            # setups. Not equivalent, so this stays os.path.
+            lines.append(os.path.abspath(root))  # noqa: PTH100
             lines.extend(plugins)
             lines.append("")  # blank separator for readability
             n_folders += 1
@@ -2681,8 +2252,11 @@ def scan_mod_directories(start_path, output_path=None):
     text = "\n".join(lines) + ("\n" if lines else "")
     if output_path is not None:
         Path(output_path).write_text(text, encoding="utf-8")
-    print(f"Scanned '{os.path.abspath(start_path)}': "
-          f"{n_folders} mod folder(s), {n_plugins} plugin(s).")
+    # See the PTH100 note above: abspath must not become resolve() here.
+    print(
+        f"Scanned '{os.path.abspath(start_path)}': "  # noqa: PTH100
+        f"{n_folders} mod folder(s), {n_plugins} plugin(s)."
+    )
     if output_path is not None:
         print(f"Wrote subset file: {output_path}")
     return lines, n_folders, n_plugins
@@ -2691,6 +2265,7 @@ def scan_mod_directories(start_path, output_path=None):
 # ---------------------------------------------------------------------------
 # subset extraction
 # ---------------------------------------------------------------------------
+
 
 def basename_if_plugin(value: str):
     v = value.strip().strip('"').strip("'")
@@ -2730,7 +2305,7 @@ def extract_subset_from_subset_file(path: Path):
     and, combined with --emit-toml, is enough on its own (no existing
     momw-customizations.toml required) to generate a brand new one.
     """
-    text = path.read_text(encoding="utf-8")
+    text = read_user_text(path, encoding="utf-8")
 
     if path.suffix.lower() == ".toml":
         try:
@@ -2741,8 +2316,9 @@ def extract_subset_from_subset_file(path: Path):
         plugins, data_inserts = [], []
         for raw in data.get("subset", []):
             _classify_subset_entry(str(raw), plugins, data_inserts, str(path))
-        for raw in data.get("data", []):
-            data_inserts.append({"value": str(raw), "after": None, "before": None})
+        data_inserts.extend(
+            {"value": str(raw), "after": None, "before": None} for raw in data.get("data", [])
+        )
         return plugins, data_inserts
 
     return extract_subset_from_lines(text.splitlines(), source=str(path))
@@ -2751,7 +2327,11 @@ def extract_subset_from_subset_file(path: Path):
 def _classify_subset_entry(raw, plugins, data_inserts, source):
     """Classify one raw subset entry: a recognized plugin extension makes it a
     plugin; otherwise a slash/backslash makes it a data= folder path; otherwise
-    it's skipped with a warning (nothing safe to guess from a bare word)."""
+    it's skipped with a warning (nothing safe to guess from a bare word).
+
+    Both `plugins` and `data_inserts` are APPENDED TO IN PLACE and nothing is
+    returned -- the caller passes the accumulators it wants filled.
+    """
     raw = raw.strip()
     if not raw:
         return
@@ -2761,9 +2341,11 @@ def _classify_subset_entry(raw, plugins, data_inserts, source):
     elif "/" in raw.replace("\\", "/"):
         data_inserts.append({"value": raw, "after": None, "before": None})
     else:
-        print(f"WARNING: '{raw}' from {source} doesn't look like a plugin filename or a "
-              f"data folder path (no recognized extension, no slash) -- skipping.",
-              file=sys.stderr)
+        print(
+            f"WARNING: '{raw}' from {source} doesn't look like a plugin filename or a "
+            f"data folder path (no recognized extension, no slash) -- skipping.",
+            file=sys.stderr,
+        )
 
 
 def _strip_line_comment(line: str) -> str:
@@ -2776,7 +2358,7 @@ def _strip_line_comment(line: str) -> str:
     if line.lstrip().startswith("#"):
         return ""
     m = re.search(r"\s#", line)
-    return line[:m.start()] if m else line
+    return line[: m.start()] if m else line
 
 
 def extract_subset_from_lines(lines, source="subset lines"):
@@ -2813,13 +2395,13 @@ def extract_subset_from_toml(toml_path: Path):
     except ModuleNotFoundError:
         try:
             import tomli as tomllib  # type: ignore
-        except ModuleNotFoundError:
+        except ModuleNotFoundError as exc:
             raise SystemExit(
                 "Need Python 3.11+ (tomllib) or `pip install tomli --break-system-packages` "
                 "to parse the customizations TOML."
-            )
+            ) from exc
 
-    data = tomllib.loads(toml_path.read_text(encoding="utf-8"))
+    data = tomllib.loads(read_toml_text(toml_path))
     subset = []
     data_inserts = []
     replace_dest_names = set()
@@ -2847,7 +2429,9 @@ def extract_subset_from_toml(toml_path: Path):
             # what it replaces, so it's fed into the mlox sort anchored at that
             # spot (via source) purely to detect drift; generate_customizations_toml
             # skips it when emitting insert blocks (see replace_dest_names)
-            handle_insert(rep.get("dest", ""), listname, after=None, before=rep.get("source"), is_replace=True)
+            handle_insert(
+                rep.get("dest", ""), listname, after=None, before=rep.get("source"), is_replace=True
+            )
         for ap in block.get("append", []):
             text = ap.get("append") or ap.get("appendBlock") or ""
             for m in re.finditer(r"^\s*content\s*=\s*(\S+)", text, re.MULTILINE):
@@ -2862,245 +2446,11 @@ def extract_subset_from_toml(toml_path: Path):
     subset = [s for s in subset if not (s.lower() in _seen or _seen.add(s.lower()))]
     return subset, data_inserts, replace_dest_names, subset_listnames
 
+
 # ---------------------------------------------------------------------------
 # data= (folder path) insertion -- positioned by after/before anchor, since
 # mlox has no concept of ordering data paths, only plugins
 # ---------------------------------------------------------------------------
-
-def detect_data_quoting(data_lines) -> bool:
-    """Returns True if the existing data= lines in this openmw.cfg predominantly
-    wrap their path in double quotes (data="..."), False if they're bare
-    (data=...). New/inserted data= lines are then formatted to MATCH whichever
-    convention the file already uses, instead of being unconditionally quoted.
-
-    This matters because a cfg written in the classic bare style treats the
-    quote characters as literal parts of the path -- so injecting a quoted
-    data="C:\\Foo" line into an otherwise-unquoted cfg can make OpenMW look for
-    a folder literally named "C:\\Foo" (quotes included) and fail to load the
-    mod. Following the file's own convention avoids that and keeps the sorting
-    panel's display consistent. Empty/tie/no-data-lines defaults to bare (the
-    momw-configurator/umo default on the setups this tool targets)."""
-    quoted = unquoted = 0
-    for line in data_lines:
-        m = re.match(r"^\s*data\s*=\s*(.+?)\s*$", line, re.IGNORECASE)
-        if not m:
-            continue
-        val = m.group(1).strip()
-        if len(val) >= 2 and val[0] == '"' and val[-1] == '"':
-            quoted += 1
-        else:
-            unquoted += 1
-    return quoted > unquoted
-
-
-def format_data_line(path_value: str, quoted: bool = False) -> str:
-    v = path_value.strip().strip('"').strip("'")
-    return f'data="{v}"' if quoted else f"data={v}"
-
-
-def find_anchor_index(lines, anchor: str):
-    anchor_l = anchor.lower()
-    for i, l in enumerate(lines):
-        if anchor_l in l.lower():
-            return i
-    return None
-
-
-def extract_data_path_value(line: str):
-    """Pulls the bare path back out of a raw 'data="..."' cfg line. Returns
-    None if the line doesn't actually match (nil-guarded -- callers may pass
-    arbitrary lines)."""
-    m = re.match(r"^\s*data\s*=\s*(.+?)\s*$", line, re.IGNORECASE)
-    if not m:
-        return None
-    return m.group(1).strip().strip('"').strip("'")
-
-
-def normalize_data_path(value: str) -> str:
-    """Normalizes a data= path value for duplicate-detection purposes only
-    (never for display/writing) -- case-insensitive, slash-direction-
-    insensitive, trailing-slash-insensitive. Two paths that normalize to the
-    same string are treated as 'the same data= entry' even if written
-    differently (e.g. a Windows path with backslashes vs. one with forward
-    slashes, or differing only in case)."""
-    if not value:
-        return ""
-    return value.strip().strip('"').strip("'").replace("\\", "/").rstrip("/").lower()
-
-
-def list_plugins_in_dir(path_value: str, base_dir: Path = None):
-    """
-    Looks (non-recursively -- OpenMW/mlox both expect plugins directly inside
-    the folder a data= line points at) for .esp/.esm/etc files in the folder
-    a data= path points to, and returns their filenames.
-
-    Heavily nil-guarded on purpose: path_value can be almost anything (an
-    absolute Windows path pasted into a TOML written on Linux, an MO2
-    variable that was never substituted, a typo, a network share that isn't
-    mounted right now, ...). Any failure here should just mean "we don't
-    know what's in this folder", not crash the whole sort.
-    """
-    if not path_value:
-        return []
-    candidates = []
-    try:
-        raw = path_value.strip().strip('"').strip("'")
-        if not raw:
-            return []
-        p = Path(raw)
-        candidates.append(p)
-        if base_dir is not None and not p.is_absolute():
-            candidates.append(base_dir / p)
-    except (TypeError, ValueError, OSError):
-        return []
-
-    for p in candidates:
-        try:
-            if not p.is_dir():
-                continue
-            return sorted(
-                entry.name for entry in p.iterdir()
-                if entry.is_file() and entry.name.lower().endswith(PLUGIN_EXTS)
-            )
-        except (OSError, PermissionError):
-            continue
-    return []
-
-
-def infer_data_path_anchors(data_inserts, data_order, final_order, cfg_path: Path):
-    """
-    For any data_insert that has NO explicit after/before anchor, tries to
-    work one out by looking at what's actually sitting in that folder: if it
-    contains a plugin that's also somewhere in the mlox-sorted final_order,
-    anchor the data= line next to whichever EXISTING (frozen) data= path
-    owns the nearest neighboring plugin in that same sorted order.
-
-    Only ever touches inserts that arrived with no anchor at all -- an
-    explicit after/before written in the TOML is always left alone, since
-    that's the user's stated intent and this is just a best-effort fallback
-    for when there wasn't one. Mutates the dicts in data_inserts in place
-    and returns nothing; every lookup here is independently nil-guarded so a
-    folder that can't be scanned, or a plugin that isn't in final_order,
-    just falls through to the existing "no anchor -> append at end" behavior
-    in insert_data_paths rather than raising.
-    """
-    if not final_order:
-        return  # no content sort happened this run -- nothing to anchor against
-
-    base_dir = cfg_path.parent if cfg_path else None
-
-    # plugin (lowercased) -> owning EXISTING data= line's path value.
-    # Deliberately built from data_order (frozen/base paths) only -- new
-    # inserts can't anchor off each other in the same run (see
-    # insert_data_paths' docstring), so they're not eligible anchor targets.
-    plugin_owner = {}
-    for line in data_order:
-        val = extract_data_path_value(line)
-        if not val:
-            continue
-        for plugin in list_plugins_in_dir(val, base_dir):
-            plugin_owner.setdefault(plugin.lower(), val)
-
-    order_index = {name.lower(): i for i, name in enumerate(final_order)}
-
-    for item in data_inserts:
-        if item.get("after") or item.get("before"):
-            continue  # explicit anchor already given -- don't second-guess it
-
-        own_plugins = {p.lower() for p in list_plugins_in_dir(item["value"], base_dir)}
-        if not own_plugins:
-            continue  # empty/unreadable/no-plugin folder -- nothing to infer from
-
-        # find where (if anywhere) this folder's plugins land in the sort
-        positions = sorted(order_index[p] for p in own_plugins if p in order_index)
-        if not positions:
-            continue  # plugins exist but aren't part of this run's sorted set
-
-        lo, hi = positions[0], positions[-1]
-
-        anchor_value, mode = None, None
-        # walk backward from the folder's own plugins for an owned neighbor
-        for i in range(lo - 1, -1, -1):
-            owner = plugin_owner.get(final_order[i].lower())
-            if owner:
-                anchor_value, mode = owner, "after"
-                break
-        if not anchor_value:
-            # nothing usable behind it -- try forward instead
-            for i in range(hi + 1, len(final_order)):
-                owner = plugin_owner.get(final_order[i].lower())
-                if owner:
-                    anchor_value, mode = owner, "before"
-                    break
-
-        if anchor_value:
-            item[mode] = anchor_value
-            via = sorted(own_plugins & order_index.keys())[0]
-            print(f"  Inferred anchor for '{item['value']}': {mode} '{anchor_value}' "
-                  f"(via plugin {via})")
-
-
-def insert_data_paths(data_lines, data_inserts):
-    """
-    data_lines: existing raw data= lines from openmw.cfg, in file order.
-    data_inserts: list of {"value": str, "after": str|None, "before": str|None},
-    in the order they appeared in momw-customizations.toml.
-
-    Anchors are matched as a case-insensitive substring against the EXISTING
-    data_lines only (an insert can't anchor off another new insert in the
-    same run -- keep multi-step chains in separate runs if you need that).
-
-    Guarded against duplicates: an insert whose path already matches an
-    existing data_lines entry (case/slash-direction/trailing-slash
-    insensitive -- see normalize_data_path) is skipped rather than added a
-    second time, and so is a second insert in the same run pointing at a
-    path another insert already claimed. This only affects whether a NEW
-    line gets added -- it never removes or reorders an existing line, so
-    dragging existing entries around in the order panel is unaffected.
-
-    Returns a list of (line_text, is_new, source_value_or_None).
-    """
-    existing_normalized = {normalize_data_path(extract_data_path_value(line)) for line in data_lines}
-    existing_normalized.discard("")
-    quoted = detect_data_quoting(data_lines)
-
-    anchor_map = {}
-    leftover = []
-    for item in data_inserts:
-        norm_val = normalize_data_path(item["value"])
-        if norm_val and norm_val in existing_normalized:
-            print(f"NOTE: '{item['value']}' already present in data= list -- skipping duplicate insert.")
-            continue
-        if norm_val:
-            existing_normalized.add(norm_val)  # also guards duplicate NEW inserts within this same run
-
-        new_line = format_data_line(item["value"], quoted)
-        anchor = item.get("after") or item.get("before")
-        mode = "after" if item.get("after") else ("before" if item.get("before") else None)
-        if not anchor:
-            print(f"NOTE: '{item['value']}' has no after/before anchor -- appending at end of data= list.")
-            leftover.append((new_line, item["value"]))
-            continue
-        idx = find_anchor_index(data_lines, anchor)
-        if idx is None:
-            print(f"WARNING: anchor '{anchor}' not found among existing data= paths for "
-                  f"'{item['value']}' -- appending at end instead.")
-            leftover.append((new_line, item["value"]))
-            continue
-        anchor_map.setdefault(idx, []).append((mode, new_line, item["value"]))
-
-    result = []
-    for i, line in enumerate(data_lines):
-        for mode, new_line, val in anchor_map.get(i, []):
-            if mode == "before":
-                result.append((new_line, True, val))
-        result.append((line, False, None))
-        for mode, new_line, val in anchor_map.get(i, []):
-            if mode == "after":
-                result.append((new_line, True, val))
-    for new_line, val in leftover:
-        result.append((new_line, True, val))
-    return result
 
 
 # ---------------------------------------------------------------------------
@@ -3108,30 +2458,6 @@ def insert_data_paths(data_lines, data_inserts):
 # persists across umo/momw-configurator rebuilds, instead of only patching
 # openmw.cfg (which a rebuild would just overwrite again)
 # ---------------------------------------------------------------------------
-
-def toml_value(v: str) -> str:
-    """
-    Prefer a single-quoted TOML literal string ('...') for everything --
-    plugin names, script names, and especially paths. Literal strings are
-    raw (TOML does zero escape processing on their contents), which is
-    exactly what a Windows path full of backslashes needs: 'C:\\Games\\...'
-    is correct and readable as-is, whereas a double-quoted *basic* string
-    would require every backslash doubled ("C:\\\\Games\\\\..."), which is
-    not what momw-configurator/umo actually write.
-
-    A literal string can't contain a `'` itself (it would end the string
-    early), so a name with an apostrophe -- e.g. "MyMod's.esp" -- gets
-    escalated to a triple-single-quoted multi-line literal string instead
-    ('''MyMod's.esp'''), which tolerates a lone `'` (just not three in a
-    row). In the vanishingly unlikely case a filename contains `'''`
-    itself, fall back to a properly escaped double-quoted basic string as
-    a last resort.
-    """
-    if "'''" in v:
-        return '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
-    if "'" in v:
-        return "'''" + v + "'''"
-    return "'" + v + "'"
 
 
 def read_savegame_content_files(path):
@@ -3147,8 +2473,11 @@ def read_savegame_content_files(path):
         return None, "not an OpenMW save (no TES3 header)"
     for tag, body in _iter_tes3_records(raw):
         if tag == b"SAVE":
-            files = [sd.rstrip(b"\x00").decode("utf-8", "replace")
-                     for st, sd in _iter_subrecords(body) if st == b"DEPE"]
+            files = [
+                sd.rstrip(b"\x00").decode("utf-8", "replace")
+                for st, sd in _iter_subrecords(body)
+                if st == b"DEPE"
+            ]
             return files, None
     return None, "no SAVE record found -- not a savegame?"
 
@@ -3166,8 +2495,8 @@ def check_savegame_against_order(save_path, active_order):
 
 
 BACKUP_PATTERNS = (
-    ".preclean.bak",      # ours: original before a staged tes3cmd clean
-    ".masterfix.bak",     # ours: original before a master-size resync
+    ".preclean.bak",  # ours: original before a staged tes3cmd clean
+    ".masterfix.bak",  # ours: original before a master-size resync
 )
 
 
@@ -3177,6 +2506,7 @@ def scan_backups(dirs, cfg_path=None, max_depth=4):
     timestamped '*.bak-YYYYMMDD-HHMMSS' / Configurator '*.backup.*' copies.
     Returns [(backup_path, original_path_or_None, kind)]."""
     import re as _re
+
     out, seen = [], set()
     re_tilde = _re.compile(r"^(.+)~\d+(\.[^.]+)$", _re.IGNORECASE)
     re_stamp = _re.compile(r"^(.+)\.bak-\d{8}-\d{6}$", _re.IGNORECASE)
@@ -3200,7 +2530,7 @@ def scan_backups(dirs, cfg_path=None, max_depth=4):
                 orig, kind = None, None
                 for suf in BACKUP_PATTERNS:
                     if fn.lower().endswith(suf):
-                        orig, kind = p.with_name(fn[:-len(suf)]), suf.lstrip(".")
+                        orig, kind = p.with_name(fn[: -len(suf)]), suf.lstrip(".")
                         break
                 if kind is None:
                     m = re_tilde.match(fn)
@@ -3216,7 +2546,11 @@ def scan_backups(dirs, cfg_path=None, max_depth=4):
                                 orig, kind = p.with_name(m.group(1)), "configurator .backup"
                 if kind is not None:
                     seen.add(key)
-                    out.append((p, orig if (orig and orig.exists()) else orig, kind))
+                    # The original is reported even when it no longer exists:
+                    # restoring a backup whose original was deleted is a valid
+                    # recovery, and the caller shows its own "original missing"
+                    # marker based on the path.
+                    out.append((p, orig, kind))
     out.sort(key=lambda t: str(t[0]).lower())
     return out
 
@@ -3225,7 +2559,8 @@ USER_RULES_HEADER = (
     ";; Personal mlox rules -- written by you (with help from MLOX Subset Sort's\n"
     ";; rule maker). Keep this file LAST in the rule-files list: later files win\n"
     ";; rule conflicts, so your rules override mlox_base/mlox_user.\n"
-    ";; Syntax: https://morrowind-modding.github.io/modding-tools/sorting-plugin-load-order/mlox/mlox-rule-guidelines\n")
+    ";; Syntax: https://morrowind-modding.github.io/modding-tools/sorting-plugin-load-order/mlox/mlox-rule-guidelines\n"
+)
 
 
 def order_rule_frozen_conflicts(names, final_order, curated_lower):
@@ -3240,7 +2575,7 @@ def order_rule_frozen_conflicts(names, final_order, curated_lower):
     pos = {str(n).lower(): i for i, n in enumerate(final_order)}
     cl = {str(c).lower() for c in curated_lower}
     out = []
-    for a, b in zip(names, names[1:]):
+    for a, b in pairwise(names):
         al, bl = a.lower(), b.lower()
         if pattern_has_meta(a) or pattern_has_meta(b):
             continue
@@ -3273,17 +2608,21 @@ def append_user_rule(path, keyword, names, comment=None):
             raise ValueError(f"invalid character in name/pattern: {n!r}")
         m = _RE_ORDER_NAME.match(n)
         if not m or m.group(0) != n:
-            raise ValueError(f"{n!r} must end in a plugin extension "
-                             f"(.esp/.esm/.omwaddon/.omwgame/.omwscripts, optionally '*')")
+            raise ValueError(
+                f"{n!r} must end in a plugin extension "
+                f"(.esp/.esm/.omwaddon/.omwgame/.omwscripts, optionally '*')"
+            )
         if n.lower() in seen:
             # a plugin listed twice orders it relative to itself -- a
             # self-cycle mlox would discard; always a mistake
-            raise ValueError(f"'{n}' is listed more than once -- a plugin can't be "
-                             f"ordered relative to itself")
+            raise ValueError(
+                f"'{n}' is listed more than once -- a plugin can't be "
+                f"ordered relative to itself"
+            )
         seen.add(n.lower())
     parts = []
     if comment and str(comment).strip():
-        parts += [f";; {l}" for l in str(comment).strip().splitlines()]
+        parts += [f";; {line}" for line in str(comment).strip().splitlines()]
     parts.append(f"[{titles[kw]}]")
     parts += clean
     text = "\n".join(parts) + "\n"
@@ -3302,971 +2641,37 @@ def append_user_rule(path, keyword, names, comment=None):
 # momw/momw/data_seeds/data/plugin-order.yml; the GitLab API raw endpoint is
 # tried too since it sidesteps the web UI's occasional auth funkiness, then
 # MOMW's own Gitea mirror. Overridable via $MLOX_PLUGIN_ORDER_URL.
-PLUGIN_ORDER_URLS = (
-    "https://gitlab.com/modding-openmw/modding-openmw.com/-/raw/master/momw/momw/"
-    "data_seeds/data/plugin-order.yml?ref_type=heads&inline=false",
-    "https://gitlab.com/api/v4/projects/modding-openmw%2Fmodding-openmw.com/repository/files/"
-    "momw%2Fmomw%2Fdata_seeds%2Fdata%2Fplugin-order.yml/raw?ref=master",
+
+
+#: Schemes we are willing to download from. Anything else (notably ``file:``,
+#: ``ftp:`` and ``data:``) is rejected: these URLs come from a persisted
+#: settings file and from environment variables, so a tampered value must not
+#: be able to make an "update" button read an arbitrary local file and write
+#: it over the user's rules.
+
+#: Hard cap on a single download (bytes). The real files are ~250 KB; this
+#: stops a hostile or misconfigured endpoint from exhausting memory.
+
+
+RULES_REPO = (
+    "DanaePlays/mlox-rules"  # actively maintained; plox uses it, mlox 1.1+ auto-updates from it
 )
-
-
-def update_plugin_order_yml(path, urls=None, timeout=45):
-    """Download the current MOMW plugin-order.yml over the configured file.
-    STRICTLY validated before anything is touched: the download must parse
-    with parse_plugin_order_yml and contain a sane number of entries, so a
-    wrong URL / error page can never clobber the file. The old file is kept
-    as a timestamped .bak. Returns report lines."""
-    import urllib.request
-    import tempfile as _tf
-    p = Path(path)
-    # precedence: explicit urls param (e.g. the GUI's Sources setting) >
-    # $MLOX_PLUGIN_ORDER_URL > built-in candidates
-    env = os.environ.get("MLOX_PLUGIN_ORDER_URL")
-    cand = list(urls) if urls else ([env] if env else list(PLUGIN_ORDER_URLS))
-    report = []
-    for url in cand:
-        try:
-            with urllib.request.urlopen(url, timeout=timeout) as r:
-                data = r.read()
-        except Exception as e:
-            report.append(f"  {url}: {e}")
-            continue
-        if b"file_name" not in data or b"on_lists" not in data:
-            report.append(f"  {url}: response doesn't look like plugin-order.yml")
-            continue
-        # full validation through the real parser before touching anything
-        try:
-            with _tf.NamedTemporaryFile("wb", suffix=".yml", delete=False) as tf:
-                tf.write(data)
-                tmp = Path(tf.name)
-            entries = parse_plugin_order_yml(tmp)
-            tmp.unlink()
-        except Exception as e:
-            report.append(f"  {url}: downloaded but failed to parse ({e})")
-            continue
-        if len(entries) < 100:
-            report.append(f"  {url}: parsed but only {len(entries)} entries -- refusing")
-            continue
-        old = p.read_bytes() if p.exists() else b""
-        if old == data:
-            report.append(f"{p.name}: already up to date ({len(entries)} entries).")
-            return report
-        if p.exists():
-            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            p.with_name(p.name + f".bak-{stamp}").write_bytes(old)
-        p.write_bytes(data)
-        try:
-            old_entries = None
-            if old:
-                with _tf.NamedTemporaryFile("wb", suffix=".yml", delete=False) as tf:
-                    tf.write(old)
-                    tmp = Path(tf.name)
-                old_entries = len(parse_plugin_order_yml(tmp))
-                tmp.unlink()
-        except Exception:
-            old_entries = None
-        frm = f"{old_entries} -> " if old_entries is not None else ""
-        report.append(f"{p.name}: updated from {url} ({frm}{len(entries)} entries; "
-                      f"previous version kept as .bak).")
-        return report
-    report.insert(0, "FAILED: no source produced a valid plugin-order.yml:")
-    report.append("  (set $MLOX_PLUGIN_ORDER_URL if MOMW moved the file)")
-    return report
-
-
-RULES_REPO = "DanaePlays/mlox-rules"   # actively maintained; plox uses it, mlox 1.1+ auto-updates from it
 # {name} is replaced with the rule filename (mlox_base.txt / mlox_user.txt).
 # Users can point this at a fork/mirror via the GUI's Sources dialog or
 # $MLOX_RULES_URL_TEMPLATE.
-RULES_URL_TEMPLATE = "https://raw.githubusercontent.com/" + RULES_REPO + "/main/{name}"
-
-
-def update_rule_files(rule_paths, url_template=None, timeout=30):
-    """Download the current mlox_base.txt / mlox_user.txt from the maintained
-    rules repo over any configured rule file with a matching filename. The old
-    file is kept as a timestamped .bak. Only filenames the repo actually
-    manages are touched -- a personal rules file with another name is skipped.
-
-    url_template (or $MLOX_RULES_URL_TEMPLATE) overrides the source; it must
-    contain '{name}', which is replaced per file. Returns report lines."""
-    import urllib.request
-    template = (url_template or os.environ.get("MLOX_RULES_URL_TEMPLATE")
-                or RULES_URL_TEMPLATE)
-    if "{name}" not in template:
-        return [f"FAILED: rules URL template must contain '{{name}}': {template}"]
-    report = []
-    for p in rule_paths:
-        p = Path(p)
-        if p.name.lower() not in ("mlox_base.txt", "mlox_user.txt"):
-            report.append(f"skipped {p.name}: not an upstream-managed filename")
-            continue
-        url = template.format(name=p.name)
-        try:
-            with urllib.request.urlopen(url, timeout=timeout) as r:
-                data = r.read()
-        except Exception as e:
-            report.append(f"FAILED {p.name}: {e}")
-            continue
-        if not data or b"[Order]" not in data:
-            report.append(f"FAILED {p.name}: download doesn't look like an mlox rules file")
-            continue
-        old = p.read_bytes() if p.exists() else b""
-        if old == data:
-            report.append(f"{p.name}: already up to date ({len(data):,} bytes)")
-            continue
-        if p.exists():
-            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            p.with_name(p.name + f".bak-{stamp}").write_bytes(old)
-        p.write_bytes(data)
-        report.append(f"{p.name}: updated {len(old):,} -> {len(data):,} bytes "
-                      f"(previous version kept as .bak)")
-    return report
-
-
-def rule_file_ages(rule_paths):
-    """[(name, age_days or None)] for showing how stale the rule files are."""
-    out = []
-    now = datetime.now().timestamp()
-    for p in rule_paths:
-        p = Path(p)
-        try:
-            out.append((p.name, int((now - p.stat().st_mtime) // 86400)))
-        except OSError:
-            out.append((p.name, None))
-    return out
-
-
-def cfg_line_value(line):
-    """The value part of a cfg line, unquoted -- mirror of custom.go's
-    cfgLineValue(). Returns None for lines without '='."""
-    if "=" not in line:
-        return None
-    v = line.split("=", 1)[1].strip()
-    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
-        v = v[1:-1]
-    return v
-
-
-def configurator_remove_matches(val, line):
-    """Mirror of custom.go's shouldRemoveLine(): path-like values (containing
-    a slash) compare against the line's VALUE (exact or '/'-suffix match);
-    everything else is a plain whole-line substring test."""
-    if "/" in val or "\\" in val:
-        lv = cfg_line_value(line)
-        if lv is None:
-            return False
-        lvn = lv.replace("\\", "/").strip()
-        vn = val.replace("\\", "/").strip()
-        is_abs = vn.startswith("/") or (len(vn) >= 3 and vn[1] == ":" and vn[2] == "/")
-        return lvn == vn or (not is_abs and lvn.endswith("/" + vn))
-    return val in line
-
-
-def simulate_configurator_apply(cfg_lines, toml_text, list_name=None):
-    """Faithful re-implementation of momw-configurator's ApplyCustomizations
-    (cfg/custom.go), so the emitted TOML can be dry-run against a cfg BEFORE
-    anyone runs the real Configurator. Mirrors, per the Go source:
-
-      * insert: after/before matched by whole-line substring; 0 matches ->
-        error per insert; >1 matches -> FATAL (the Go code returns a nil cfg);
-        after -> target_idx+1, before -> target_idx; prefix copied from the
-        matched line; insertBlock lines inserted sequentially.
-      * replace: whole-line substring; >1 matches -> error, entry skipped;
-        data lines get quoted values.
-      * remove: shouldRemoveLine semantics (see configurator_remove_matches);
-        EVERY matching line is removed, silently.
-      * append: groundcover= lines routed to the groundcover section (after
-        the last groundcover= line, or a new section), the rest to an
-        '# APPENDED LINES #' section at the end.
-      * apply order per block: inserts, replaces, removes, appends.
-
-    Template vars ({{.ModBaseDir}}) and $ENV vars are NOT expanded -- a note
-    is returned instead, since the preview can't know the Configurator's
-    config. Returns (new_lines_or_None, errors, notes); None means the run
-    would abort (ambiguous insert anchor)."""
-    try:
-        import tomllib as _toml
-    except ModuleNotFoundError:
-        try:
-            import tomli as _toml  # type: ignore
-        except ModuleNotFoundError:
-            return None, [], ["preview skipped: needs Python 3.11+ (tomllib) or 'pip install tomli'"]
-    try:
-        data = _toml.loads(toml_text)
-    except Exception as e:
-        return None, [f"emitted TOML failed to parse: {e}"], []
-
-    lines = list(cfg_lines)
-    errs, notes = [], []
-
-    def _check_templates(v):
-        if "{{" in v or "$" in v:
-            notes.append(f"'{v}': template/env var left unexpanded in the preview")
-
-    for cust in data.get("Customizations") or []:
-        if list_name and cust.get("listName") and cust.get("listName") != list_name:
-            continue
-
-        # 1) inserts
-        for st in cust.get("insert") or []:
-            insert, iblock = st.get("insert"), st.get("insertBlock")
-            after, before = st.get("after"), st.get("before")
-            target = after if after is not None else before
-            if (insert is None and iblock is None) or target is None:
-                errs.append("insert entry needs insert/insertBlock plus after or before")
-                continue
-            if after is not None and before is not None:
-                errs.append("after and before cannot be used together")
-                continue
-            matches = [i for i, l in enumerate(lines) if target in l]
-            if not matches:
-                errs.append(f"target line is not present in openmw.cfg: {target}")
-                continue
-            if len(matches) > 1:
-                errs.append(f"FATAL: multiple matches for anchor '{target}' -- the real "
-                            f"Configurator abandons the cfg here")
-                return None, errs, notes
-            idx = matches[0]
-            prefix = lines[idx].split("=")[0]
-            dest = idx + 1 if after is not None else idx
-            vals = [insert] if insert is not None else \
-                   [l.replace("\r", "") for l in iblock.split("\n") if l]
-            for v in vals:
-                _check_templates(v)
-                lines.insert(dest, f"{prefix}={v}")
-                dest += 1
-
-        # 2) replaces
-        for st in cust.get("replace") or []:
-            src, dst = st.get("source"), st.get("dest")
-            if src is None or dst is None:
-                errs.append("replace entry needs source and dest")
-                continue
-            matches = [i for i, l in enumerate(lines) if src in l]
-            if len(matches) > 1:
-                errs.append(f"replace source '{src}' matches more than one line -- skipped")
-                continue
-            if matches:
-                idx = matches[0]
-                prefix = lines[idx].split("=")[0]
-                _check_templates(dst)
-                lines[idx] = (f'{prefix}="{dst}"' if prefix == "data" else f"{prefix}={dst}")
-
-        # 3) removes (every match, silently)
-        rm = []
-        for key in ("removeData", "removeFallbackArchive", "removeContent",
-                    "removeFallback", "removeGroundcover"):
-            rm += list(cust.get(key) or [])
-        if rm:
-            lines = [l for l in lines if not any(configurator_remove_matches(v, l) for v in rm)]
-
-        # 4) appends
-        gc, other = [], []
-        for st in cust.get("append") or []:
-            vals = [st["append"]] if "append" in st else \
-                   [l.replace("\r", "") for l in st.get("appendBlock", "").split("\n") if l]
-            for v in vals:
-                _check_templates(v)
-                (gc if v.startswith("groundcover=") else other).append(v)
-        if gc:
-            last = max((i for i, l in enumerate(lines) if l.startswith("groundcover=")), default=-1)
-            if last >= 0:
-                for j, v in enumerate(gc):
-                    lines.insert(last + 1 + j, v)
-            else:
-                lines += ["", "#                   #", "# GROUNDCOVER FILES #", "#                   #"] + gc
-        if other:
-            lines += ["", "#                #", "# APPENDED LINES #", "#                #"] + other
-
-    return lines, errs, notes
-
-
-def preview_configurator_result(plan_lines, toml_text, expected_content_order,
-                                subset_names, user_data_norms=None, list_name=None):
-    """Dry-run the emitted TOML and verify the round trip.
-
-    The real Configurator applies customizations to a FRESH curated cfg (no
-    customs in it yet), so the simulation base is the current cfg with this
-    run's custom content= lines and custom data= paths stripped out.
-
-    Returns (ok, report_lines): ok is True when the simulated content= order
-    exactly matches what the sort computed (accounting for removals)."""
-    subset_lower = {str(s).lower() for s in subset_names or ()}
-    user_norms = {n for n in (user_data_norms or ()) if n}
-    base = []
-    for l in plan_lines:
-        m = re.match(r"^\s*content\s*=\s*(.+?)\s*$", l, re.IGNORECASE)
-        if m and m.group(1).lower() in subset_lower:
-            continue
-        m = re.match(r"^\s*data\s*=\s*(.+?)\s*$", l, re.IGNORECASE)
-        if m and normalize_data_path(m.group(1).strip().strip('"')) in user_norms:
-            continue
-        base.append(l)
-
-    report = []
-    sim, errs, notes = simulate_configurator_apply(base, toml_text, list_name=list_name)
-    for n in notes:
-        report.append(f"  NOTE: {n}")
-    for e in errs:
-        report.append(f"  WARNING: {e}")
-    if sim is None:
-        report.append("  PREVIEW ABORTED -- the real Configurator run would fail the same way.")
-        return False, report
-
-    sim_content = [m.group(1) for l in sim
-                   for m in [re.match(r"^\s*content\s*=\s*(.+?)\s*$", l, re.IGNORECASE)] if m]
-    # expected: the computed order, minus anything the TOML's removes catch
-    try:
-        import tomllib as _toml
-    except ModuleNotFoundError:
-        import tomli as _toml  # type: ignore
-    data = _toml.loads(toml_text)
-    rm = []
-    for cust in data.get("Customizations") or []:
-        for key in ("removeData", "removeFallbackArchive", "removeContent",
-                    "removeFallback", "removeGroundcover"):
-            rm += list(cust.get(key) or [])
-    expected = [n for n in expected_content_order
-                if not any(configurator_remove_matches(v, f"content={n}") for v in rm)]
-
-    if sim_content == expected:
-        report.append(f"  VERIFIED: simulated apply reproduces the sorted order exactly "
-                      f"({len(sim_content)} content= lines).")
-        return True, report
-    report.append("  MISMATCH: the simulated Configurator result differs from the sorted order!")
-    for i, (a, b) in enumerate(zip(sim_content, expected)):
-        if a != b:
-            report.append(f"    first difference at #{i}: simulated '{a}' vs expected '{b}'")
-            break
-    if len(sim_content) != len(expected):
-        report.append(f"    lengths differ: simulated {len(sim_content)} vs expected {len(expected)}")
-    return False, report
-
-
-def generate_customizations_toml(original_data, final_content_order, subset_set,
-                                   original_content_values, data_result_tuples=None,
-                                   raw_data_inserts=None, replace_dest_names=None,
-                                   user_data_values=None, list_name=None,
-                                   remove_content=None, remove_data=None,
-                                   custom_anchors=None):
-    """
-    original_data: parsed dict of the source momw-customizations.toml (listName,
-      removeData/removeContent/removeFallback/removeGroundcover, replace, append
-      blocks are preserved verbatim).
-    final_content_order: full mlox-sorted content= plugin list.
-    subset_set: which of those are "ours" (need a regenerated insert block).
-    original_content_values: {plugin_name: original insert-value string} so we
-      keep whatever the user originally wrote (usually identical to the name).
-    data_result_tuples: output of insert_data_paths -- (line, is_new, source_value) --
-      used when --sort-data-paths was given, to emit re-anchored data inserts.
-    raw_data_inserts: original {"value","after","before"} dicts -- used when
-      --sort-data-paths was NOT given, to pass the data inserts through unchanged.
-    replace_dest_names: plugin names that came from a [[Customizations.replace]]
-      "dest" (rather than an [[insert]]) -- these are already written out via the
-      "replace" passthrough below, so they're skipped here to avoid emitting a
-      duplicate/conflicting insert block for the same plugin. momw-configurator's
-      "replace" has no after/before of its own (it just takes the position of
-      "source"), so mlox moving one of these relative to the frozen order can't
-      actually be expressed as a replace -- it's reported as a warning instead.
-    user_data_values: the raw path strings of every data= insert that came from
-      THIS run's customizations/subset (before duplicate-skipping). Needed so a
-      data path that momw-configurator already baked into openmw.cfg on a prior
-      run -- and which insert_data_paths therefore correctly skips as a live-cfg
-      duplicate -- still gets re-emitted as an insert block here. Without this,
-      the "durable" regenerated TOML would silently lose every data path that's
-      already in the cfg (i.e. all of them, since the cfg was built FROM this
-      very TOML), leaving momw-configurator nothing to re-insert on the next
-      rebuild. A line is treated as "ours" if it's a genuinely new insert OR its
-      normalized path is in this set.
-    """
-    replace_dest_names = replace_dest_names or set()
-    subset_set_lower = {s.lower() for s in subset_set}
-    original_data = original_data or {}
-    # No existing [[Customizations]] block to attach inserts to (e.g. --subset-file
-    # was used with no --customizations at all) -- synthesize one so there's
-    # somewhere for the insert/replace/append output below to actually go,
-    # instead of the whole loop silently iterating zero times.
-    # listName is REQUIRED by momw-configurator (it says which curated list the
-    # customizations apply to). Precedence: an explicit list_name passed in
-    # (--list-name / GUI field) wins; else keep whatever the source TOML had;
-    # else fall back to "generated" so the file is at least valid TOML. The
-    # override also covers the --subset-file-only case, which otherwise always
-    # emitted the useless placeholder "generated".
-    default_name = list_name or "generated"
-    blocks = original_data.get("Customizations") or [{"listName": default_name}]
-
-    # extra removals from opted-out items that already exist in the cfg -- added
-    # to the FIRST block only, so a multi-block file doesn't repeat them
-    extra_removes = {"removeContent": list(remove_content or []),
-                     "removeData": list(remove_data or [])}
-
-    out = []
-    _anchors = []   # every after=/before=/source= value we emit, for the ambiguity check
-    _removes = []   # every remove* value we emit -- removal matching is SILENT
-    for bi, block in enumerate(blocks):
-        out.append("[[Customizations]]")
-        name = list_name or block.get("listName")
-        if name:
-            out.append(f"listName = {toml_value(name)}")
-        for key in ("removeData", "removeContent", "removeFallback", "removeGroundcover"):
-            vals = list(block.get(key) or [])
-            if bi == 0:
-                vals += extra_removes.get(key, [])
-            # de-dupe case-insensitively, preserving order
-            seen, merged = set(), []
-            for x in vals:
-                if x.lower() not in seen:
-                    seen.add(x.lower())
-                    merged.append(x)
-            if merged:
-                # one entry per line, matching the style of MOMW's own
-                # documentation examples -- a 25-entry single line is unreadable
-                out.append(f"{key} = [")
-                for x in merged:
-                    out.append(f"  {toml_value(x)},")
-                out.append("]")
-                _removes.extend(merged)
-        out.append("")
-
-        # 1) DATA INSERTS FIRST (Ensures paths are defined before plugins look for them)
-        if data_result_tuples:
-            # data path inserts, anchored to whatever immediately precedes them
-            # in the final data= order (existing line or an earlier new insert).
-            # We emit a block for every line that's OURS -- a genuinely new
-            # insert, OR an existing cfg line whose path is one of this run's
-            # data paths (i.e. one momw-configurator already applied on a prior
-            # run). The latter is why we can't just gate on is_new: after the
-            # first rebuild every one of our paths is "already in the cfg", and
-            # gating on is_new would drop them all from the regenerated TOML.
-            user_norms = {normalize_data_path(v) for v in (user_data_values or [])}
-            user_norms.discard("")
-            prev_line = None
-            for line, is_new, value in data_result_tuples:
-                path_val = value if value else extract_data_path_value(line)
-                norm = normalize_data_path(path_val) if path_val else ""
-                is_ours = is_new or (norm and norm in user_norms)
-                if is_ours and path_val:
-                    out.append("[[Customizations.insert]]")
-                    out.append(f"insert = {toml_value(path_val)}")
-                    if prev_line is not None:
-                        anchor = extract_data_path_value(prev_line) or prev_line.split("=", 1)[-1].strip().strip('"')
-                        out.append(f"after = {toml_value(anchor)}")
-                        _anchors.append(anchor)
-                    else:
-                        out.append("# WARNING: this was the very first data= line -- no predecessor to anchor to")
-                    out.append("")
-                prev_line = line
-        elif raw_data_inserts:
-            # --sort-data-paths not given -- pass these through exactly as originally written
-            for d in raw_data_inserts:
-                out.append("[[Customizations.insert]]")
-                out.append(f"insert = {toml_value(d['value'])}")
-                if d.get("after"):
-                    out.append(f"after = {toml_value(d['after'])}")
-                    _anchors.append(d["after"])
-                elif d.get("before"):
-                    out.append(f"before = {toml_value(d['before'])}")
-                    _anchors.append(d["before"])
-                out.append("")
-
-        # 2) CONTENT INSERTS SECOND
-        # content inserts, in mlox-computed order, each anchored to whatever
-        # immediately precedes it (already-existing plugin or an earlier
-        # insert block in this same file, which will exist by the time
-        # momw-configurator gets to this block)
-        for i, name in enumerate(final_content_order):
-            if name.lower() not in subset_set_lower or name in replace_dest_names:
-                continue
-            value = original_content_values.get(name, name)
-            # Annotate WHY this mod sits here: the after=/before= below is its
-            # chained position (documented Configurator semantics), but the
-            # REAL reason comes from the sort -- a dependency/rule target, a
-            # NearStart/NearEnd hint, or nothing at all (positional only).
-            info = (custom_anchors or {}).get(name.lower())
-            if info:
-                how, anch = info
-                if how == "after":
-                    out.append(f"# constraint: must load after {toml_value(anch)}")
-                elif how == "before":
-                    out.append(f"# constraint: must load before {toml_value(anch)}")
-                elif how in ("nearstart", "nearend"):
-                    out.append(f"# constraint: mlox [{'NearStart' if how == 'nearstart' else 'NearEnd'}] hint")
-                else:
-                    out.append("# no ordering constraint -- positional only")
-            out.append("[[Customizations.insert]]")
-            out.append(f"insert = {toml_value(value)}")
-            if i == 0:
-                # sorted to the very start of the load order -- there's no
-                # predecessor to anchor "after", so anchor "before" whatever
-                # ended up immediately following it instead
-                if len(final_content_order) > 1:
-                    out.append(f"before = {toml_value(final_content_order[1])}")
-                    _anchors.append(final_content_order[1])
-                else:
-                    out.append("# WARNING: this is the only content= plugin -- no anchor to write")
-            else:
-                anchor = final_content_order[i - 1]
-                out.append(f"after = {toml_value(anchor)}")
-                _anchors.append(anchor)
-            out.append("")
-
-        for rep in block.get("replace", []):
-            out.append("[[Customizations.replace]]")
-            if "source" in rep:
-                out.append(f"source = {toml_value(rep['source'])}")
-                _anchors.append(rep["source"])
-            if "dest" in rep:
-                out.append(f"dest = {toml_value(rep['dest'])}")
-            out.append("")
-
-        for ap in block.get("append", []):
-            out.append("[[Customizations.append]]")
-            if "append" in ap:
-                out.append(f"append = {toml_value(ap['append'])}")
-            if "appendBlock" in ap:
-                out.append(f"appendBlock = {toml_value(ap['appendBlock'])}")
-            out.append("")
-
-    # Ambiguity checks (warn-only, output unchanged). Verified against
-    # momw-configurator's cfg/custom.go:
-    #  * after=/before=/source= values are matched with strings.Contains
-    #    against WHOLE cfg lines, and >1 match is a hard error (doInsert even
-    #    discards the cfg it was building) -- so a filename nested inside
-    #    another ('Incantation.omwscripts' in 'content=Incantation.omwscripts.esp')
-    #    breaks the configurator run.
-    #  * remove* values match the same way but with NO multi-match error --
-    #    doRemove silently deletes EVERY matching line, so a nested filename
-    #    would silently remove a mod the user never opted out. (Path-like
-    #    values instead match the line's value exactly or by /-suffix.)
-    haystack = [f"content={n}" for n in final_content_order]
-    if data_result_tuples:
-        haystack += [line for line, _, _ in data_result_tuples]
-
-    _line_value = cfg_line_value
-    _remove_matches = configurator_remove_matches
-
-    for a in dict.fromkeys(_anchors):        # dedupe, keep order
-        hits = [l for l in haystack if a in l]
-        if len(hits) > 1:
-            print(f"WARNING: anchor '{a}' in the emitted TOML matches "
-                  f"{len(hits)} openmw.cfg lines -- momw-configurator errors on "
-                  f"ambiguous matches. Colliding lines: "
-                  f"{'; '.join(hits[:4])}{' ...' if len(hits) > 4 else ''}")
-    for r in dict.fromkeys(_removes):
-        hits = [l for l in haystack if _remove_matches(r, l)]
-        if len(hits) > 1:
-            print(f"WARNING: remove entry '{r}' matches {len(hits)} openmw.cfg "
-                  f"lines -- momw-configurator removes ALL of them, silently. "
-                  f"Colliding lines: {'; '.join(hits[:4])}{' ...' if len(hits) > 4 else ''}")
-
-    return "\n".join(out).rstrip() + "\n"
 
 
 # ---------------------------------------------------------------------------
 # graph + stable topological sort
 # ---------------------------------------------------------------------------
 
-def expand_pattern(pattern, node_pool):
-    if pattern_has_meta(pattern):
-        rx = mlox_pattern_to_regex(pattern)
-        return [n for n in node_pool if rx.match(n)]
-    for n in node_pool:
-        if n.lower() == pattern.lower():
-            return [n]
-    return []
-
-
-def would_create_cycle(adj, start, target, nodes):
-    # DFS from target: can we already reach start? if so, adding start->target closes a cycle
-    stack = [target]
-    seen = set()
-    while stack:
-        n = stack.pop()
-        if n == start:
-            return True
-        if n in seen:
-            continue
-        seen.add(n)
-        stack.extend(adj.get(n, ()))
-    return False
-
-
-def _is_master_file(name):
-    """True for master-type plugins that should load before ordinary plugins."""
-    return name.lower().endswith((".esm", ".omwgame"))
-
-
-def build_and_sort(base_order_names, subset_names, rule_blocks, masters=None,
-                   nearstart=None, nearend=None, anchor_out=None):
-    # Guard against the same plugin becoming two different graph nodes just
-    # because of a casing difference (OpenMW's VFS is case-insensitive, so
-    # 'NewMod.esp' and 'newmod.esp' are the same file) -- canonicalize any
-    # subset entry that matches an existing base entry onto that entry's
-    # exact spelling, and drop the resulting case-duplicates. Without this,
-    # a subset plugin already in the cfg under different casing would get
-    # inserted a second time instead of being repositioned.
-    trace_sort(f"[sort] === build_and_sort: {len(base_order_names)} base plugin(s), "
-          f"{len(subset_names)} subset (custom) plugin(s), {len(rule_blocks)} mlox rule block(s), "
-          f"masters for {len(masters or {})} plugin(s) ===")
-    base_lower_map = {n.lower(): n for n in base_order_names}
-    canonical_subset_names = []
-    seen_lower = set()
-    for n in subset_names:
-        canon = base_lower_map.get(n.lower(), n)
-        if canon.lower() != n.lower():
-            trace_sort(f"[sort] canonicalize subset '{n}' -> cfg spelling '{canon}'")
-        if canon.lower() not in seen_lower:
-            seen_lower.add(canon.lower())
-            canonical_subset_names.append(canon)
-        else:
-            trace_sort(f"[sort] drop duplicate subset entry '{n}' (already have '{canon}')")
-    subset_names = canonical_subset_names
-
-    base_index = {name: i for i, name in enumerate(base_order_names)}
-    nodes = set(base_order_names) | set(subset_names)
-    # Deterministic iteration pool: set order is randomized per process
-    # (PYTHONHASHSEED), and using `nodes` directly for rule expansion made
-    # edge insertion order -- and through it the final sort -- vary from
-    # run to run. Same membership, fixed order.
-    node_pool = base_order_names + [n for n in subset_names if n not in base_index]
-    subset_set = set(subset_names)
-    node_lower = {n.lower(): n for n in nodes}
-    in_cfg = [n for n in subset_names if n in base_index]
-    new_cust = [n for n in subset_names if n not in base_index]
-    trace_sort(f"[sort] {len(in_cfg)} custom(s) already in cfg (will be repositioned), "
-          f"{len(new_cust)} brand-new custom(s) to insert")
-
-    adj = {n: set() for n in nodes}
-    indeg = {n: 0 for n in nodes}
-    conflicts = []  # mlox rules we couldn't apply without reordering the frozen cfg
-
-    def add_edge(a, b, label, quiet=False):
-        if a == b or b in adj.get(a, ()):
-            return True
-        if would_create_cycle(adj, a, b, nodes):
-            conflicts.append((a, b))
-            if not quiet:
-                trace_sort(f"[sort]   edge REJECTED (would cycle): '{a}' -> '{b}'  [{label}]")
-            return False
-        adj[a].add(b)
-        indeg[b] += 1
-        if not quiet:
-            trace_sort(f"[sort]   edge OK: '{a}' -> '{b}'  [{label}]")
-        return True
-
-    # 1) frozen chain from the existing cfg order -- but ONLY the curated (non-
-    #    subset) plugins. Your custom mods that are already in the cfg must NOT be
-    #    chained in place, or they'd be locked between their current neighbors and
-    #    couldn't be re-sorted. Bridging over them chains curated[i] -> curated[i+1]
-    #    directly, freezing the curated list while leaving customs free to move.
-    frozen_seq = [n for n in base_order_names if n not in subset_set]
-    trace_sort(f"[sort] step 1: frozen chain over {len(frozen_seq)} curated plugin(s), "
-          f"bridging over {len(in_cfg)} custom(s) in the cfg (chain edges not logged individually)")
-    for a, b in zip(frozen_seq, frozen_seq[1:]):
-        add_edge(a, b, "existing cfg order", quiet=True)
-
-    # 1b) header-master dependencies: every custom plugin must load AFTER each
-    #     master it lists in its TES3 header (the real dependency, which mlox's
-    #     rule DB doesn't capture for arbitrary mods). Only added for CUSTOM
-    #     dependents so the curated list (already master-correct) is never touched.
-    trace_sort(f"[sort] step 1b: header-master dependency edges")
-    if masters:
-        for p in subset_names:
-            ms = masters.get(p.lower(), ())
-            if ms:
-                trace_sort(f"[sort]  '{p}' header masters: {list(ms)}")
-            for m in ms:
-                mn = node_lower.get(m.lower())
-                if mn and mn != p:
-                    add_edge(mn, p, "master (header)")
-                elif not mn:
-                    trace_sort(f"[sort]   master '{m}' of '{p}' NOT installed -- no edge")
-    else:
-        trace_sort("[sort]  (no header masters available -- mod files not reachable)")
-
-    # 2) mlox ordering edges, but only where they touch a subset plugin (the
-    #    frozen base is already ordered by step 1). Within each block we chain
-    #    consecutive INSTALLED matches, skipping over patterns that match
-    #    nothing you have -- so [Order] A, B, C with B not installed still
-    #    yields A -> C directly, preserving the constraint instead of losing it
-    #    when B drops out. This is the transitive-bridge behaviour the real mlox
-    #    engine gets by keeping a not-installed plugin as a phantom node.
-    trace_sort("[sort] step 2: mlox [Order] rule edges (only those touching a custom plugin)")
-    _rule_edge_count = 0
-    # Higher priority (later file, e.g. mlox_user.txt) FIRST: since add_edge
-    # rejects any edge that would close a cycle, the edges added earliest win
-    # a conflict -- exactly how the real mlox gives user rules precedence by
-    # reading mlox_user.txt before mlox_base.txt. (Sorting ascending here
-    # silently gave the BASE file precedence -- backwards.)
-    blocks_sorted = sorted(rule_blocks, key=lambda b: -b[1])
-    for names, priority in blocks_sorted:
-        # expand each token to its installed matches; a token that matches
-        # nothing is dropped (it becomes an order bridge, not a broken link)
-        survivors = [ms for ms in (expand_pattern(tok, node_pool) for tok in names) if ms]
-        for a_matches, b_matches in zip(survivors, survivors[1:]):
-            for a in a_matches:
-                for b in b_matches:
-                    if a == b:
-                        continue
-                    if a in subset_set or b in subset_set:
-                        add_edge(a, b, f"mlox rule (priority {priority})")
-                        _rule_edge_count += 1
-    trace_sort(f"[sort]  considered rule edges touching customs: {_rule_edge_count}")
-
-    # Report rules we couldn't apply -- deduped and phrased as info, not alarm.
-    # These aren't errors: they happen whenever a curated MOMW cfg order
-    # intentionally differs from raw mlox. The frozen cfg order is kept and the
-    # affected plugin is still placed as well as the non-conflicting rules allow.
-    if conflicts:
-        seen, unique = set(), []
-        for a, b in conflicts:
-            key = (a.lower(), b.lower())
-            if key not in seen:
-                seen.add(key)
-                unique.append((a, b))
-        print(f"\n  {len(unique)} mlox ordering rule(s) not applied -- your openmw.cfg already "
-              f"orders these the other way, so your (curated) cfg order is kept:")
-        for a, b in unique:
-            print(f"    - mlox wanted '{a}' before '{b}', but your load order already has "
-                  f"'{b}' before '{a}'")
-
-    # 3) stable Kahn's topological sort. Tie-break among ready nodes:
-    #    (a) masters (.esm/.omwgame) before ordinary plugins -- ESM-first, so a
-    #        custom master with no rule still floats up into the master block;
-    #    (b) then original cfg position (curated keep their exact order; a custom
-    #        already in the cfg keeps its rough spot; brand-new customs sort after
-    #        the plugins they were declared after);
-    #    (c) then name, for determinism.
-    #    Edges always win over the tie-break, so real dependencies/rules dominate.
-    import heapq
-    nb = len(base_order_names)
-    pos = dict(base_index)
-    # Position each custom from ALL of its graph predecessors -- header-master
-    # edges AND applied mlox [Order] rule edges -- resolved TRANSITIVELY through
-    # custom->custom chains: "place this custom right after the latest-loading
-    # thing it must come after", whatever that thing is (a curated plugin or
-    # another custom). Master-type predecessors (.esm/.omwgame) are NOT a
-    # position signal: they sit in the master block at the very top and half
-    # the list depends on them, so anchoring to them would cluster everything
-    # at the front (a previous failed attempt). A custom with no non-master
-    # predecessor keeps its cfg position (if already in the cfg) or goes to
-    # the end, in declared order -- same place the Configurator would append it.
-    trace_sort("[sort] step 3: anchoring custom plugins from their graph neighbors "
-               "(master edges + applied mlox rule edges, resolved transitively)")
-    preds = {}
-    succs = {}
-    for a, tgts in adj.items():
-        for b in tgts:
-            if b in subset_set:
-                preds.setdefault(b, []).append(a)
-            if a in subset_set:
-                succs.setdefault(a, []).append(b)
-    # adj's edge sets iterate in hash order (randomized per process); sort the
-    # neighbor lists so tie-breaks and resolution order -- and therefore the
-    # final sort -- are identical run to run.
-    for lst in preds.values():
-        lst.sort(key=str.lower)
-    for lst in succs.values():
-        lst.sort(key=str.lower)
-
-    declared_end = {n: nb + j for j, n in enumerate(subset_names)}
-    _EPS = 1e-6  # nudge a dependent just past/short of its custom neighbor
-    resolved = {}   # custom -> (pos value, anchor name or None, "after"/"before"/"none")
-    derives = {}    # custom -> set of customs its position value was derived from
-    _resolving = set()  # in-flight nodes (graph is a DAG, but pred/succ lookups interlock)
-
-    def _no_signal_pos(n):
-        # no positioning signal: keep cfg pos if already in the cfg, else end
-        return float(base_index[n]) if n in base_index else float(declared_end[n])
-
-    def _derives_from(x, n):
-        """True if custom x's resolved position was derived (transitively)
-        from n's -- using such a value to anchor n would be circular and
-        inflate both (e.g. 'A loads before B' must not make B anchor after
-        A's fallback-end position)."""
-        stack, seen = [x], set()
-        while stack:
-            c = stack.pop()
-            if c == n:
-                return True
-            if c in seen:
-                continue
-            seen.add(c)
-            stack.extend(derives.get(c, ()))
-        return False
-
-    def _final_pos(n):
-        """Anchor position for custom n.
-
-        1. "After" signal (preferred): right after the latest-loading NON-master
-           thing n must load after -- a curated plugin (rule edge / header
-           master) or another custom (resolved transitively). Master-type
-           (.esm/.omwgame) predecessors are NOT a signal: they sit in the
-           master block at the very top and half the list depends on them, so
-           anchoring to them clusters everything at the front.
-        2. "Before" signal: otherwise, just before the earliest-loading thing
-           n must load BEFORE (mlox [Order] rules mostly constrain customs
-           this way). Without this, a before-constrained custom keeps its
-           end position, and when the frozen chain reaches its curated
-           successor, Kahn's stalls there and dumps every earlier pending
-           custom in one big block -- the exact bug being fixed.
-        3. Neither: keep cfg position (if already in the cfg) or go to the
-           end, in declared order -- where the Configurator would append it.
-
-        Neighbors whose position derives from n (see _derives_from), or that
-        are still being resolved, are skipped -- their value comes FROM n's,
-        so it can't ground n's. A skip is recorded in `derives` so the round
-        loop below can recompute n once the neighbor has settled.
-        """
-        got = resolved.get(n)
-        if got is not None:
-            return got[0]
-        _resolving.add(n)
-        deps = derives.setdefault(n, set())
-        try:
-            best, best_p = None, None
-            for p in preds.get(n, ()):
-                if _is_master_file(p):
-                    continue              # master block, top of list: no position signal
-                if p in subset_set:
-                    if p in _resolving:
-                        deps.add(p)       # interlock: p's value needs n's -- skip
-                        continue
-                    bp = _final_pos(p)
-                    if _derives_from(p, n):
-                        continue          # p's position came from n -- circular
-                    bp += _EPS            # right after that custom
-                else:
-                    bp = base_index[p] + 0.5        # right after that curated plugin
-                if best is None or bp > best:
-                    best, best_p = bp, p
-            if best is not None:
-                if best_p in subset_set:
-                    deps.add(best_p)
-                    deps.update(derives.get(best_p, ()))
-                resolved[n] = (best, best_p, "after")
-                return best
-            low, low_s = None, None
-            for s in succs.get(n, ()):
-                if s in subset_set:
-                    if s in _resolving:
-                        deps.add(s)
-                        continue
-                    bs = _final_pos(s)
-                    if _derives_from(s, n):
-                        continue
-                    bs -= _EPS            # just before that custom
-                else:
-                    bs = base_index[s] - 0.5 + _EPS  # just before that curated plugin
-                if low is None or bs < low:
-                    low, low_s = bs, s
-            if low is not None:
-                if low_s in subset_set:
-                    deps.add(low_s)
-                    deps.update(derives.get(low_s, ()))
-                resolved[n] = (low, low_s, "before")
-                return low
-            resolved[n] = (_no_signal_pos(n), None, "none")
-            return resolved[n][0]
-        finally:
-            _resolving.discard(n)
-
-    import sys as _sys
-    _old_rlimit = _sys.getrecursionlimit()
-    _sys.setrecursionlimit(max(_old_rlimit, 10 * len(subset_names) + 1000))
-    try:
-        # A node resolved while a neighbor was still in flight may hold a
-        # degraded value (the interlocked contribution was skipped). Re-run
-        # nodes whose value depended on another custom's -- everything else
-        # stays memoized -- until the values stop changing (bounded).
-        for n in subset_names:
-            _final_pos(n)
-        for _round in range(len(subset_names) + 1):
-            changed = False
-            for n in [x for x in subset_names if derives.get(x)]:
-                old = resolved.pop(n)
-                derives[n] = set()
-                _final_pos(n)
-                if resolved[n][0] != old[0]:
-                    changed = True
-            if not changed:
-                break
-    finally:
-        _sys.setrecursionlimit(_old_rlimit)
-
-    n_after = n_before = 0
-    for n in subset_names:
-        val, anch, how = resolved[n]
-        if how == "after":
-            pos[n] = val
-            n_after += 1
-            kind = "custom" if anch in subset_set else "curated"
-            trace_sort(f"[sort]  anchor '{n}' -> right after {kind} '{anch}' (pos {val:.6g})")
-        elif how == "before":
-            pos[n] = val
-            n_before += 1
-            kind = "custom" if anch in subset_set else "curated"
-            trace_sort(f"[sort]  anchor '{n}' -> right before {kind} '{anch}' (pos {val:.6g})")
-        else:
-            pos.setdefault(n, declared_end[n])
-            where = "keeps cfg pos" if n in base_index else "end of load order"
-            trace_sort(f"[sort]  '{n}' no non-master neighbor -> {where}")
-    trace_sort(f"[sort]  anchored after a dependency: {n_after}, before a successor: {n_before}, "
-               f"unanchored (standalone / masters-only): {len(subset_names) - n_after - n_before} "
-               f"/ {len(subset_names)} customs")
-
-    if anchor_out is not None:
-        # expose WHY each custom sits where it does -- ("after"|"before", anchor
-        # name) for real constraints, ("none", None) for positional-only -- so
-        # the TOML emitter can annotate its inserts
-        for n in subset_names:
-            _v, _a, _how = resolved[n]
-            anchor_out[n.lower()] = (_how, _a)
-
-    # [NearStart]/[NearEnd] position hints (mlox semantics: pull each matching
-    # plugin as close to the start/end as the edges allow -- NOT a chain).
-    # Applied to CUSTOMS only (the curated list is frozen), and they override
-    # the anchor heuristic above; graph edges still always win.
-    for pats, to_start, label in ((nearstart, True, "NearStart"), (nearend, False, "NearEnd")):
-        for pat in (pats or ()):
-            for n in expand_pattern(pat, node_pool):
-                if n not in subset_set:
-                    continue
-                j = declared_end[n] - nb  # stable tie-break among hinted customs
-                pos[n] = (-1.0 + j * _EPS) if to_start else float(2 * nb + len(subset_names) + j)
-                if anchor_out is not None:
-                    anchor_out[n.lower()] = ("nearstart" if to_start else "nearend", None)
-                trace_sort(f"[sort]  [{label}] hint: '{n}' -> {'front' if to_start else 'very end'} "
-                           f"(pos {pos[n]:.6g})")
-
-    def rank(n):
-        return (0 if _is_master_file(n) else 1, pos.get(n, nb), n.lower())
-
-    trace_sort("[sort] step 4: topological placement (order each plugin is emitted)")
-    ready = [(rank(n), n) for n in nodes if indeg[n] == 0]
-    heapq.heapify(ready)
-    result = []
-    while ready:
-        _, n = heapq.heappop(ready)
-        result.append(n)
-        if n in subset_set:       # log only customs to keep the trace readable
-            trace_sort(f"[sort]  place #{len(result)}: '{n}'  (CUSTOM, rank={rank(n)})")
-        for m in adj[n]:
-            indeg[m] -= 1
-            if indeg[m] == 0:
-                heapq.heappush(ready, (rank(m), m))
-
-    if len(result) != len(nodes):
-        remaining = nodes - set(result)
-        trace_sort(f"[sort] UNPLACED (cycle): {sorted(remaining)}")
-        print(f"WARNING: {len(remaining)} plugin(s) could not be placed due to an "
-              f"unresolved cycle and were appended at the end: {sorted(remaining)}")
-        result.extend(sorted(remaining, key=str.lower))
-
-    trace_sort(f"[sort] === done: {len(result)} plugin(s) placed "
-          f"({len(conflicts)} rule edge(s) rejected as cycles) ===")
-    return result
-
+# Graph primitives now live in mlox_subset/sort/graph.py.
+from mlox_subset.sort import (
+    build_and_sort,
+    expand_pattern,
+    is_master_file as _is_master_file,
+    would_create_cycle,
+)
 
 # ---------------------------------------------------------------------------
 # main
@@ -4280,6 +2685,7 @@ def build_and_sort(base_order_names, subset_names, rule_blocks, masters=None,
 # like [CONFLICT] / [REQUIRES] / WARNING: / NOTE: on each line.
 # ---------------------------------------------------------------------------
 
+
 def _section(title: str):
     print(f"\n{'=' * 70}\n {title}\n{'=' * 70}")
 
@@ -4292,116 +2698,194 @@ def _subsection(title: str):
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def build_arg_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--cfg", required=True, type=Path, help="Path to openmw.cfg")
-    ap.add_argument("--rules", required=True, nargs="+", type=Path,
-                     help="mlox rule file(s) or directories, in increasing priority order "
-                          "(pass mlox_base.txt first, mlox_user.txt last)")
-    ap.add_argument("--customizations", type=Path,
-                     help="momw-customizations.toml to auto-derive the subset from")
-    ap.add_argument("--subset", nargs="*", default=[],
-                     help="Explicit list of plugin filenames to sort (combined with --customizations if both given)")
-    ap.add_argument("--subset-file", type=Path,
-                     help="Plain text (one plugin per line) or minimal TOML (subset = [...]) "
-                          "file listing plugins to sort -- shorter to maintain than --subset or "
-                          "a full momw-customizations.toml block")
-    ap.add_argument("--scan-dir", type=Path,
-                     help="Scan this mods folder for data folders and plugins and write the result "
-                          "to --subset-file (required with this), then sort using it. Folds in the "
-                          "old mod_scan.py: each folder containing an asset subfolder or a plugin "
-                          "becomes a data= entry (plus its plugins as content=), and matched branches "
-                          "aren't descended further.")
+    ap.add_argument(
+        "--rules",
+        required=True,
+        nargs="+",
+        type=Path,
+        help="mlox rule file(s) or directories, in increasing priority order "
+        "(pass mlox_base.txt first, mlox_user.txt last)",
+    )
+    ap.add_argument(
+        "--customizations",
+        type=Path,
+        help="momw-customizations.toml to auto-derive the subset from",
+    )
+    ap.add_argument(
+        "--subset",
+        nargs="*",
+        default=[],
+        help="Explicit list of plugin filenames to sort (combined with --customizations if both given)",
+    )
+    ap.add_argument(
+        "--subset-file",
+        type=Path,
+        help="Plain text (one plugin per line) or minimal TOML (subset = [...]) "
+        "file listing plugins to sort -- shorter to maintain than --subset or "
+        "a full momw-customizations.toml block",
+    )
+    ap.add_argument(
+        "--scan-dir",
+        type=Path,
+        help="Scan this mods folder for data folders and plugins and write the result "
+        "to --subset-file (required with this), then sort using it. Folds in the "
+        "old mod_scan.py: each folder containing an asset subfolder or a plugin "
+        "becomes a data= entry (plus its plugins as content=), and matched branches "
+        "aren't descended further.",
+    )
     ap.add_argument("--dry-run", action="store_true", help="Print the plan, write nothing")
-    ap.add_argument("--no-backup", action="store_true",
-                     help="Skip writing a .bak-<timestamp> copy before overwriting openmw.cfg and/or "
-                          "before overwriting an existing --emit-toml target (e.g. when writing back "
-                          "to the same file --customizations pointed at).")
-    ap.add_argument("--emit-toml", type=Path,
-                     help="Write a momw-customizations.toml here (with insert blocks reordered/"
-                          "re-anchored per the mlox+anchor results) instead of/alongside patching "
-                          "openmw.cfg directly. If --customizations is also given, its other blocks "
-                          "(removeContent, replace, append, ...) are preserved and only the sorted "
-                          "plugins/paths are regenerated; if not, a brand new single-block TOML is "
-                          "generated from --subset/--subset-file alone. This is the durable fix: feed "
-                          "the output back into momw-configurator so the correct order survives "
-                          "future rebuilds.")
-    ap.add_argument("--list-name",
-                     help="listName to write into the emitted momw-customizations.toml (the curated "
-                          "mod list these customizations apply to, e.g. 'total-overhaul'). Overrides "
-                          "the listName from --customizations if both are given. Without this, the "
-                          "source TOML's listName is kept, or -- when generating from --subset-file "
-                          "alone -- it defaults to the placeholder 'generated'. momw-configurator "
-                          "REQUIRES a correct listName, so set this when generating a fresh TOML.")
-    ap.add_argument("--plugin-order-yml", type=Path,
-                     help="MOMW's plugin-order.yml (source of truth for which plugins belong to which "
-                          "curated mod list). With --list-name, curated plugins for that list are "
-                          "excluded from the sort (never reordered) so only YOUR custom additions are "
-                          "touched, and read-only sanity warnings are emitted: redundant (a custom "
-                          "plugin that's already on the list), orphan (in your cfg but neither on the "
-                          "list nor in your customizations), needs-cleaning (TES3CMD), and a base-order "
-                          "drift check against the list's canonical order. Optional; PyYAML is used if "
-                          "installed, else a built-in parser.")
-    ap.add_argument("--write-cfg", action="store_true",
-                     help="Actually patch openmw.cfg in place. Off by default -- "
-                          "prefer --emit-toml for a fix that survives future rebuilds. "
-                          "A .bak copy is made first unless --no-backup is also given.")
-    ap.add_argument("--sort-data-paths", action="store_true",
-                     help="Also position data= (folder path) insertions from the customizations "
-                          "TOML: anchored by their after/before field if given, or otherwise "
-                          "inferred by scanning the folder for plugin files and anchoring next to "
-                          "whichever existing data= path owns the nearest neighboring plugin in the "
-                          "mlox-sorted content order. Off by default: mlox has no concept of "
-                          "data-path order itself, so this is a separate opt-in feature from the "
-                          "mlox-based plugin sort. When off, any data-path insertions found in "
-                          "the TOML are left exactly as originally written (in --emit-toml output) "
-                          "or ignored entirely (for --write-cfg).")
-    ap.add_argument("--no-predicate-warnings", action="store_true",
-                     help="Skip evaluating [Requires]/[Conflict]/[Note] rules against the final "
-                          "plugin list. On by default; this is read-only and never changes the "
-                          "computed sort or what gets written, only what gets printed.")
-    ap.add_argument("--check-conflicts", action="store_true",
-                     help="After sorting, scan the active plugins for TES3 record-level conflicts "
-                          "(where 2+ plugins define/override the same record -- the last in the load "
-                          "order wins), like TES3View/tes3cmd. Read-only; needs the plugin files "
-                          "reachable via the cfg's data= folders. Can be slow on big lists.")
-    ap.add_argument("--conflicts-out", type=Path,
-                     help="Write the full conflict list to this CSV (use with --check-conflicts).")
-    ap.add_argument("--tes3conv", type=Path,
-                     help="Path to a tes3conv executable. With --check-conflicts this switches the "
-                          "conflict engine to tes3conv (exact record ids for every type; enables the "
-                          "GUI's field-level diffs). Auto-detected from PATH / $MLOX_TES3CONV / next to "
-                          "this script if not given; the built-in parser is used if none is found.")
-    ap.add_argument("--cell-map", type=Path,
-                     help="Write a self-contained HTML 'modmapper'-style cell map here: an exterior-cell "
-                          "heatmap (brighter = more mods) plus an interior-cell list, showing which mods "
-                          "touch which cells (cells your custom mods touch are highlighted). Read-only; "
-                          "open the file in any browser.")
-    ap.add_argument("--resource-conflicts", action="store_true",
-                     help="Scan the cfg's data= folders for loose-file (VFS) conflicts: the same relative "
-                          "path in 2+ folders (later wins), like MO2's Data conflicts. Read-only.")
-    ap.add_argument("--lint", action="store_true",
-                     help="After sorting, run tes3lint-style checks over the active plugins: evil "
-                          "GMSTs, the interior fog-density-0 bug, interior cells with no pathgrid, "
-                          "expansion-function use without the expansion mastered, omwaddon/omwscripts "
-                          "twin mismatches, and blank custom headers. Read-only; VFS-aware.")
-    ap.add_argument("--resources-out", type=Path,
-                     help="Write the full resource-conflict list to this CSV (with --resource-conflicts).")
-    ap.add_argument("--exclude", nargs="*", default=[],
-                     help="Name patterns (glob) to skip in --check-conflicts/--cell-map/"
-                          "--resource-conflicts scans, e.g. 's3lightfixes*' '*delta*' '*grass*'.")
-    ap.add_argument("--conflicts-subset-only", action="store_true",
-                     help="With --check-conflicts, report only conflicts that involve YOUR custom "
-                          "mods (skip base-list vs base-list conflicts).")
-    ap.add_argument("--trace", nargs="?", const=True, default=None, metavar="LOGFILE",
-                     help="Write a debug trace log for troubleshooting (off by default). Use --trace "
-                          "for the default log (mlox_subset_sort_trace.log), or --trace PATH to choose "
-                          "the file.")
-    ap.add_argument("--json-dump-dir", type=Path,
-                     help="When using tes3conv for --check-conflicts/--cell-map, write (and KEEP) the "
-                          "per-plugin JSON conversions in this folder. tes3conv output is always spooled "
-                          "to disk and read one plugin at a time (bounded memory); by default that spool "
-                          "is a temp dir removed on exit -- give this to keep it (or to reuse it).")
+    ap.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Skip writing a .bak-<timestamp> copy before overwriting openmw.cfg and/or "
+        "before overwriting an existing --emit-toml target (e.g. when writing back "
+        "to the same file --customizations pointed at).",
+    )
+    ap.add_argument(
+        "--emit-toml",
+        type=Path,
+        help="Write a momw-customizations.toml here (with insert blocks reordered/"
+        "re-anchored per the mlox+anchor results) instead of/alongside patching "
+        "openmw.cfg directly. If --customizations is also given, its other blocks "
+        "(removeContent, replace, append, ...) are preserved and only the sorted "
+        "plugins/paths are regenerated; if not, a brand new single-block TOML is "
+        "generated from --subset/--subset-file alone. This is the durable fix: feed "
+        "the output back into momw-configurator so the correct order survives "
+        "future rebuilds.",
+    )
+    ap.add_argument(
+        "--list-name",
+        help="listName to write into the emitted momw-customizations.toml (the curated "
+        "mod list these customizations apply to, e.g. 'total-overhaul'). Overrides "
+        "the listName from --customizations if both are given. Without this, the "
+        "source TOML's listName is kept, or -- when generating from --subset-file "
+        "alone -- it defaults to the placeholder 'generated'. momw-configurator "
+        "REQUIRES a correct listName, so set this when generating a fresh TOML.",
+    )
+    ap.add_argument(
+        "--plugin-order-yml",
+        type=Path,
+        help="MOMW's plugin-order.yml (source of truth for which plugins belong to which "
+        "curated mod list). With --list-name, curated plugins for that list are "
+        "excluded from the sort (never reordered) so only YOUR custom additions are "
+        "touched, and read-only sanity warnings are emitted: redundant (a custom "
+        "plugin that's already on the list), orphan (in your cfg but neither on the "
+        "list nor in your customizations), needs-cleaning (TES3CMD), and a base-order "
+        "drift check against the list's canonical order. Optional; PyYAML is used if "
+        "installed, else a built-in parser.",
+    )
+    ap.add_argument(
+        "--write-cfg",
+        action="store_true",
+        help="Actually patch openmw.cfg in place. Off by default -- "
+        "prefer --emit-toml for a fix that survives future rebuilds. "
+        "A .bak copy is made first unless --no-backup is also given.",
+    )
+    ap.add_argument(
+        "--sort-data-paths",
+        action="store_true",
+        help="Also position data= (folder path) insertions from the customizations "
+        "TOML: anchored by their after/before field if given, or otherwise "
+        "inferred by scanning the folder for plugin files and anchoring next to "
+        "whichever existing data= path owns the nearest neighboring plugin in the "
+        "mlox-sorted content order. Off by default: mlox has no concept of "
+        "data-path order itself, so this is a separate opt-in feature from the "
+        "mlox-based plugin sort. When off, any data-path insertions found in "
+        "the TOML are left exactly as originally written (in --emit-toml output) "
+        "or ignored entirely (for --write-cfg).",
+    )
+    ap.add_argument(
+        "--no-predicate-warnings",
+        action="store_true",
+        help="Skip evaluating [Requires]/[Conflict]/[Note] rules against the final "
+        "plugin list. On by default; this is read-only and never changes the "
+        "computed sort or what gets written, only what gets printed.",
+    )
+    ap.add_argument(
+        "--check-conflicts",
+        action="store_true",
+        help="After sorting, scan the active plugins for TES3 record-level conflicts "
+        "(where 2+ plugins define/override the same record -- the last in the load "
+        "order wins), like TES3View/tes3cmd. Read-only; needs the plugin files "
+        "reachable via the cfg's data= folders. Can be slow on big lists.",
+    )
+    ap.add_argument(
+        "--conflicts-out",
+        type=Path,
+        help="Write the full conflict list to this CSV (use with --check-conflicts).",
+    )
+    ap.add_argument(
+        "--tes3conv",
+        type=Path,
+        help="Path to a tes3conv executable. With --check-conflicts this switches the "
+        "conflict engine to tes3conv (exact record ids for every type; enables the "
+        "GUI's field-level diffs). Auto-detected from PATH / $MLOX_TES3CONV / next to "
+        "this script if not given; the built-in parser is used if none is found.",
+    )
+    ap.add_argument(
+        "--cell-map",
+        type=Path,
+        help="Write a self-contained HTML 'modmapper'-style cell map here: an exterior-cell "
+        "heatmap (brighter = more mods) plus an interior-cell list, showing which mods "
+        "touch which cells (cells your custom mods touch are highlighted). Read-only; "
+        "open the file in any browser.",
+    )
+    ap.add_argument(
+        "--resource-conflicts",
+        action="store_true",
+        help="Scan the cfg's data= folders for loose-file (VFS) conflicts: the same relative "
+        "path in 2+ folders (later wins), like MO2's Data conflicts. Read-only.",
+    )
+    ap.add_argument(
+        "--lint",
+        action="store_true",
+        help="After sorting, run tes3lint-style checks over the active plugins: evil "
+        "GMSTs, the interior fog-density-0 bug, interior cells with no pathgrid, "
+        "expansion-function use without the expansion mastered, omwaddon/omwscripts "
+        "twin mismatches, and blank custom headers. Read-only; VFS-aware.",
+    )
+    ap.add_argument(
+        "--resources-out",
+        type=Path,
+        help="Write the full resource-conflict list to this CSV (with --resource-conflicts).",
+    )
+    ap.add_argument(
+        "--exclude",
+        nargs="*",
+        default=[],
+        help="Name patterns (glob) to skip in --check-conflicts/--cell-map/"
+        "--resource-conflicts scans, e.g. 's3lightfixes*' '*delta*' '*grass*'.",
+    )
+    ap.add_argument(
+        "--conflicts-subset-only",
+        action="store_true",
+        help="With --check-conflicts, report only conflicts that involve YOUR custom "
+        "mods (skip base-list vs base-list conflicts).",
+    )
+    ap.add_argument(
+        "--trace",
+        nargs="?",
+        const=True,
+        default=None,
+        metavar="LOGFILE",
+        help="Write a debug trace log for troubleshooting (off by default). Use --trace "
+        "for the default log (mlox_subset_sort_trace.log), or --trace PATH to choose "
+        "the file.",
+    )
+    ap.add_argument(
+        "--json-dump-dir",
+        type=Path,
+        help="When using tes3conv for --check-conflicts/--cell-map, write (and KEEP) the "
+        "per-plugin JSON conversions in this folder. tes3conv output is always spooled "
+        "to disk and read one plugin at a time (bounded memory); by default that spool "
+        "is a temp dir removed on exit -- give this to keep it (or to reuse it).",
+    )
     return ap
 
 
@@ -4415,10 +2899,10 @@ def all_scan_dirs(data_order, raw_toml_data_inserts=None, data_inserts=None):
     tools until AFTER the cfg has been written, which defeats the point of
     checking them before committing to an order. (Pending dirs are appended
     after the cfg dirs; that matches where they'd typically land.)"""
-    dirs = [v for v in (extract_data_path_value(l) for l in (data_order or [])) if v]
+    dirs = [v for v in (extract_data_path_value(line) for line in (data_order or [])) if v]
     seen = {str(d).lower() for d in dirs}
     for src in (data_inserts, raw_toml_data_inserts):
-        for d in (src or []):
+        for d in src or []:
             v = d.get("value")
             if v and str(v).lower() not in seen:
                 seen.add(str(v).lower())
@@ -4431,7 +2915,7 @@ def pending_custom_dirs(raw_toml_data_inserts=None, data_inserts=None):
     -- used to flag which side of a conflict is YOUR mod."""
     out, seen = [], set()
     for src in (data_inserts, raw_toml_data_inserts):
-        for d in (src or []):
+        for d in src or []:
             v = d.get("value")
             if v and str(v).lower() not in seen:
                 seen.add(str(v).lower())
@@ -4452,30 +2936,44 @@ def compute_plan(args) -> dict:
         _section("SCANNING MODS FOLDER")
         scan_mod_directories(args.scan_dir, args.subset_file)
 
-    if (not args.customizations and not args.subset and not args.subset_file
-            and not getattr(args, "subset_lines", None)):
-        raise SystemExit("Provide --customizations, --subset, --subset-file, or --scan-dir so there's something to sort.")
+    if (
+        not args.customizations
+        and not args.subset
+        and not args.subset_file
+        and not getattr(args, "subset_lines", None)
+    ):
+        raise SystemExit(
+            "Provide --customizations, --subset, --subset-file, or --scan-dir so there's something to sort."
+        )
 
     _section("READING INPUT")
 
     subset = list(args.subset)
     data_inserts = []
-    raw_toml_data_inserts = []  # captured regardless of --sort-data-paths, for --emit-toml passthrough
+    raw_toml_data_inserts = (
+        []
+    )  # captured regardless of --sort-data-paths, for --emit-toml passthrough
     original_content_values = {}
     original_toml_data = {}
     replace_dest_names = set()
-    subset_origins = {}  # {plugin_name_lower: "where this came from"} -- for check_predicates' warnings
+    subset_origins = (
+        {}
+    )  # {plugin_name_lower: "where this came from"} -- for check_predicates' warnings
 
     if args.subset_file:
         file_plugins, file_data_inserts = extract_subset_from_subset_file(args.subset_file)
         subset.extend(file_plugins)
         raw_toml_data_inserts.extend(file_data_inserts)
-        print(f"  {args.subset_file}: {len(file_plugins)} plugin(s), {len(file_data_inserts)} data path(s)")
+        print(
+            f"  {args.subset_file}: {len(file_plugins)} plugin(s), {len(file_data_inserts)} data path(s)"
+        )
         if args.sort_data_paths:
             data_inserts.extend(file_data_inserts)
         elif file_data_inserts:
-            print(f"  NOTE: data path insertions found but not sorted (pass --sort-data-paths to "
-                  f"include them): {', '.join(d['value'] for d in file_data_inserts)}")
+            print(
+                f"  NOTE: data path insertions found but not sorted (pass --sort-data-paths to "
+                f"include them): {', '.join(d['value'] for d in file_data_inserts)}"
+            )
         for name in file_plugins:
             original_content_values.setdefault(name, name)
             subset_origins.setdefault(name.lower(), f"subset file ({args.subset_file.name})")
@@ -4483,41 +2981,54 @@ def compute_plan(args) -> dict:
     # In-memory subset lines (e.g. a GUI 'scan into memory' with no file saved).
     # Classified exactly like a plain-text subset file, just never written out.
     if getattr(args, "subset_lines", None):
-        mem_plugins, mem_data_inserts = extract_subset_from_lines(args.subset_lines, source="scanned subset")
+        mem_plugins, mem_data_inserts = extract_subset_from_lines(
+            args.subset_lines, source="scanned subset"
+        )
         subset.extend(mem_plugins)
         raw_toml_data_inserts.extend(mem_data_inserts)
-        print(f"  in-memory scan: {len(mem_plugins)} plugin(s), {len(mem_data_inserts)} data path(s)")
+        print(
+            f"  in-memory scan: {len(mem_plugins)} plugin(s), {len(mem_data_inserts)} data path(s)"
+        )
         if args.sort_data_paths:
             data_inserts.extend(mem_data_inserts)
         elif mem_data_inserts:
-            print(f"  NOTE: data path insertions found but not sorted (pass --sort-data-paths to "
-                  f"include them): {len(mem_data_inserts)} path(s)")
+            print(
+                f"  NOTE: data path insertions found but not sorted (pass --sort-data-paths to "
+                f"include them): {len(mem_data_inserts)} path(s)"
+            )
         for name in mem_plugins:
             original_content_values.setdefault(name, name)
             subset_origins.setdefault(name.lower(), "scanned subset (in memory)")
 
     if args.customizations:
-        toml_subset, toml_data_inserts, replace_dest_names, subset_listnames = \
+        toml_subset, toml_data_inserts, replace_dest_names, subset_listnames = (
             extract_subset_from_toml(args.customizations)
+        )
         subset.extend(toml_subset)
         raw_toml_data_inserts.extend(toml_data_inserts)
-        print(f"  {args.customizations}: {len(toml_subset)} content plugin(s), "
-              f"{len(toml_data_inserts)} data path(s)")
+        print(
+            f"  {args.customizations}: {len(toml_subset)} content plugin(s), "
+            f"{len(toml_data_inserts)} data path(s)"
+        )
         if args.sort_data_paths:
             data_inserts.extend(toml_data_inserts)
         elif toml_data_inserts:
-            print(f"  NOTE: data path insertions found but not sorted (pass --sort-data-paths to "
-                  f"include them): {', '.join(d['value'] for d in toml_data_inserts)}")
+            print(
+                f"  NOTE: data path insertions found but not sorted (pass --sort-data-paths to "
+                f"include them): {', '.join(d['value'] for d in toml_data_inserts)}"
+            )
         for name in toml_subset:
             original_content_values[name] = name
             listname = subset_listnames.get(name)
-            subset_origins[name.lower()] = f"customizations.toml -> '{listname}'" if listname else "customizations.toml"
+            subset_origins[name.lower()] = (
+                f"customizations.toml -> '{listname}'" if listname else "customizations.toml"
+            )
         if args.emit_toml:
             try:
                 import tomllib
             except ModuleNotFoundError:
                 import tomli as tomllib  # type: ignore
-            original_toml_data = tomllib.loads(args.customizations.read_text(encoding="utf-8"))
+            original_toml_data = tomllib.loads(read_toml_text(args.customizations))
 
     # de-dupe case-insensitively, PRESERVING declaration order (scan order /
     # the order written in the subset file or TOML). Unconstrained mods keep
@@ -4533,7 +3044,7 @@ def compute_plan(args) -> dict:
     final_order = None
     data_result = None
     predicate_warnings = []
-    custom_anchors = {}   # {custom_lower: (how, anchor_name)} from build_and_sort
+    custom_anchors = {}  # {custom_lower: (how, anchor_name)} from build_and_sort
 
     # --- plugin-order.yml: curated-vs-custom split (opt-in) -----------------
     # With a --list-name, curated plugins (those the yml says belong to that
@@ -4542,7 +3053,9 @@ def compute_plan(args) -> dict:
     # sort. Everything here is guarded; a missing/garbled yml just skips the
     # feature rather than failing the run.
     yml_entries, curated_set, curated_order, yml_warnings = [], set(), [], []
-    declared_lower = {s.lower() for s in subset}  # everything you declared, pre-split (for orphan check)
+    declared_lower = {
+        s.lower() for s in subset
+    }  # everything you declared, pre-split (for orphan check)
     plugin_order_yml = getattr(args, "plugin_order_yml", None)
     list_name = getattr(args, "list_name", None)
     if plugin_order_yml:
@@ -4554,23 +3067,30 @@ def compute_plan(args) -> dict:
             print(f"  WARNING: could not read plugin-order.yml ({e}) -- skipping yml checks.")
             yml_entries = []
         if yml_entries and not list_name:
-            print("  NOTE: no list name given -- can't separate curated-list plugins from your "
-                  "custom ones, so curated/redundant/orphan/order checks are skipped "
-                  "(needs-cleaning notes still work).")
+            print(
+                "  NOTE: no list name given -- can't separate curated-list plugins from your "
+                "custom ones, so curated/redundant/orphan/order checks are skipped "
+                "(needs-cleaning notes still work)."
+            )
         if yml_entries and list_name:
             curated_set, curated_order = curated_for_list(yml_entries, list_name)
             print(f"  '{list_name}': {len(curated_set)} curated plugin(s) on this list")
             if not curated_set:
-                print(f"  WARNING: no plugins found for list '{list_name}' in the yml -- check the "
-                      f"list name spelling. Curated-set checks skipped.")
+                print(
+                    f"  WARNING: no plugins found for list '{list_name}' in the yml -- check the "
+                    f"list name spelling. Curated-set checks skipped."
+                )
             redundant = [s for s in subset if s.lower() in curated_set]
             if redundant:
                 subset = [s for s in subset if s.lower() not in curated_set]
-                for r in redundant:
-                    yml_warnings.append(
-                        f"[REDUNDANT] '{r}' is already part of the '{list_name}' list -- not sorting "
-                        f"it (leaving it to the curated list / configurator).")
-                print(f"  Excluded {len(redundant)} curated plugin(s) from the sort: {', '.join(redundant)}")
+                yml_warnings.extend(
+                    f"[REDUNDANT] '{r}' is already part of the '{list_name}' list -- not "
+                    f"sorting it (leaving it to the curated list / configurator)."
+                    for r in redundant
+                )
+                print(
+                    f"  Excluded {len(redundant)} curated plugin(s) from the sort: {', '.join(redundant)}"
+                )
 
     if subset:
         _section(f"SORTING {len(subset)} PLUGIN(S)")
@@ -4580,14 +3100,16 @@ def compute_plan(args) -> dict:
         already_present = [s for s in subset if s.lower() in base_lower]
         new_plugins = [s for s in subset if s.lower() not in base_lower]
         if already_present:
-            print(f"\n  Already in cfg, will be repositioned within it: {', '.join(already_present)}")
+            print(
+                f"\n  Already in cfg, will be repositioned within it: {', '.join(already_present)}"
+            )
         if new_plugins:
             print(f"  Not in cfg yet, will be inserted: {', '.join(new_plugins)}")
 
         _subsection("loading mlox rules")
         rule_blocks, nearstart_pats, nearend_pats = load_rule_blocks(args.rules)
 
-        sort_trace_begin()   # fresh, dedicated sort log for this sort's play-by-play
+        sort_trace_begin()  # fresh, dedicated sort log for this sort's play-by-play
 
         # header-master dependencies for the custom plugins (best-effort: needs
         # the mod files reachable via the cfg's data= folders). These force each
@@ -4601,33 +3123,49 @@ def compute_plan(args) -> dict:
             # dirs -- so without these their headers can't be read).
             sort_dirs = all_scan_dirs(data_order, raw_toml_data_inserts, data_inserts)
             sort_index = PluginFileIndex(sort_dirs)
-            trace_sort(f"[sort] header-master read: searching {len(sort_dirs)} data folder(s) for "
-                  f"{len(subset)} custom plugin(s)")
+            trace_sort(
+                f"[sort] header-master read: searching {len(sort_dirs)} data folder(s) for "
+                f"{len(subset)} custom plugin(s)"
+            )
             _not_found = 0
             for name in subset:
                 p = sort_index.find(name)
                 if p is None:
                     _not_found += 1
-                    trace_sort(f"[sort]  '{name}': file NOT found in data folders -- masters unknown")
+                    trace_sort(
+                        f"[sort]  '{name}': file NOT found in data folders -- masters unknown"
+                    )
                     continue
                 ms = read_plugin_masters(p)
                 trace_sort(f"[sort]  '{name}': {len(ms)} master(s) {ms}  ({p})")
                 if ms:
                     masters[name.lower()] = ms
             if _not_found:
-                trace_sort(f"[sort] header-master read: {_not_found} custom file(s) not found in any "
-                      f"data folder")
+                trace_sort(
+                    f"[sort] header-master read: {_not_found} custom file(s) not found in any "
+                    f"data folder"
+                )
             if masters:
-                print(f"  Read header masters for {len(masters)} of {len(subset)} custom plugin(s).")
+                print(
+                    f"  Read header masters for {len(masters)} of {len(subset)} custom plugin(s)."
+                )
             else:
-                print("  (No header masters read -- mod files not reachable from the cfg's data= "
-                      "folders, so ordering uses mlox rules + ESM-first only.)")
+                print(
+                    "  (No header masters read -- mod files not reachable from the cfg's data= "
+                    "folders, so ordering uses mlox rules + ESM-first only.)"
+                )
         except Exception:
             masters = {}
 
-        final_order = build_and_sort(base_order_names, subset, rule_blocks, masters=masters,
-                                     nearstart=nearstart_pats, nearend=nearend_pats,
-                                     anchor_out=custom_anchors)
+        final_order = build_and_sort(
+            base_order_names,
+            subset,
+            rule_blocks,
+            masters=masters,
+            nearstart=nearstart_pats,
+            nearend=nearend_pats,
+            anchor_out=custom_anchors,
+        )
 
         # Drift check: the CURATED (non-custom) plugins must keep their exact cfg
         # order. Customs that were already in the cfg are expected to move, so
@@ -4635,10 +3173,14 @@ def compute_plan(args) -> dict:
         subset_lower_chk = {s.lower() for s in subset}
         frozen_before = [n for n in base_order_names if n.lower() not in subset_lower_chk]
         base_set = set(base_order_names)
-        frozen_after = [n for n in final_order if n in base_set and n.lower() not in subset_lower_chk]
+        frozen_after = [
+            n for n in final_order if n in base_set and n.lower() not in subset_lower_chk
+        ]
         if frozen_before != frozen_after:
-            print("\n  INTERNAL WARNING: curated (frozen) order drifted -- this shouldn't happen. "
-                  "Please double check the output before using it.")
+            print(
+                "\n  INTERNAL WARNING: curated (frozen) order drifted -- this shouldn't happen. "
+                "Please double check the output before using it."
+            )
 
         _subsection("final content= order")
         subset_lower = {s.lower() for s in subset}
@@ -4648,11 +3190,16 @@ def compute_plan(args) -> dict:
 
         if not args.no_predicate_warnings:
             rules_raw_text = load_rules_raw_text(args.rules)
-            pred_data_dirs = [v for v in (extract_data_path_value(l) for l in data_order) if v]
-            predicate_warnings = check_predicates(rules_raw_text, final_order, subset_origins,
-                                                  data_dirs=pred_data_dirs)
+            pred_data_dirs = [
+                v for v in (extract_data_path_value(line) for line in data_order) if v
+            ]
+            predicate_warnings = check_predicates(
+                rules_raw_text, final_order, subset_origins, data_dirs=pred_data_dirs
+            )
             if predicate_warnings:
-                _section(f"{len(predicate_warnings)} MLOX RULE WARNING(S) -- read-only, not enforced")
+                _section(
+                    f"{len(predicate_warnings)} MLOX RULE WARNING(S) -- read-only, not enforced"
+                )
                 for w in predicate_warnings:
                     print(f"\n{w}")
             else:
@@ -4662,16 +3209,20 @@ def compute_plan(args) -> dict:
     if yml_entries:
         active = final_order if final_order else base_order_names
         nc_set = needs_cleaning_set(yml_entries)
-        for n in active:
-            if n.lower() in nc_set:
-                yml_warnings.append(f"[NEEDS CLEANING] '{n}' should be cleaned with TES3CMD "
-                                    f"(flagged in plugin-order.yml).")
+        yml_warnings.extend(
+            f"[NEEDS CLEANING] '{n}' should be cleaned with TES3CMD "
+            f"(flagged in plugin-order.yml)."
+            for n in active
+            if n.lower() in nc_set
+        )
         if list_name and curated_set:
-            for n in base_order_names:
-                if n.lower() not in curated_set and n.lower() not in declared_lower:
-                    yml_warnings.append(
-                        f"[ORPHAN] '{n}' is in your cfg but not on the '{list_name}' list and not in "
-                        f"your customizations -- an unmanaged custom plugin (fine if intentional).")
+            yml_warnings.extend(
+                f"[ORPHAN] '{n}' is in your cfg but not on the '{list_name}' list and "
+                f"not in your customizations -- an unmanaged custom plugin (fine if "
+                f"intentional)."
+                for n in base_order_names
+                if n.lower() not in curated_set and n.lower() not in declared_lower
+            )
             yml_warnings.extend(base_order_matches_yml(base_order_names, curated_order))
         if yml_warnings:
             _section(f"{len(yml_warnings)} PLUGIN-ORDER.YML WARNING(S) -- read-only, not enforced")
@@ -4692,7 +3243,8 @@ def compute_plan(args) -> dict:
         _active_for_masters = final_order if final_order else base_order_names
         _mindex = PluginFileIndex(all_scan_dirs(data_order, raw_toml_data_inserts, data_inserts))
         _missing, _order_problems, _size_notes, _checked, _problem_names = check_missing_masters(
-            _active_for_masters, _mindex, subset_origins)
+            _active_for_masters, _mindex, subset_origins
+        )
         master_problem_plugins = sorted(_problem_names, key=str.lower)
         if _checked == 0:
             _section("MASTER CHECK -- skipped")
@@ -4700,8 +3252,10 @@ def compute_plan(args) -> dict:
         else:
             master_warnings = _missing + _order_problems
             n_issues = len(_missing) + len(_order_problems)
-            _section(f"MASTER CHECK -- {_checked} plugin(s) read, "
-                     f"{n_issues} problem(s), {len(_size_notes)} size note(s)")
+            _section(
+                f"MASTER CHECK -- {_checked} plugin(s) read, "
+                f"{n_issues} problem(s), {len(_size_notes)} size note(s)"
+            )
             for w in _missing:
                 print(f"\n{w}")
             for w in _order_problems:
@@ -4722,8 +3276,11 @@ def compute_plan(args) -> dict:
     try:
         _active_ws = final_order if final_order else base_order_names
         _widx = PluginFileIndex(all_scan_dirs(data_order, raw_toml_data_inserts, data_inserts))
-        for _artifact in ("delta-merged.omwaddon", "deleted_groundcover.omwaddon",
-                          "S3LightFixes.esp"):
+        for _artifact in (
+            "delta-merged.omwaddon",
+            "deleted_groundcover.omwaddon",
+            "S3LightFixes.esp",
+        ):
             _ap = _widx.find(_artifact)
             if _ap is None or _artifact.lower() not in {n.lower() for n in _active_ws}:
                 continue
@@ -4739,9 +3296,11 @@ def compute_plan(args) -> dict:
                 except OSError:
                     pass
             if _newer:
-                print(f"\n[STALE] '{_artifact}' is older than {len(_newer)} active plugin(s) "
-                      f"(e.g. {', '.join(_newer[:3])}{', ...' if len(_newer) > 3 else ''}) -- "
-                      f"re-run momw-configurator so it gets rebuilt against the current load order.")
+                print(
+                    f"\n[STALE] '{_artifact}' is older than {len(_newer)} active plugin(s) "
+                    f"(e.g. {', '.join(_newer[:3])}{', ...' if len(_newer) > 3 else ''}) -- "
+                    f"re-run momw-configurator so it gets rebuilt against the current load order."
+                )
     except Exception:
         pass
 
@@ -4759,21 +3318,35 @@ def compute_plan(args) -> dict:
         if _excl:
             print(f"  (excluded {len(_excl)} plugin(s) by --exclude)")
         cindex = PluginFileIndex(conf_dirs)
-        conv = find_tes3conv(explicit=getattr(args, "tes3conv", None),
-                             extra_dirs=[str(args.cfg.parent) if args.cfg else None])
+        conv = find_tes3conv(
+            explicit=getattr(args, "tes3conv", None),
+            extra_dirs=[str(args.cfg.parent) if args.cfg else None],
+        )
         _dump = getattr(args, "json_dump_dir", None)
-        csession = (Tes3ConvSession(conv, dump_dir=str(_dump) if _dump else None, keep=bool(_dump))
-                    if conv else None)          # disk-backed, shared across both scans
+        csession = (
+            Tes3ConvSession(conv, dump_dir=str(_dump) if _dump else None, keep=bool(_dump))
+            if conv
+            else None
+        )  # disk-backed, shared across both scans
         if csession and _dump:
             print(f"  Keeping tes3conv JSON dump in: {csession.dumped_dir()}")
 
         if want_conflicts:
             _section("TES3 RECORD CONFLICTS (read-only)")
-            print(f"  Engine: {'tes3conv (' + conv + ')' if conv else 'built-in parser (record-level)'}")
-            conflicts, cstats = detect_conflicts(active, cindex, subset_names=subset, session=csession)
-            print(format_conflict_report(conflicts, cstats,
-                                         subset_only=getattr(args, "conflicts_subset_only", False),
-                                         limit=200))
+            print(
+                f"  Engine: {'tes3conv (' + conv + ')' if conv else 'built-in parser (record-level)'}"
+            )
+            conflicts, cstats = detect_conflicts(
+                active, cindex, subset_names=subset, session=csession
+            )
+            print(
+                format_conflict_report(
+                    conflicts,
+                    cstats,
+                    subset_only=getattr(args, "conflicts_subset_only", False),
+                    limit=200,
+                )
+            )
             out = getattr(args, "conflicts_out", None)
             if out and conflicts:
                 try:
@@ -4787,14 +3360,16 @@ def compute_plan(args) -> dict:
             cov = build_cell_coverage(active, cindex, subset_names=subset, session=csession)
             try:
                 Path(cell_map_out).write_text(generate_cell_map_html(cov), encoding="utf-8")
-                print(f"  Scanned {cov['scanned']} plugin(s): {len(cov['exterior'])} exterior + "
-                      f"{len(cov['interior'])} interior cell(s) touched.")
+                print(
+                    f"  Scanned {cov['scanned']} plugin(s): {len(cov['exterior'])} exterior + "
+                    f"{len(cov['interior'])} interior cell(s) touched."
+                )
                 print(f"  Wrote cell map: {cell_map_out}  (open it in a browser)")
             except OSError as e:
                 print(f"  WARNING: could not write cell map: {e}", file=sys.stderr)
 
         if csession is not None:
-            csession.cleanup()   # drop the temp JSON spool (no-op if --json-dump-dir kept it)
+            csession.cleanup()  # drop the temp JSON spool (no-op if --json-dump-dir kept it)
 
     if getattr(args, "lint", False):
         _section("LINT (tes3lint-style checks, read-only)")
@@ -4802,11 +3377,14 @@ def compute_plan(args) -> dict:
         _lactive, _lexcl = filter_plugins(_lactive, getattr(args, "exclude", None))
         if _lexcl:
             print(f"  (excluded {len(_lexcl)} plugin(s) by --exclude)")
-        _lw, _ls = lint_plugins(_lactive, PluginFileIndex(conf_dirs),
-                                subset_names=subset, origins=subset_origins)
-        print(f"  Scanned {_ls.get('scanned', 0)} plugin(s); "
-              f"{_ls.get('interior_cells', 0)} interior cell(s), "
-              f"{_ls.get('pathgrids', 0)} interior pathgrid(s).")
+        _lw, _ls = lint_plugins(
+            _lactive, PluginFileIndex(conf_dirs), subset_names=subset, origins=subset_origins
+        )
+        print(
+            f"  Scanned {_ls.get('scanned', 0)} plugin(s); "
+            f"{_ls.get('interior_cells', 0)} interior cell(s), "
+            f"{_ls.get('pathgrids', 0)} interior pathgrid(s)."
+        )
         for _w in _lw:
             print(f"\n{_w}")
         if not _lw:
@@ -4835,7 +3413,11 @@ def compute_plan(args) -> dict:
         _section(f"SORTING {len(data_inserts)} DATA PATH(S)")
         infer_data_path_anchors(data_inserts, data_order, final_order, args.cfg)
         for d in data_inserts:
-            anchor = d.get("after") and f"after '{d['after']}'" or d.get("before") and f"before '{d['before']}'" or "no anchor"
+            anchor = (
+                (d.get("after") and f"after '{d['after']}'")
+                or (d.get("before") and f"before '{d['before']}'")
+                or "no anchor"
+            )
             print(f"  {d['value']}  ({anchor})")
         data_result = insert_data_paths(data_order, data_inserts)
         _subsection("final data= order")
@@ -4872,8 +3454,14 @@ def compute_plan(args) -> dict:
     }
 
 
-def write_plan(args, plan: dict, final_order: list = None, data_order: list = None,
-               disabled_plugins=None, disabled_data=None) -> dict:
+def write_plan(
+    args,
+    plan: dict,
+    final_order: list | None = None,
+    data_order: list | None = None,
+    disabled_plugins=None,
+    disabled_data=None,
+) -> dict:
     """
     The "write it out" half of a run. Uses plan["final_order"]/plan["data_result"]
     (what mlox/anchoring computed) unless a caller passes its own final_order
@@ -4905,11 +3493,13 @@ def write_plan(args, plan: dict, final_order: list = None, data_order: list = No
     # so it needs no removeContent/removeData).
     base_lower = {n.lower() for n in (plan.get("base_order_names") or [])}
     remove_content = sorted({p for p in (disabled_plugins or []) if p.lower() in base_lower})
-    base_data_norms = {normalize_data_path(extract_data_path_value(l))
-                       for l in (plan.get("data_order") or [])}
+    base_data_norms = {
+        normalize_data_path(extract_data_path_value(line))
+        for line in (plan.get("data_order") or [])
+    }
     base_data_norms.discard("")
     remove_data = []
-    for line in (disabled_data or []):
+    for line in disabled_data or []:
         val = extract_data_path_value(line) or line
         if normalize_data_path(val) in base_data_norms:
             remove_data.append(val)
@@ -4936,7 +3526,9 @@ def write_plan(args, plan: dict, final_order: list = None, data_order: list = No
         for n in final_order:
             print(f"  content={n}")
 
-    if data_result is not None and [l for l, _, _ in data_result] != [l for l, _, _ in (plan["data_result"] or [])]:
+    if data_result is not None and [line for line, _, _ in data_result] != [
+        line for line, _, _ in (plan["data_result"] or [])
+    ]:
         _subsection("data= order being exported (manually adjusted)")
         for line, _, _ in data_result:
             print(f"  {line}")
@@ -4969,12 +3561,19 @@ def write_plan(args, plan: dict, final_order: list = None, data_order: list = No
         # apply logic and verify the result reproduces the sorted order.
         _subsection("configurator preview (simulated apply)")
         try:
-            _user_norms = [normalize_data_path(d["value"]) for d in (plan["data_inserts"] or [])
-                           if d.get("value")]
+            _user_norms = [
+                normalize_data_path(d["value"])
+                for d in (plan["data_inserts"] or [])
+                if d.get("value")
+            ]
             _ok, _rep = preview_configurator_result(
-                plan["lines"], toml_text, list(final_order or []),
-                subset, user_data_norms=_user_norms,
-                list_name=getattr(args, "list_name", None))
+                plan["lines"],
+                toml_text,
+                list(final_order or []),
+                subset,
+                user_data_norms=_user_norms,
+                list_name=getattr(args, "list_name", None),
+            )
             for _l in _rep:
                 print(_l)
         except Exception as _e:
@@ -4988,8 +3587,10 @@ def write_plan(args, plan: dict, final_order: list = None, data_order: list = No
             wrote_toml = True
 
     if not args.write_cfg and not args.emit_toml:
-        print("\n  NOTE: nothing was written -- this was a preview. "
-              "Pass --write-cfg and/or --emit-toml to save the result.")
+        print(
+            "\n  NOTE: nothing was written -- this was a preview. "
+            "Pass --write-cfg and/or --emit-toml to save the result."
+        )
 
     _section("SUMMARY")
     print(f"  Plugins sorted:        {len(subset)}")

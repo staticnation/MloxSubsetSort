@@ -1,5 +1,109 @@
 # Changelog
 
+## 3.0
+
+### Changed
+
+- **The theme picker now themes the whole GUI, live** (task #43). What was a
+  log-panel-only syntax setting now drives an app-wide chrome palette:
+  window, buttons, frames, tabs, entries, lists, scrollbars, tooltips,
+  pane-divider grips and console-style panes all follow the selected theme,
+  and switching it re-themes every open window immediately (a ttk.Style
+  re-configure for the ~160 ttk widgets, plus a recursive walk over the live
+  widget tree for the plain-tk remainder). Built-in presets carry hand-tuned
+  chrome from each scheme's published UI palette; base16 imports take theirs
+  from the base00–base04 UI slots; native-JSON imports may supply an optional
+  `"chrome"` object — and any chrome colour not given explicitly is derived
+  from the theme's background (lightening dark themes, darkening light ones),
+  so every existing imported theme keeps working unchanged. With the default
+  theme the GUI looks as it always has.
+
+### Fixed
+
+- **`[SIZE]` and `[DESC]` rules no longer assert a match for plugins that are
+  not on disk.** These predicates fall back to "assume true" when the plugin
+  cannot be inspected -- mlox does the same, deliberately, to avoid raising a
+  warning it cannot substantiate. But mlox gates that on having *no data
+  directory at all* (`self.datadir is None` in its `ruleParser`), whereas this
+  tool applied it whenever an individual plugin was not found.
+
+  With readable mod folders and one missing plugin, every `[SIZE]`/`[DESC]`
+  rule about it therefore claimed a size or description match for a file known
+  not to exist -- which can fire a `[Conflict]` or `[Requires]` warning that
+  is simply wrong. Now distinguished via `PluginFileIndex.usable`.
+
+  The bug survived earlier audits because `testdata/` has no `data=`
+  directories, so the index is unusable there and the old behaviour was
+  correct. It is now covered by four tests, including the readable-directory
+  case that reproduces it.
+
+### Documentation
+
+- The field-diff tree has a tooltip: double-clicking is now discoverable, and
+  it says which fields are decoded (`bytecode`, `variables`) rather than shown
+  raw.
+- The **Check Conflicts** tooltip mentions script disassembly, which it
+  predated.
+
+### Internal
+
+- **PEP conformance is verified rather than asserted.** `tests/test_standards.py`
+  mechanically checks 15 PEPs that define a standard for this codebase -- PEP 8
+  (now including **naming** and **import order**, which were never enforced),
+  257, 484/526, 563, 585/604, 3120, 263, 3131, 328, 440, 621, 561, 594, 632,
+  394, 518/517, 508, 420. Enabling the missing ruff rulesets found 18 issues.
+- **`[project]` metadata and a `[build-system]` table** now exist (PEP 621 /
+  518), with `py.typed` (PEP 561) so a consuming type checker stops silently
+  ignoring the package's annotations.
+- **mypy is clean and now gates.** It found 22 errors when first enabled --
+  every one in a hand-written annotation, including a `Sequence` the body
+  concatenated and an int-typed dict holding floats.
+- **PEP 20**: the one mechanically checkable line ("Errors should never pass
+  silently. Unless explicitly silenced.") is now a test. It found two silent
+  `except: pass` handlers with no stated reason.
+
+- **Compiled scripts are now readable in the field-diff window.** Double-click
+  a `bytecode` field and you get a disassembly -- named instructions with their
+  operands -- instead of a wall of base64. Previously any script edit at all
+  looked like a total rewrite, because the whole blob changed.
+
+  The listing is deliberately honest about its limits. Morrowind's compiler
+  stores expressions (the `x == 1` in an `if`) as semi-textual data rather than
+  opcodes, so no table-driven disassembler can decode a whole script. Anything
+  not recognised is printed verbatim as offset/hex/ASCII and the walker
+  resynchronises on the next known opcode, so it never desyncs and never
+  invents an instruction. A `; decoded: N%` header tells you how much of the
+  stream was accounted for.
+
+  When the record carries its source text, that is used to suppress false
+  positives: an opcode value occurring by chance inside expression data is only
+  decoded if the script really calls that function. On the test corpus this
+  took false positives from 52 to zero.
+
+- **The `variables` field is decoded too.** It carries the script's local
+  variable names under the same base64+zstd wrapping, so the diff previously
+  showed only that the blob differed, never *which* locals changed. It now
+  lists them in declaration order.
+
+  Worth noting how close this came to shipping wrong: the field has a 4-byte
+  length prefix, and a first pass that split straight on NUL produced a junk
+  leading "name" on all 118 corpus scripts -- one variable too many, every
+  time. Checking against the record headers caught it. With the prefix
+  stripped, the body length matches both the prefix value and
+  `header.variables_length`, and the name count matches
+  `num_shorts + num_longs + num_floats`, across all 120 records tested.
+
+- **Opcode table rebuilt from MIT-licensed sources only.** The table is
+  generated from MWEdit's `Functions.dat` by `tools/gen_opcodes.py`, plus one
+  compiler-internal opcode (`_SetReference`) measured from real scripts rather
+  than copied from anyone. An earlier draft merged in MWSE's `OpCodes.h`, which
+  is **GPLv2** -- that data has been removed. See `CODE_REVIEW.md` §10.
+
+- **Attribution corrections.** `tes3cmd` is by John Moonsugar (MIT), not Paul
+  Halliday; `tes3lint`'s evil-GMST table now carries its MIT notice inline; and
+  abot's `missing_pathgrids` / `cell_conflicts` are credited properly, with the
+  note that only their ideas were used, never their code.
+
 ## 2.3
 
 - **Type-to-jump in every list.** Click a list (plugin order, data paths,

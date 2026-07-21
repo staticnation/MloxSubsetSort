@@ -516,3 +516,145 @@ def test_requires_python_matches_the_running_interpreter() -> None:
     assert (
         sys.version_info[: len(floor)] >= floor
     ), f"running {sys.version_info[:2]} but requires-python is {requires}"
+
+
+class TestNoReExportShim:
+    """The engine must not stand in front of ``mlox_subset/``.
+
+    Until 3.0, ``mlox_subset_sort.py`` imported 36 names purely so that
+    ``core.<name>`` resolved for the GUI and the tests -- a second import path
+    for names it never called (``CODE_REVIEW.md`` §23). These two assertions
+    are the invariant that keeps it gone. Either one alone can be satisfied by
+    a shim creeping back, which is why both are here.
+    """
+
+    @staticmethod
+    def _engine_imports() -> dict[str, str]:
+        """Map every name the engine imports from ``mlox_subset/`` to its module.
+
+        Returns:
+            ``{bound_name: source_module}``, using the bound (possibly aliased)
+            name, since that is what a ``core.<name>`` reference would resolve.
+        """
+        tree = ast.parse((PROJECT_ROOT / "mlox_subset_sort.py").read_text(encoding="utf-8"))
+        return {
+            alias.asname or alias.name: node.module or ""
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("mlox_subset")
+            for alias in node.names
+        }
+
+    def test_no_caller_reaches_a_library_name_through_the_engine(self) -> None:
+        """``core.<name>`` must never resolve to something the engine imported.
+
+        Reaching ``core.build_and_sort`` instead of
+        ``mlox_subset.sort.build_and_sort`` is the shim: two obvious ways to
+        one function. ``core.<name>`` for a name the engine *defines* is fine
+        and common -- that is the GUI calling the engine.
+        """
+        imported = self._engine_imports()
+        offenders: dict[str, set[str]] = {}
+        for path in PROJECT_ROOT.rglob("*.py"):
+            if any(part in {"build", ".git"} or part.endswith(".egg-info") for part in path.parts):
+                continue
+            # This file states the rule, so it necessarily names the pattern it
+            # forbids ("core.build_and_sort") in its own docstrings.
+            if path.name == "test_standards.py":
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for match in re.finditer(r"\bcore\.([A-Za-z_]\w*)", text):
+                if match.group(1) in imported:
+                    offenders.setdefault(str(path.relative_to(PROJECT_ROOT)), set()).add(
+                        match.group(1)
+                    )
+        assert not offenders, (
+            "these call sites reach a mlox_subset name through the engine; import it "
+            f"from its own module instead: { {k: sorted(v) for k, v in offenders.items()} }"
+        )
+
+    def test_every_engine_import_is_actually_used(self) -> None:
+        """No import in the engine exists only to be re-exported.
+
+        This is what ``F401`` enforces in ``pyproject.toml``; asserting it here
+        too means the guarantee survives someone re-adding the per-file
+        exemption, which is exactly how the shim arrived the first time.
+        """
+        source = (PROJECT_ROOT / "mlox_subset_sort.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        spans = {
+            line
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("mlox_subset")
+            for line in range(node.lineno, node.end_lineno + 1)
+        }
+        body = "\n".join(
+            line for number, line in enumerate(source.splitlines(), 1) if number not in spans
+        )
+        body_tree = ast.parse(body)
+        mentioned = {n.id for n in ast.walk(body_tree) if isinstance(n, ast.Name)}
+        mentioned |= {n.attr for n in ast.walk(body_tree) if isinstance(n, ast.Attribute)}
+        mentioned |= set(re.findall(r"[\"']([A-Za-z_]\w*)[\"']", body))
+        unused = sorted(name for name in self._engine_imports() if name not in mentioned)
+        assert not unused, (
+            "the engine imports these but never uses them -- they are re-exports, "
+            f"which is the shim §23 removed: {unused}"
+        )
+
+
+def test_gettext_marker_is_never_shadowed_by_unpacking() -> None:
+    """No module rebinds ``_`` when ``_`` is its gettext marker.
+
+    ``_, rest = f()`` is idiomatic Python for "ignore the first value", and it
+    is a live bug in any module that imports ``_`` from ``mlox_subset``: it
+    rebinds the translation function to whatever was discarded, and every
+    later ``_("...")`` in that scope raises ``TypeError``.
+
+    This has cost two debugging rounds -- once in the sort engine (fixed by
+    renaming to ``_rank``) and once in the path-grid renderer -- which is why
+    it is pinned rather than left to review. Ruff cannot catch it: it has no
+    reason to believe ``_`` means anything in particular.
+    """
+    offenders: list[str] = []
+    for path in PROJECT_ROOT.rglob("*.py"):
+        if any(part in {"build", ".git"} or part.endswith(".egg-info") for part in path.parts):
+            continue
+        source = path.read_text(encoding="utf-8", errors="ignore")
+        tree = ast.parse(source)
+        imports_marker = any(
+            isinstance(node, ast.ImportFrom)
+            and (node.module or "").startswith("mlox_subset")
+            and any(alias.asname or alias.name == "_" for alias in node.names if alias.name == "_")
+            for node in ast.walk(tree)
+        )
+        if not imports_marker:
+            continue
+        for node in ast.walk(tree):
+            targets: list[ast.expr] = []
+            if isinstance(node, ast.Assign):
+                targets = list(node.targets)
+            elif isinstance(node, ast.For):
+                targets = [node.target]
+            elif isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+                # A comprehension has its own scope, so `[x for _, x in ys]`
+                # does NOT leak `_` to the enclosing function -- that idiom is
+                # used seven times in this codebase and is correct. It is only
+                # a bug when the comprehension itself calls `_()`, where the
+                # shadowed name is the one in scope.
+                calls_marker = any(
+                    isinstance(inner, ast.Call)
+                    and isinstance(inner.func, ast.Name)
+                    and inner.func.id == "_"
+                    for inner in ast.walk(node)
+                )
+                if calls_marker:
+                    targets = [generator.target for generator in node.generators]
+            offenders.extend(
+                f"{path.relative_to(PROJECT_ROOT)}:{target.lineno}"
+                for target in targets
+                if isinstance(target, ast.Tuple)
+                and any(isinstance(elt, ast.Name) and elt.id == "_" for elt in target.elts)
+            )
+    assert not offenders, (
+        "these sites rebind `_`, which is the gettext marker in their module -- "
+        f"use a named throwaway like `_rank` or `_coords` instead: {offenders}"
+    )

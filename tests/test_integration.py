@@ -24,6 +24,15 @@ from pathlib import Path
 
 import pytest
 
+from mlox_subset.configurator import (
+    cfg_line_value,
+    configurator_remove_matches,
+    extract_data_path_value,
+    normalize_data_path,
+)
+from mlox_subset.rules import load_rule_blocks, pattern_has_meta
+from mlox_subset.sort import build_and_sort, expand_pattern, is_master_file
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 REQUIRED_FILES = ("openmw.cfg", "mlox_base.txt", "mlox_user.txt")
 
@@ -69,23 +78,23 @@ def _silently(func, *args, **kwargs):
 
 
 class TestPathHelpers:
-    def test_normalize_data_path_is_separator_insensitive(self, core):
-        assert core.normalize_data_path(r"E:\Mods\Foo") == core.normalize_data_path("E:/Mods/Foo")
+    def test_normalize_data_path_is_separator_insensitive(self):
+        assert normalize_data_path(r"E:\Mods\Foo") == normalize_data_path("E:/Mods/Foo")
 
-    def test_extract_data_path_value_strips_quotes(self, core):
-        assert core.extract_data_path_value('data="E:/Mods/Foo"') == "E:/Mods/Foo"
+    def test_extract_data_path_value_strips_quotes(self):
+        assert extract_data_path_value('data="E:/Mods/Foo"') == "E:/Mods/Foo"
 
-    def test_cfg_line_value_unquotes(self, core):
-        assert core.cfg_line_value('data="E:/x"') == "E:/x"
-        assert core.cfg_line_value("content=A.esp") == "A.esp"
-        assert core.cfg_line_value("no-equals-here") is None
+    def test_cfg_line_value_unquotes(self):
+        assert cfg_line_value('data="E:/x"') == "E:/x"
+        assert cfg_line_value("content=A.esp") == "A.esp"
+        assert cfg_line_value("no-equals-here") is None
 
-    def test_configurator_remove_matches_mirrors_upstream(self, core):
+    def test_configurator_remove_matches_mirrors_upstream(self):
         # plain names: whole-line substring match (upstream's quirk)
-        assert core.configurator_remove_matches("B.esp", "content=NotB.esp")
+        assert configurator_remove_matches("B.esp", "content=NotB.esp")
         # path-like values: exact / suffix match on the value only
-        assert core.configurator_remove_matches("SomeMod/00 Core", 'data="E:/M/SomeMod/00 Core"')
-        assert not core.configurator_remove_matches("Mod/00 Core", 'data="E:/M/OtherMod/00 Core"')
+        assert configurator_remove_matches("SomeMod/00 Core", 'data="E:/M/SomeMod/00 Core"')
+        assert not configurator_remove_matches("Mod/00 Core", 'data="E:/M/OtherMod/00 Core"')
 
     def test_all_scan_dirs_dedupes_and_orders(self, core):
         dirs = core.all_scan_dirs(
@@ -95,26 +104,26 @@ class TestPathHelpers:
         )
         assert dirs == ["/cfg/a", "/cfg/b", "/pending/y", "/pending/x"]
 
-    def test_pattern_has_meta(self, core):
-        assert core.pattern_has_meta("Wares*.esp")
-        assert core.pattern_has_meta("Mod <VER>.esp")
-        assert not core.pattern_has_meta("Plain.esp")
+    def test_pattern_has_meta(self):
+        assert pattern_has_meta("Wares*.esp")
+        assert pattern_has_meta("Mod <VER>.esp")
+        assert not pattern_has_meta("Plain.esp")
 
     def test_is_master_file(self, core):
-        assert core._is_master_file("X.esm") and core._is_master_file("X.omwgame")
-        assert not core._is_master_file("X.esp")
+        assert is_master_file("X.esm") and is_master_file("X.omwgame")
+        assert not is_master_file("X.esp")
 
 
 class TestExpandPattern:
-    def test_exact_match_is_case_insensitive(self, core):
-        assert core.expand_pattern("a.esp", ["A.esp", "B.esp"]) == ["A.esp"]
+    def test_exact_match_is_case_insensitive(self):
+        assert expand_pattern("a.esp", ["A.esp", "B.esp"]) == ["A.esp"]
 
-    def test_wildcard_expands_to_all_matches(self, core):
+    def test_wildcard_expands_to_all_matches(self):
         pool = ["Wares-base.esm", "Wares_extra.esp", "Other.esp"]
-        assert core.expand_pattern("Wares*", pool) == ["Wares-base.esm", "Wares_extra.esp"]
+        assert expand_pattern("Wares*", pool) == ["Wares-base.esm", "Wares_extra.esp"]
 
-    def test_unmatched_pattern_yields_nothing(self, core):
-        assert core.expand_pattern("Nope*.esp", ["A.esp"]) == []
+    def test_unmatched_pattern_yields_nothing(self):
+        assert expand_pattern("Nope*.esp", ["A.esp"]) == []
 
 
 def _sort_real(core):
@@ -123,8 +132,8 @@ def _sort_real(core):
     def run():
         _lines, _cp, content_order, _dp, _do = core.read_cfg(CFG)
         base = [name for name, _ in content_order]
-        rules, nearstart, nearend = core.load_rule_blocks(RULES)
-        result = core.build_and_sort(base, [], rules, {}, nearstart=nearstart, nearend=nearend)
+        rules, nearstart, nearend = load_rule_blocks(RULES)
+        result = build_and_sort(base, [], rules, {}, nearstart=nearstart, nearend=nearend)
         return base, result, rules
 
     return _silently(run)

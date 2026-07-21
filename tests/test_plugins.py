@@ -21,6 +21,8 @@ from conftest import (
     zstr,
 )
 
+from mlox_subset.plugins import PluginFileIndex
+
 VANILLA = ("Morrowind.esm",)
 
 
@@ -59,7 +61,7 @@ class TestMasterCheck:
             data_dir / "MyMod.esp",
             masters=("Morrowind.esm", "Disabled.esm", "Gone.esm"),
         )
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         missing, order_problems, _sizes, checked, problems = core.check_missing_masters(
             ["Morrowind.esm", "MyMod.esp"], index
@@ -75,7 +77,7 @@ class TestMasterCheck:
     def test_detects_master_loading_after_its_dependent(self, core, data_dir):
         write_plugin(data_dir / "Late.esm")
         write_plugin(data_dir / "Early.esp", masters=("Late.esm",))
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         _missing, order_problems, _sizes, _checked, problems = core.check_missing_masters(
             ["Early.esp", "Late.esm"], index
@@ -89,7 +91,7 @@ class TestMasterCheck:
         """A failed tes3cmd sync writes 0 sizes; that must be called out."""
         master = write_plugin(data_dir / "Morrowind.esm")
         write_plugin(data_dir / "Dep.esp", masters=("Morrowind.esm",), sizes=(0,))
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         _m, _o, size_notes, _c, _p = core.check_missing_masters(["Morrowind.esm", "Dep.esp"], index)
 
@@ -105,7 +107,7 @@ class TestMasterSizeResync:
             data_dir / "Dep.esp", masters=("Morrowind.esm",), sizes=(0,), extra=b"K" * 40
         )
         original = plugin.read_bytes()
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         updated, unresolved, error = core.sync_plugin_master_sizes(plugin, index)
 
@@ -120,7 +122,7 @@ class TestMasterSizeResync:
         write_plugin(data_dir / "Morrowind.esm", extra=b"J" * 500)
         plugin = write_plugin(data_dir / "Dep.esp", masters=("Morrowind.esm",), sizes=(0,))
         original = plugin.read_bytes()
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         core.sync_plugin_master_sizes(plugin, index)
         backup = plugin.with_name(plugin.name + ".masterfix.bak")
@@ -132,7 +134,7 @@ class TestMasterSizeResync:
 
     def test_unresolved_master_is_left_untouched(self, core, data_dir):
         plugin = write_plugin(data_dir / "Dep.esp", masters=("Nowhere.esm",), sizes=(42,))
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         updated, unresolved, error = core.sync_plugin_master_sizes(plugin, index)
 
@@ -153,7 +155,7 @@ class TestLintChecks:
         evil = rec("GMST", sub("NAME", zstr("sProfitValue")) + sub("STRV", b"Profit Value"))
         changed = rec("GMST", sub("NAME", zstr("sDeleteNote")) + sub("STRV", b"My Own Text"))
         write_plugin(data_dir / "Dirty.esp", masters=VANILLA, extra=evil + changed)
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         warnings, _stats = core.lint_plugins(["Dirty.esp"], index, subset_names=["Dirty.esp"])
 
@@ -173,7 +175,7 @@ class TestLintChecks:
             + pathgrid("lit room")
             + pathgrid("openish"),
         )
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         warnings, _ = core.lint_plugins(["Cells.esp"], index, subset_names=["Cells.esp"])
 
@@ -189,7 +191,7 @@ class TestLintChecks:
             extra=interior_cell("shared vault", 0.4) + interior_cell("lonely", 0.4),
         )
         write_plugin(data_dir / "Grid.esp", masters=VANILLA, extra=pathgrid("shared vault"))
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         warnings, _ = core.lint_plugins(
             ["Cell.esp", "Grid.esp"], index, subset_names=["Cell.esp", "Grid.esp"]
@@ -209,7 +211,7 @@ class TestLintChecks:
             masters=("Morrowind.esm", "Bloodmoon.esm"),
             extra=script_record("t", "begin t\nBecomeWerewolf\nend"),
         )
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         warnings, _ = core.lint_plugins(
             ["Wolf.esp", "Ok.esp"], index, subset_names=["Wolf.esp", "Ok.esp"]
@@ -223,7 +225,7 @@ class TestLintChecks:
     def test_scripts_twin_mismatch(self, core, data_dir):
         write_plugin(data_dir / "Twin.omwaddon", masters=VANILLA)
         (data_dir / "Twin.omwscripts").write_text("return {}")
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         warnings, _ = core.lint_plugins(["Twin.omwaddon"], index, subset_names=["Twin.omwaddon"])
 
@@ -233,7 +235,7 @@ class TestLintChecks:
     def test_vanilla_masters_are_skipped(self, core, data_dir):
         evil = rec("GMST", sub("NAME", zstr("sProfitValue")) + sub("STRV", b"Profit Value"))
         write_plugin(data_dir / "Tribunal.esm", extra=evil)
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         warnings, stats = core.lint_plugins(["Tribunal.esm"], index)
 
@@ -243,7 +245,7 @@ class TestLintChecks:
     def test_blank_header_flagged_for_custom_plugins_only(self, core, data_dir):
         write_plugin(data_dir / "Mine.esp", masters=VANILLA, author="", description="")
         write_plugin(data_dir / "Theirs.esp", masters=VANILLA, author="", description="")
-        index = core.PluginFileIndex([str(data_dir)])
+        index = PluginFileIndex([str(data_dir)])
 
         warnings, _ = core.lint_plugins(
             ["Mine.esp", "Theirs.esp"], index, subset_names=["Mine.esp"]

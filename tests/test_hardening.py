@@ -13,6 +13,10 @@ from pathlib import Path
 
 import pytest
 
+from mlox_subset.configurator import simulate_configurator_apply, toml_value
+from mlox_subset.plugins import PluginFileIndex
+from mlox_subset.sort import build_and_sort, expand_pattern
+
 # Deliberately malformed TES3 byte streams. Each has broken something a naive
 # reader would trust: the magic, a declared size, or a subrecord boundary.
 MALFORMED_PLUGINS: dict[str, bytes] = {
@@ -87,7 +91,7 @@ class TestResyncNeverCorrupts:
     radius of a mistake here is real data loss."""
 
     def test_malformed_input_is_rejected_without_mutation(self, core, malformed_plugin, tmp_path):
-        index = core.PluginFileIndex([str(tmp_path)])
+        index = PluginFileIndex([str(tmp_path)])
         before = malformed_plugin.read_bytes()
 
         updated, _unresolved, _error = core.sync_plugin_master_sizes(malformed_plugin, index)
@@ -115,7 +119,7 @@ class TestScannersTolerateGarbage:
         for name, blob in MALFORMED_PLUGINS.items():
             (tmp_path / f"{name}.esp").write_bytes(blob)
         (tmp_path / "plain_text.esp").write_text("this is not a plugin")
-        index = core.PluginFileIndex([str(tmp_path)])
+        index = PluginFileIndex([str(tmp_path)])
         names = sorted(p.name for p in tmp_path.iterdir())
 
         warnings, stats = core.lint_plugins(names, index, subset_names=names)
@@ -189,35 +193,33 @@ class TestCustomizationTypeSafety:
 
     CFG = ["content=Alpha.esp", "content=Beta.esp", "content=Gamma.esp", 'data="E:/M/Core"']
 
-    def test_string_instead_of_array_does_not_wipe_the_cfg(self, core):
+    def test_string_instead_of_array_does_not_wipe_the_cfg(self):
         """Regression: iterating a string yielded single characters as removal
         patterns, which matched -- and deleted -- almost every line."""
         doc = "[[Customizations]]\nremoveContent = 'Alpha.esp'\n"
 
-        lines, errors, _notes = core.simulate_configurator_apply(self.CFG, doc)
+        lines, errors, _notes = simulate_configurator_apply(self.CFG, doc)
 
         assert lines == self.CFG, "cfg was modified by a malformed removeContent"
         assert any("must be an array" in e for e in errors)
 
-    def test_non_string_entries_are_skipped_not_applied(self, core):
+    def test_non_string_entries_are_skipped_not_applied(self):
         doc = "[[Customizations]]\nremoveContent = ['Beta.esp', 123]\n"
 
-        lines, errors, _notes = core.simulate_configurator_apply(self.CFG, doc)
+        lines, errors, _notes = simulate_configurator_apply(self.CFG, doc)
 
         assert "content=Beta.esp" not in lines
         assert "content=Alpha.esp" in lines
         assert any("not a string" in e for e in errors)
 
-    def test_non_table_customizations_entry_is_reported(self, core):
-        lines, errors, _notes = core.simulate_configurator_apply(
-            self.CFG, "Customizations = ['oops']\n"
-        )
+    def test_non_table_customizations_entry_is_reported(self):
+        lines, errors, _notes = simulate_configurator_apply(self.CFG, "Customizations = ['oops']\n")
 
         assert lines == self.CFG
         assert any("not a table" in e for e in errors)
 
-    def test_valid_array_still_removes(self, core):
-        lines, errors, _notes = core.simulate_configurator_apply(
+    def test_valid_array_still_removes(self):
+        lines, errors, _notes = simulate_configurator_apply(
             self.CFG, "[[Customizations]]\nremoveContent = ['Beta.esp']\n"
         )
 
@@ -236,8 +238,8 @@ class TestCustomizationTypeSafety:
             "[[Customizations]]\n[[Customizations.replace]]\nsource='A.esp'\n",
         ],
     )
-    def test_malformed_documents_are_handled_not_raised(self, core, document):
-        lines, errors, _notes = core.simulate_configurator_apply(self.CFG, document)
+    def test_malformed_documents_are_handled_not_raised(self, document):
+        lines, errors, _notes = simulate_configurator_apply(self.CFG, document)
         assert lines is None or isinstance(lines, list)
         assert isinstance(errors, list)
 
@@ -258,14 +260,14 @@ class TestPatternMatchingEdgeCases:
     ]
 
     @pytest.mark.parametrize("name", NAMES)
-    def test_exact_names_with_metacharacters_match_only_themselves(self, core, name):
-        assert core.expand_pattern(name, self.NAMES) == [name]
+    def test_exact_names_with_metacharacters_match_only_themselves(self, name):
+        assert expand_pattern(name, self.NAMES) == [name]
 
     @pytest.mark.parametrize(
         "pattern", ["Mod [Final]*.esp", "Mod (v*).esp", "A^*.esp", "G{2,}*.esp", "bad[.esp"]
     )
-    def test_wildcard_patterns_with_metacharacters_do_not_raise(self, core, pattern):
-        assert isinstance(core.expand_pattern(pattern, self.NAMES), list)
+    def test_wildcard_patterns_with_metacharacters_do_not_raise(self, pattern):
+        assert isinstance(expand_pattern(pattern, self.NAMES), list)
 
 
 class TestSortDegenerateInputs:
@@ -281,10 +283,10 @@ class TestSortDegenerateInputs:
             (["A.esp", "A.esp", "B.esp"], ["C.esp"], {"c.esp": []}),  # duplicate cfg lines
         ],
     )
-    def test_degenerate_inputs_do_not_raise(self, core, base, subset, masters):
-        assert isinstance(core.build_and_sort(base, subset, [], masters), list)
+    def test_degenerate_inputs_do_not_raise(self, base, subset, masters):
+        assert isinstance(build_and_sort(base, subset, [], masters), list)
 
-    def test_deep_transitive_chain_resolves(self, core):
+    def test_deep_transitive_chain_resolves(self):
         """600 mods each mastering the previous one -- the anchor resolver must
         not blow the recursion limit."""
         depth = 600
@@ -293,7 +295,7 @@ class TestSortDegenerateInputs:
             f"c{i}.esp": ["Morrowind.esm"] + ([f"C{i - 1}.esp"] if i else []) for i in range(depth)
         }
 
-        result = core.build_and_sort(["Morrowind.esm"], subset, [], masters)
+        result = build_and_sort(["Morrowind.esm"], subset, [], masters)
 
         assert result[1:] == subset
 
@@ -315,10 +317,10 @@ class TestTomlValueEscaping:
             "trailing space .esp",
         ],
     )
-    def test_any_name_round_trips(self, core, name):
+    def test_any_name_round_trips(self, name):
         try:
             import tomllib
         except ModuleNotFoundError:  # pragma: no cover
             tomllib = pytest.importorskip("tomli")
 
-        assert tomllib.loads(f"x = {core.toml_value(name)}")["x"] == name
+        assert tomllib.loads(f"x = {toml_value(name)}")["x"] == name

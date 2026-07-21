@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import pytest
 
+from mlox_subset.rules import parse_mlox_file
+from mlox_subset.sort import build_and_sort
+
 
 @pytest.fixture
 def rules_file(tmp_path):
@@ -25,18 +28,18 @@ class TestValidation:
     def test_round_trips_through_the_real_parser(self, core, rules_file, capsys):
         """A rule that writes must be a rule that loads."""
         core.append_user_rule(rules_file, "order", ["Base.esp", "Patch.omwaddon"])
-        assert core.parse_mlox_file(rules_file) == [("order", ["Base.esp", "Patch.omwaddon"])]
+        assert parse_mlox_file(rules_file) == [("order", ["Base.esp", "Patch.omwaddon"])]
 
     def test_comment_is_written_as_a_mlox_comment(self, core, rules_file, capsys):
         core.append_user_rule(rules_file, "order", ["A.esp", "B.esp"], comment="(Ref: the readme)")
         assert ";; (Ref: the readme)" in rules_file.read_text(encoding="utf-8")
         # comments must not leak into the parsed names
-        assert core.parse_mlox_file(rules_file) == [("order", ["A.esp", "B.esp"])]
+        assert parse_mlox_file(rules_file) == [("order", ["A.esp", "B.esp"])]
 
     def test_appending_keeps_earlier_rules(self, core, rules_file, capsys):
         core.append_user_rule(rules_file, "order", ["A.esp", "B.esp"])
         core.append_user_rule(rules_file, "nearend", ["Merged*.esp"])
-        assert core.parse_mlox_file(rules_file) == [
+        assert parse_mlox_file(rules_file) == [
             ("order", ["A.esp", "B.esp"]),
             ("nearend", ["Merged*.esp"]),
         ]
@@ -75,7 +78,7 @@ class TestValidation:
     @pytest.mark.parametrize("name", ["Wares*.esp", "plugin-?.esp", "Mod <VER>.esp"])
     def test_wildcard_patterns_are_accepted(self, core, rules_file, name, capsys):
         core.append_user_rule(rules_file, "order", [name, "Other.esp"])
-        assert core.parse_mlox_file(rules_file)[0][1][0] == name
+        assert parse_mlox_file(rules_file)[0][1][0] == name
 
 
 class TestFrozenOrderConflictDetection:
@@ -114,5 +117,5 @@ class TestFrozenOrderConflictDetection:
         conflicts = core.order_rule_frozen_conflicts(["B.esp", "A.esp"], base, curated)
         assert conflicts, "pre-check should flag this rule"
 
-        result = core.build_and_sort(base, [], [(["B.esp", "A.esp"], 0)], {})
+        result = build_and_sort(base, [], [(["B.esp", "A.esp"], 0)], {})
         assert result == base, "the sort must discard it, exactly as warned"

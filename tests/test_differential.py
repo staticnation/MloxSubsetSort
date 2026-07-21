@@ -25,6 +25,33 @@ from pathlib import Path
 
 import pytest
 
+from mlox_subset.configurator import (
+    cfg_line_value,
+    configurator_remove_matches,
+    customization_string_list,
+    detect_data_quoting,
+    format_data_line,
+    normalize_data_path,
+    simulate_configurator_apply,
+    toml_value,
+)
+from mlox_subset.momw import curated_for_list, needs_cleaning_set, parse_plugin_order_yml
+from mlox_subset.net import ALLOWED_URL_SCHEMES, MAX_DOWNLOAD_BYTES, fetch_url_bytes
+from mlox_subset.rules import (
+    TOP_RE,
+    check_predicates,
+    describe_node,
+    evaluate_node,
+    get_triggered_plugins,
+    load_rule_blocks,
+    load_rules_raw_text,
+    mlox_pattern_to_regex,
+    parse_mlox_lisp,
+    pattern_has_meta,
+    tokenize_mlox_logic,
+)
+from mlox_subset.sort import build_and_sort
+from mlox_subset.versions import format_version
 from tests.test_integration import _find_data_dir
 
 BASELINE_DIR = Path(__file__).resolve().parent / "baselines"
@@ -87,7 +114,7 @@ def observations(core, data_dir) -> dict[str, str]:
     base_order = [core.basename_if_plugin(value) for value, _line in content_order]
     base_order = [name for name in base_order if name]
     rule_paths = [data_dir / "mlox_base.txt", data_dir / "mlox_user.txt"]
-    blocks, nearstart, nearend = core.load_rule_blocks(rule_paths)
+    blocks, nearstart, nearend = load_rule_blocks(rule_paths)
 
     out: dict[str, str] = {
         "cfg.content_order": _digest(base_order),
@@ -102,7 +129,7 @@ def observations(core, data_dir) -> dict[str, str]:
     # curated order untouched, and must be deterministic.
     def _sort() -> list:
         """Sort with no custom mods, exactly as the real caller does."""
-        return core.build_and_sort(base_order, [], blocks, {}, nearstart=nearstart, nearend=nearend)
+        return build_and_sort(base_order, [], blocks, {}, nearstart=nearstart, nearend=nearend)
 
     sorted_order = _sort()
     out["sort.identity_no_customs"] = _digest(sorted_order)
@@ -121,10 +148,8 @@ def observations(core, data_dir) -> dict[str, str]:
         "Mod With Spaces.esp",
         "weird+chars(1).esp",
     ]
-    out["rules.pattern_regexes"] = _digest(
-        [core.mlox_pattern_to_regex(p).pattern for p in patterns]
-    )
-    out["rules.pattern_has_meta"] = _digest([core.pattern_has_meta(p) for p in patterns])
+    out["rules.pattern_regexes"] = _digest([mlox_pattern_to_regex(p).pattern for p in patterns])
+    out["rules.pattern_has_meta"] = _digest([pattern_has_meta(p) for p in patterns])
 
     # --- predicate evaluation -------------------------------------------
     # The [Requires]/[Conflict]/[Note] language is the most intricate part of
@@ -149,13 +174,13 @@ def observations(core, data_dir) -> dict[str, str]:
         "[ANY Wild*.esp plugin-?.esp Mod <VER>.esp]",
         "/a free-text DESC message/",
     ]
-    token_lists = [core.tokenize_mlox_logic(text) for text in expressions]
+    token_lists = [tokenize_mlox_logic(text) for text in expressions]
     out["predicates.tokens"] = _digest(token_lists)
 
     # parse_mlox_lisp consumes its input via pop(0), so each call gets a copy.
-    asts = [core.parse_mlox_lisp(list(tokens)) for tokens in token_lists]
+    asts = [parse_mlox_lisp(list(tokens)) for tokens in token_lists]
     out["predicates.ast"] = _digest(asts)
-    out["predicates.describe"] = _digest([core.describe_node(node) for node in asts])
+    out["predicates.describe"] = _digest([describe_node(node) for node in asts])
 
     active = {
         "morrowind.esm",
@@ -165,17 +190,17 @@ def observations(core, data_dir) -> dict[str, str]:
         "foo.esp",
         "wildthing.esp",
     }
-    out["predicates.evaluate"] = _digest([core.evaluate_node(node, active, None) for node in asts])
+    out["predicates.evaluate"] = _digest([evaluate_node(node, active, None) for node in asts])
     out["predicates.triggered"] = _digest(
-        [sorted(core.get_triggered_plugins(node, active, None)) for node in asts]
+        [sorted(get_triggered_plugins(node, active, None)) for node in asts]
     )
 
     # End-to-end: every predicate in the real rule files, against the real
     # sorted order. This is the observation that would actually catch a
     # regression a user would notice.
-    rules_text = core.load_rules_raw_text(rule_paths)
+    rules_text = load_rules_raw_text(rule_paths)
     out["predicates.rules_text_length"] = _digest(len(rules_text))
-    warnings = core.check_predicates(rules_text, sorted_order)
+    warnings = check_predicates(rules_text, sorted_order)
     out["predicates.warning_count"] = _digest(len(warnings))
     out["predicates.warnings"] = _digest(warnings)
 
@@ -203,11 +228,11 @@ def observations(core, data_dir) -> dict[str, str]:
         "not.a.version",
         "1.x",
     ]
-    out["versions.format"] = _digest([core._format_version(v) for v in versions])
+    out["versions.format"] = _digest([format_version(v) for v in versions])
     # The comparison these feed is lexicographic, so pin the induced ordering
     # too -- formatting could change while still sorting the same, or vice
     # versa, and only one of those is a regression.
-    formatted = [core._format_version(v) for v in versions if core._format_version(v)]
+    formatted = [format_version(v) for v in versions if format_version(v)]
     out["versions.ordering"] = _digest(sorted(formatted))
 
     # --- MOMW curated-list data ------------------------------------------
@@ -217,14 +242,14 @@ def observations(core, data_dir) -> dict[str, str]:
     # prevent.
     order_yml = data_dir / "plugin-order.yml"
     if order_yml.exists():
-        entries = core.parse_plugin_order_yml(order_yml)
+        entries = parse_plugin_order_yml(order_yml)
         out["momw.entry_count"] = _digest(len(entries))
         out["momw.entries"] = _digest(entries)
-        out["momw.needs_cleaning"] = _digest(sorted(core.needs_cleaning_set(entries)))
+        out["momw.needs_cleaning"] = _digest(sorted(needs_cleaning_set(entries)))
         lists = sorted({name for entry in entries for name in (entry.get("lists") or [])})
         out["momw.list_names"] = _digest(lists)
         out["momw.curated_per_list"] = _digest(
-            {name: core.curated_for_list(entries, name) for name in lists}
+            {name: curated_for_list(entries, name) for name in lists}
         )
 
     # --- URL validation ---------------------------------------------------
@@ -248,7 +273,7 @@ def observations(core, data_dir) -> dict[str, str]:
     rejections = []
     for url in hostile:
         try:
-            core.fetch_url_bytes(url, timeout=1)
+            fetch_url_bytes(url, timeout=1)
         except ValueError as exc:  # noqa: PERF203 - per-URL isolation is the point
             rejections.append((url, type(exc).__name__, str(exc)[:60]))
         except Exception as exc:  # noqa: BLE001 -- the observation IS the type
@@ -259,20 +284,20 @@ def observations(core, data_dir) -> dict[str, str]:
         else:  # pragma: no cover - would mean the guard let it through
             rejections.append((url, "ALLOWED", ""))
     out["net.url_rejections"] = _digest(rejections)
-    out["net.allowed_schemes"] = _digest(sorted(core.ALLOWED_URL_SCHEMES))
-    out["net.max_download_bytes"] = _digest(core.MAX_DOWNLOAD_BYTES)
+    out["net.allowed_schemes"] = _digest(sorted(ALLOWED_URL_SCHEMES))
+    out["net.max_download_bytes"] = _digest(MAX_DOWNLOAD_BYTES)
 
     out.update(_configurator_observations(core, data_dir))
 
-    bodies = _real_predicate_bodies(core, rules_text)
+    bodies = _real_predicate_bodies(rules_text)
     out["predicates.corpus_size"] = _digest(len(bodies))
-    corpus_tokens = [core.tokenize_mlox_logic(body) for body in bodies]
+    corpus_tokens = [tokenize_mlox_logic(body) for body in bodies]
     out["predicates.corpus_tokens"] = _digest(corpus_tokens)
-    corpus_asts = [core.parse_mlox_lisp(list(tokens)) for tokens in corpus_tokens]
+    corpus_asts = [parse_mlox_lisp(list(tokens)) for tokens in corpus_tokens]
     out["predicates.corpus_ast"] = _digest(corpus_asts)
     active_lower = {name.lower() for name in sorted_order}
     out["predicates.corpus_evaluate"] = _digest(
-        [core.evaluate_node(node, active_lower, None) for node in corpus_asts]
+        [evaluate_node(node, active_lower, None) for node in corpus_asts]
     )
     return out
 
@@ -308,7 +333,7 @@ def _configurator_observations(core, data_dir: Path) -> dict[str, str]:
         "",
         "fallback=Weather_Clear,1",
     ]
-    out["cfg.line_values"] = _digest([core.cfg_line_value(line) for line in cfg_lines])
+    out["cfg.line_values"] = _digest([cfg_line_value(line) for line in cfg_lines])
     data_values = [
         '"C:\\Games\\Mods\\Some Mod"',
         "/home/user/mods/plain",
@@ -316,22 +341,20 @@ def _configurator_observations(core, data_dir: Path) -> dict[str, str]:
         '"quoted with spaces"',
         "unquoted with spaces",
     ]
-    out["cfg.normalize_data_path"] = _digest(
-        [core.normalize_data_path(value) for value in data_values]
-    )
+    out["cfg.normalize_data_path"] = _digest([normalize_data_path(value) for value in data_values])
     out["cfg.format_data_line"] = _digest(
-        [core.format_data_line(v, quoted) for v in data_values for quoted in (True, False)]
+        [format_data_line(v, quoted) for v in data_values for quoted in (True, False)]
     )
     out["cfg.detect_data_quoting"] = _digest(
         [
-            core.detect_data_quoting(['data="a"', 'data="b"']),
-            core.detect_data_quoting(["data=a", "data=b"]),
-            core.detect_data_quoting(['data="a"', "data=b"]),
-            core.detect_data_quoting([]),
+            detect_data_quoting(['data="a"', 'data="b"']),
+            detect_data_quoting(["data=a", "data=b"]),
+            detect_data_quoting(['data="a"', "data=b"]),
+            detect_data_quoting([]),
         ]
     )
     out["cfg.toml_value"] = _digest(
-        [core.toml_value(v) for v in ["plain", 'has "quotes"', "back\\slash", "", "C:\\path\\here"]]
+        [toml_value(v) for v in ["plain", 'has "quotes"', "back\\slash", "", "C:\\path\\here"]]
     )
 
     # The string-vs-array guard. A regression here silently deletes cfg lines,
@@ -339,16 +362,16 @@ def _configurator_observations(core, data_dir: Path) -> dict[str, str]:
     string_list_cases: list[object] = []
     for value in (["A.esp", "B.esp"], "A.esp", None, 42, [], ["A.esp", 7]):
         errors: list[str] = []
-        result = core.customization_string_list({"removeContent": value}, "removeContent", errors)
+        result = customization_string_list({"removeContent": value}, "removeContent", errors)
         string_list_cases.append((repr(value), result, errors))
     out["cfg.customization_string_list"] = _digest(string_list_cases)
 
     out["cfg.configurator_remove_matches"] = _digest(
         [
-            core.configurator_remove_matches("Mod.esp", "content=Mod.esp"),
-            core.configurator_remove_matches("Mod.esp", "content=Other.esp"),
-            core.configurator_remove_matches("Mod", "content=Mod.esp"),
-            core.configurator_remove_matches("", "content=Mod.esp"),
+            configurator_remove_matches("Mod.esp", "content=Mod.esp"),
+            configurator_remove_matches("Mod.esp", "content=Other.esp"),
+            configurator_remove_matches("Mod", "content=Mod.esp"),
+            configurator_remove_matches("", "content=Mod.esp"),
         ]
     )
 
@@ -359,14 +382,14 @@ def _configurator_observations(core, data_dir: Path) -> dict[str, str]:
     if cfg_path.exists() and toml_path.exists():
         lines, _cpos, _co, _dpos, _do = core.read_cfg(cfg_path)
         toml_text = toml_path.read_text(encoding="utf-8", errors="replace")
-        result = core.simulate_configurator_apply(lines, toml_text)
+        result = simulate_configurator_apply(lines, toml_text)
         # The simulation returns a result whose shape varies by version; digest
         # it wholesale via the JSON default=str fallback rather than assuming.
         out["configurator.simulate_real"] = _digest(result)
     return out
 
 
-def _real_predicate_bodies(core, rules_text: str, limit: int = 4000) -> list[str]:
+def _real_predicate_bodies(rules_text: str, limit: int = 4000) -> list[str]:
     """Every ``[Requires]``/``[Conflict]``/``[Note]`` body in the rule files.
 
     Extracted the same way :func:`check_predicates` does -- by splitting on
@@ -381,7 +404,7 @@ def _real_predicate_bodies(core, rules_text: str, limit: int = 4000) -> list[str
         Body strings, in file order.
     """
     wanted = {"requires", "conflict", "note"}
-    matches = list(core.TOP_RE.finditer(rules_text))
+    matches = list(TOP_RE.finditer(rules_text))
     bodies: list[str] = []
     for index, match in enumerate(matches):
         if match.group(1).lower() not in wanted:

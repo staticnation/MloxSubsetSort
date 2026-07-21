@@ -154,7 +154,10 @@ def simulate_configurator_apply(
             )
     try:
         data = _toml.loads(toml_text)
-    except Exception as e:
+    except ValueError as e:
+        # TOMLDecodeError subclasses ValueError in both tomllib and tomli, so
+        # this catches a parse failure from either without importing whichever
+        # one we ended up with above.
         return None, [f"emitted TOML failed to parse: {e}"], []
 
     lines = list(cfg_lines)

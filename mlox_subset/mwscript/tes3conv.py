@@ -161,7 +161,11 @@ def variables_text_for_field(value: str | bytes) -> str:
         names = decode_variables_field(value)
     except BytecodeDecodeError as exc:
         return f"; could not decode this variables field:\n;   {exc}"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- backstop after the specific
+        # BytecodeDecodeError above: this is the "unexpected" arm by design.
+        # Field data is attacker-shaped (arbitrary bytes from any mod file) and
+        # the viewer must degrade to an explanatory line, never take the window
+        # down over one malformed record.
         return f"; unexpected error decoding this variables field: {exc!r}"
     if not names:
         return "; (no local variables declared)"
@@ -197,5 +201,8 @@ def listing_for_bytecode_field(value: str | bytes, source_text: str | None = Non
         return f"; could not decode this bytecode field:\n;   {exc}"
     try:
         return format_listing(disassemble(raw, source_text=source_text))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 -- same backstop as above: the
+        # disassembler walks arbitrary bytes, so an unanticipated IndexError /
+        # struct.error / UnicodeDecodeError must become a comment line rather
+        # than kill the field-detail window.
         return f"; unexpected error disassembling this bytecode: {exc!r}"

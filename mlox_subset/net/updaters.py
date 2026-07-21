@@ -126,7 +126,10 @@ def update_plugin_order_yml(
     for url in cand:
         try:
             data = fetch_url_bytes(url, timeout=timeout)
-        except Exception as e:
+        except (OSError, ValueError) as e:
+            # fetch_url_bytes' documented contract: ValueError for a bad or
+            # disallowed URL / oversized body, OSError for the request itself
+            # (urllib's URLError, socket timeouts and ssl errors all subclass it).
             report.append(f"  {url}: {e}")
             continue
         if b"file_name" not in data or b"on_lists" not in data:
@@ -140,7 +143,12 @@ def update_plugin_order_yml(
                 tf.write(data)
                 tmp = Path(tf.name)
             entries = parse_plugin_order_yml(tmp)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- validating untrusted download
+            # This is the gate that decides whether freshly downloaded bytes are
+            # safe to write over the user's file. parse_plugin_order_yml runs a
+            # third-party YAML parser (or our fallback) over arbitrary remote
+            # content; narrowing risks letting an unanticipated parser error
+            # through and installing a corrupt plugin-order.yml.
             report.append(f"  {url}: downloaded but failed to parse ({e})")
             continue
         finally:
@@ -165,7 +173,10 @@ def update_plugin_order_yml(
                     tmp = Path(tf.name)
                 old_entries = len(parse_plugin_order_yml(tmp))
                 tmp.unlink()
-        except Exception:
+        except Exception:  # noqa: BLE001 -- cosmetic count only
+            # This block just derives "N -> M entries" for the report. The new
+            # file is already written by this point, so any failure re-parsing
+            # the *old* one must be invisible rather than fail the update.
             old_entries = None
         frm = f"{old_entries} -> " if old_entries is not None else ""
         report.append(
@@ -222,7 +233,8 @@ def update_rule_files(
             ]
         try:
             data = fetch_url_bytes(url, timeout=timeout)
-        except Exception as e:
+        except (OSError, ValueError) as e:
+            # same documented contract as above
             report.append(f"FAILED {p.name}: {e}")
             continue
         if not data or b"[Order]" not in data:

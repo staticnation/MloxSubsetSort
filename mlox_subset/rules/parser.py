@@ -167,7 +167,7 @@ def load_rule_blocks(
         for rule_file in files:
             try:
                 blocks = parse_mlox_file(rule_file)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 # Deliberately broad. Rule files are untrusted input downloaded
                 # from a community repository, and one malformed file must not
                 # abort a sort that the other files can still complete.

@@ -141,7 +141,7 @@ def load_rules_raw_text(rule_paths: Sequence[str | Path]) -> str:
         for rule_file in files:
             try:
                 chunks.append(rule_file.read_text(encoding="utf-8-sig", errors="replace"))
-            except Exception as exc:  # noqa: PERF203
+            except Exception as exc:  # noqa: PERF203, BLE001
                 # Deliberately broad, and deliberately inside the loop: rule
                 # files are untrusted downloads, and isolating each file is the
                 # point -- hoisting the try out would let one bad file discard

@@ -13,7 +13,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: MLOX Subset Sort 3.0.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-21 03:44\n"
+"POT-Creation-Date: 2026-07-21 11:50\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -47,386 +47,449 @@ msgstr ""
 msgid "WARNING: remove entry '%(entry)s' matches %(count)d openmw.cfg lines -- momw-configurator removes ALL of them, silently. Colliding lines: %(lines)s%(more)s"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:105
+#: mlox_subset/gui/conflicts.py:155
 msgid "Scanning for conflicts..."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:126
+#: mlox_subset/gui/conflicts.py:176
 msgid " TES3 RECORD CONFLICTS (read-only)"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:130
+#: mlox_subset/gui/conflicts.py:180
 msgid "  Engine: tes3conv (%(path)s) -- field-level diffs available."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:143
+#: mlox_subset/gui/conflicts.py:193
 msgid "Conflicts: %(count)d record(s), %(involved)d involving your mods. See the Conflicts window."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:179
+#: mlox_subset/gui/conflicts.py:229
 msgid "No data= folders to scan."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:193
+#: mlox_subset/gui/conflicts.py:243
 msgid "Scanning data folders for file conflicts..."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:205
+#: mlox_subset/gui/conflicts.py:255
 msgid " DATA-PATH RESOURCE (VFS) CONFLICTS"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:209
+#: mlox_subset/gui/conflicts.py:259
 msgid "Resource conflicts: %(count)d file(s). See the window."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:248
+#: mlox_subset/gui/conflicts.py:298
 msgid "%(conflicts)d loose-file conflict(s) across %(dirs)d folder(s), %(files)d file(s) — %(involved)d involve your custom data paths (★). Later folder wins — reorder the data-path panel to change it."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:264
+#: mlox_subset/gui/conflicts.py:314
 msgid "Only my paths"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:331
-#: mlox_subset/gui/conflicts.py:484
+#: mlox_subset/gui/conflicts.py:381
+#: mlox_subset/gui/conflicts.py:539
 msgid "Save report (CSV)..."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:334
-#: mlox_subset/gui/conflicts.py:491
-#: mlox_subset/gui/conflicts.py:673
-#: mlox_subset/gui/t3.py:184
-#: mlox_subset_sort_gui.py:2424
-#: mlox_subset_sort_gui.py:2714
-#: mlox_subset_sort_gui.py:3126
+#: mlox_subset/gui/conflicts.py:384
+#: mlox_subset/gui/conflicts.py:561
+#: mlox_subset/gui/conflicts.py:969
+#: mlox_subset/gui/t3.py:187
+#: mlox_subset_sort_gui.py:2438
+#: mlox_subset_sort_gui.py:2728
+#: mlox_subset_sort_gui.py:3140
 msgid "Close"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:341
+#: mlox_subset/gui/conflicts.py:391
 msgid "Save resource conflicts"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:350
+#: mlox_subset/gui/conflicts.py:400
 msgid "Saved: %(path)s"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:352
-#: mlox_subset/gui/conflicts.py:710
-#: mlox_subset_sort_gui.py:2468
+#: mlox_subset/gui/conflicts.py:402
+#: mlox_subset/gui/conflicts.py:1006
+#: mlox_subset_sort_gui.py:2482
 msgid "Save failed"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:370
+#: mlox_subset/gui/conflicts.py:420
 msgid "%(conflicts)d conflicting record(s) across %(scanned)d plugin(s) — %(involved)d involve your custom mods (★). Winner = last loaded."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:384
+#: mlox_subset/gui/conflicts.py:434
 msgid "Only my mods"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:401
+#: mlox_subset/gui/conflicts.py:451
 msgid "Set tes3conv..."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:446
+#: mlox_subset/gui/conflicts.py:496
 msgid "Field comparison for the selected record — differing fields in red · ★ = your custom mod · last column wins · double-click a field for the full value:"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:465
-msgid "Field-by-field diff of the selected record. Red = the plugins disagree; the last one in the load order wins.\n\nDouble-click any row for the full value, one tab per plugin. Two fields are decoded rather than shown raw:\n  • bytecode -- disassembled to named script instructions, so a script edit reads as a change instead of a wall of base64. Spans the disassembler cannot decode are printed as offset/hex/ASCII rather than guessed at, and a 'decoded: N%' header says how much was understood.\n  • variables -- the script's local variable names, in declaration order."
+#: mlox_subset/gui/conflicts.py:515
+msgid "Field-by-field diff of the selected record. Red = the plugins disagree; the last one in the load order wins.\n\nDouble-click any row for the full value, one tab per plugin. Fields stored as binary are decoded rather than shown raw, so an edit reads as a change instead of a wall of base64:\n  • bytecode -- disassembled to named script instructions. Spans the disassembler cannot decode are printed as offset/hex/ASCII rather than guessed at, and a 'decoded: N%' header says how much was understood.\n  • variables -- the script's local variable names, in declaration order.\n  • landscape (vertex heights, normals, colours, textures, world map) -- decoded to one terrain row per line, so the diff shows which rows of the cell moved. Heights are reconstructed to absolute world units.\n  • path grid connections -- decoded to a per-point adjacency list (point -> its neighbours), so you can see which nodes were rewired."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:489
+#: mlox_subset/gui/conflicts.py:544
 msgid "Dump tes3conv JSON..."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:499
+#: mlox_subset/gui/conflicts.py:548
+msgid "Conflict map..."
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:553
+msgid "Plot every conflicting record onto the world grid, so you can see WHERE your mods collide. Hotter cells have more conflicts; cells involving your own mods are outlined. Opens as an HTML page.\n\nThis is not the cell map: that shows which mods TOUCH which cells, which is a different (and much larger) set."
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:586
+msgid "Could not write the page"
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:587
+msgid "Writing %(path)s failed: %(error)s"
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:596
+msgid "Saved, but could not open a browser"
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:597
+msgid "The page was written to %(path)s (%(error)s)"
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:609
+msgid "Could not build the conflict map"
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:609
+#: mlox_subset/gui/conflicts.py:684
+#: mlox_subset/gui/conflicts.py:708
+msgid "%(error)s"
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:684
+#: mlox_subset/gui/conflicts.py:708
+msgid "Could not build the view"
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:732
+msgid "Show graph..."
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:738
+msgid "Draw the path grid as a navigation graph, with the edges this plugin added in green and the ones it removed in red.\n\nA mod that only REMOVES edges has probably rebuilt its path grid by accident -- that breaks NPC movement and nothing else reports it."
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:750
+msgid "Show difference..."
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:756
+msgid "Decode both versions to absolute heights and subtract them: red where the winner raised the ground, blue where it lowered it.\n\nComparing the raw values above is misleading. Heights are stored as cumulative deltas, so moving ONE vertex changes every byte after it and two nearly-identical cells look completely different."
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:768
+msgid "Show in 3D..."
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:774
+msgid "Draw the cell's terrain as a surface you can rotate, with each plugin's version switchable in place. Drag to turn it.\n\nShading follows slope rather than height, which reads as terrain."
+msgstr ""
+
+#: mlox_subset/gui/conflicts.py:785
 msgid "Dump tes3conv JSON to folder"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:507
+#: mlox_subset/gui/conflicts.py:793
 msgid "Wrote %(count)d JSON file to %(folder)s"
 msgid_plural "Wrote %(count)d JSON files to %(folder)s"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset/gui/conflicts.py:516
+#: mlox_subset/gui/conflicts.py:802
 msgid "JSON dumped"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:517
+#: mlox_subset/gui/conflicts.py:803
 msgid "Wrote %(count)d tes3conv JSON file to:\n%(folder)s"
 msgid_plural "Wrote %(count)d tes3conv JSON files to:\n%(folder)s"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset/gui/conflicts.py:526
+#: mlox_subset/gui/conflicts.py:812
 msgid "Nothing written"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:527
+#: mlox_subset/gui/conflicts.py:813
 msgid "No JSON was written. The tes3conv session may have been cleared — re-run Check Conflicts, then dump again."
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:534
+#: mlox_subset/gui/conflicts.py:820
 msgid "Dump failed"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:586
+#: mlox_subset/gui/conflicts.py:874
 msgid "Word wrap"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:591
+#: mlox_subset/gui/conflicts.py:880
 msgid "Syntax highlighting: %(theme)s"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:699
+#: mlox_subset/gui/conflicts.py:995
 msgid "Save conflict report"
 msgstr ""
 
-#: mlox_subset/gui/conflicts.py:708
+#: mlox_subset/gui/conflicts.py:1004
 msgid "Conflict report saved: %(path)s"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:72
+#: mlox_subset/gui/t3.py:75
 msgid "tes3cmd:"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:78
+#: mlox_subset/gui/t3.py:81
 msgid "Path to tes3cmd. Leave empty to auto-detect (PATH, next to this app, next to openmw.cfg). End users normally have the compiled tes3cmd.exe from the MOMW Tools Pack; the pure-perl script works too if perl is installed."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:88
+#: mlox_subset/gui/t3.py:91
 msgid "Locate tes3cmd"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:94
+#: mlox_subset/gui/t3.py:97
 #: mlox_subset/gui/widgets.py:203
 #: mlox_subset/gui/widgets.py:212
-#: mlox_subset_sort_gui.py:2611
+#: mlox_subset_sort_gui.py:2625
 msgid "Browse..."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:107
+#: mlox_subset/gui/t3.py:110
 msgid "Plugins to run on"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:125
+#: mlox_subset/gui/t3.py:128
 msgid "My mods (last sort)"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:129
+#: mlox_subset/gui/t3.py:132
 msgid "Add every custom mod from the last Sort whose file could be located (curated plugins are the list's job, not yours)."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:134
+#: mlox_subset/gui/t3.py:137
 msgid "MOMW needs-cleaning"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:138
+#: mlox_subset/gui/t3.py:141
 msgid "Add every ACTIVE plugin that plugin-order.yml flags as needs_cleaning (MOMW's own 'clean this one' list), resolved across the data folders. Requires the plugin-order.yml path on the main tab."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:144
+#: mlox_subset/gui/t3.py:147
 msgid "Add file(s)..."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:146
+#: mlox_subset/gui/t3.py:149
 msgid "Remove selected"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:148
-#: mlox_subset_sort_gui.py:2661
+#: mlox_subset/gui/t3.py:151
+#: mlox_subset_sort_gui.py:2675
 msgid "Clear"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:152
+#: mlox_subset/gui/t3.py:155
 msgid "Command"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:161
+#: mlox_subset/gui/t3.py:164
 msgid "extra arguments:"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:167
+#: mlox_subset/gui/t3.py:170
 msgid "Optional extra tes3cmd switches, e.g. --instances for clean, --author/--description for header. Passed through verbatim."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:175
+#: mlox_subset/gui/t3.py:178
 msgid "Run"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:179
+#: mlox_subset/gui/t3.py:182
 msgid "Output streams to the main Log. Modifying commands ask for confirmation first; tes3cmd makes its own backups."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:205
+#: mlox_subset/gui/t3.py:208
 msgid "Run '1. Sort' first so I know which mods are yours."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:219
+#: mlox_subset/gui/t3.py:222
 msgid "tes3cmd: added %(count)d of your mods"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:221
+#: mlox_subset/gui/t3.py:224
 msgid " (%(count)d file not found in the data folders)"
 msgid_plural " (%(count)d files not found in the data folders)"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset/gui/t3.py:232
+#: mlox_subset/gui/t3.py:235
 msgid "Set the plugin-order.yml path on the main tab first."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:239
+#: mlox_subset/gui/t3.py:242
 msgid "Couldn't read plugin-order.yml: %(error)s"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:244
+#: mlox_subset/gui/t3.py:247
 msgid "Run '1. Sort' first so I know the active load order."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:258
+#: mlox_subset/gui/t3.py:261
 msgid "tes3cmd: added %(count)d needs-cleaning plugin"
 msgid_plural "tes3cmd: added %(count)d needs-cleaning plugins"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset/gui/t3.py:269
+#: mlox_subset/gui/t3.py:272
 msgid "Choose plugin file(s)"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:293
+#: mlox_subset/gui/t3.py:296
 msgid "Resync master sizes"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:294
+#: mlox_subset/gui/t3.py:297
 msgid "Rewrite the recorded master sizes in %(count)d plugin file to match the installed masters?\n\nOnly the 8-byte size fields change; a one-time .masterfix.bak copy of each file is kept."
 msgid_plural "Rewrite the recorded master sizes in %(count)d plugin files to match the installed masters?\n\nOnly the 8-byte size fields change; a one-time .masterfix.bak copy of each file is kept."
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset/gui/t3.py:310
+#: mlox_subset/gui/t3.py:313
 msgid "Resyncing master sizes..."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:321
+#: mlox_subset/gui/t3.py:324
 msgid "'%(path)s' does not exist. Fix the path or clear it to auto-detect."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:331
-#: mlox_subset/gui/t3.py:338
-#: mlox_subset/gui/t3.py:343
-#: mlox_subset/gui/t3.py:289
-#: mlox_subset/gui/t3.py:320
-#: mlox_subset/gui/t3.py:351
+#: mlox_subset/gui/t3.py:334
+#: mlox_subset/gui/t3.py:341
+#: mlox_subset/gui/t3.py:346
+#: mlox_subset/gui/t3.py:292
+#: mlox_subset/gui/t3.py:323
+#: mlox_subset/gui/t3.py:354
 msgid "tes3cmd"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:332
+#: mlox_subset/gui/t3.py:335
 msgid "tes3cmd not found. Browse to the compiled tes3cmd.exe (MOMW Tools Pack)."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:343
-#: mlox_subset/gui/t3.py:289
+#: mlox_subset/gui/t3.py:346
+#: mlox_subset/gui/t3.py:292
 msgid "Add at least one plugin file first."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:376
+#: mlox_subset/gui/t3.py:379
 msgid "tes3cmd clean"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:377
+#: mlox_subset/gui/t3.py:380
 msgid "Clean %(count)d plugin file?\n\nEach is staged into a private 'Data Files' with its masters so tes3cmd sees the full VFS; plugins whose masters can't be found are skipped. A one-time .preclean.bak copy of each modified file is kept."
 msgid_plural "Clean %(count)d plugin files?\n\nEach is staged into a private 'Data Files' with its masters so tes3cmd sees the full VFS; plugins whose masters can't be found are skipped. A one-time .preclean.bak copy of each modified file is kept."
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset/gui/t3.py:395
+#: mlox_subset/gui/t3.py:398
 msgid "tes3cmd %(command)s running..."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:443
+#: mlox_subset/gui/t3.py:446
 msgid "  Engine: %(command)s"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:451
+#: mlox_subset/gui/t3.py:454
 msgid "  Staging dir: %(path)s"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:470
+#: mlox_subset/gui/t3.py:473
 msgid "  SKIPPED: could not stage '%(name)s'."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:475
+#: mlox_subset/gui/t3.py:478
 msgid "  SKIPPED: master(s) not found in any data folder: %(names)s -- cleaning without the masters present gives wrong results."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:492
+#: mlox_subset/gui/t3.py:495
 msgid "  (exit code %(code)d) -- original NOT touched"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:499
+#: mlox_subset/gui/t3.py:502
 msgid "  no changes -- already clean"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:512
+#: mlox_subset/gui/t3.py:515
 msgid "  cleaned: %(before)d -> %(after)d bytes (backup: %(backup)s)"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:518
+#: mlox_subset/gui/t3.py:521
 msgid "  ERROR: %(error)s"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:520
+#: mlox_subset/gui/t3.py:523
 msgid "tes3cmd clean: %(changed)d cleaned, %(clean)d already clean, %(skipped)d skipped (missing masters), %(failed)d failed."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:530
+#: mlox_subset/gui/t3.py:533
 msgid "  Re-run '1. Sort' to refresh checks."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:532
+#: mlox_subset/gui/t3.py:535
 msgid "tes3cmd %(command)s: %(ok)d ok, %(failed)d failed. See the log."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:551
+#: mlox_subset/gui/t3.py:554
 msgid " MASTER-SIZE RESYNC (in-app, VFS-aware)"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:561
+#: mlox_subset/gui/t3.py:564
 msgid "  %(name)s: ERROR: %(error)s"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:569
+#: mlox_subset/gui/t3.py:572
 msgid "  %(name)s: already in sync"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:572
+#: mlox_subset/gui/t3.py:575
 msgid "  %(name)s: WARNING: master '%(master)s' not found in any data folder -- its size field left untouched"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:578
+#: mlox_subset/gui/t3.py:581
 msgid "Resync: %(fixed)d plugin(s) updated, %(ok)d already in sync, %(failed)d error(s)."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:583
+#: mlox_subset/gui/t3.py:586
 msgid "  Re-run '1. Sort' to refresh the master check."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:603
+#: mlox_subset/gui/t3.py:606
 msgid "Locate the tes3conv executable"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:609
+#: mlox_subset/gui/t3.py:612
 msgid "tes3conv set — click 'Check Conflicts' again to re-scan with field diffs."
 msgstr ""
 
-#: mlox_subset/gui/t3.py:612
+#: mlox_subset/gui/t3.py:615
 msgid "tes3conv set"
 msgstr ""
 
-#: mlox_subset/gui/t3.py:613
+#: mlox_subset/gui/t3.py:616
 msgid "tes3conv location saved.\n\nClick 'Check Conflicts' again to re-scan; the field comparison will then populate when you select a record."
 msgstr ""
 
@@ -464,893 +527,1168 @@ msgid_plural "WARNING: %(count)d plugins could not be placed due to an unresolve
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort.py:761
+#: mlox_subset/viz/conflictmap.py:51
+msgid "No exterior cells have conflicts."
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:66
+msgid "cell (%(x)d, %(y)d): %(count)d conflict(s)"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:104
+#: mlox_subset/viz/heightdelta.py:159
+#: mlox_subset/viz/pathgrid.py:214
+#: mlox_subset/viz/terrain3d.py:173
+msgid "Cell"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:105
+#: mlox_subset/viz/conflictmap.py:159
+msgid "Conflicts"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:106
+msgid "Yours"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:107
+msgid "Record types"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:108
+msgid "Usually wins"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:127
+msgid "terrain shape, textures and vertex colours"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:128
+msgid "NPC navigation -- broken edges strand NPCs, and nothing else reports it"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:129
+msgid "the cell's own record: name, water level, region, ambient light"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:159
+msgid "Record type"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:159
+msgid "Cells"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:159
+msgid "What it governs"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:192
+msgid "%(n)d conflict"
+msgid_plural "%(n)d conflicts"
+msgstr[0] ""
+msgstr[1] ""
+
+#: mlox_subset/viz/conflictmap.py:198
+msgid "Cells with conflicts"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:199
+msgid "Spatial conflicts"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:200
+msgid "Involving your mods"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:201
+msgid "Non-spatial (objects, dialogue, interiors)"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:205
+msgid "Conflict density by cell"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:208
+msgid "outlined = involves your mods"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:209
+msgid "North is up. Hover a cell for its count. Colour saturates at the 95th percentile, so a few extreme cells do not flatten the rest."
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:215
+msgid "What is being edited"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:216
+msgid "Worst cells"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:220
+msgid "Conflict map"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:221
+msgid "Cells where the same record is defined by more than one plugin. Coverage (which mods touch which cells) is a different question -- see the cell map."
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:247
+msgid "See also"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:248
+msgid "Cell map (coverage)"
+msgstr ""
+
+#: mlox_subset/viz/conflictmap.py:250
+msgid "That map shows which mods TOUCH each cell. Touching is not colliding: most shared cells here are fine, and this page is the subset that is not."
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:67
+msgid "vertex (%(col)d, %(row)d): %(delta)+.0f units"
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:140
+msgid "%(changed)d of %(total)d vertices differ. Largest movement %(peak).0f units (%(up)d raised, %(down)d lowered)."
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:151
+msgid "The terrain is identical. These records differ in some other field -- textures, colours or the world map -- not in height."
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:159
+#: mlox_subset/viz/pathgrid.py:214
+#: mlox_subset/viz/terrain3d.py:173
+msgid "(unknown)"
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:160
+#: mlox_subset/viz/pathgrid.py:215
+msgid "Winner"
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:161
+#: mlox_subset/viz/pathgrid.py:221
+msgid "Overrides"
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:165
+msgid "Height difference"
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:170
+msgid "winner is higher"
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:171
+msgid "winner is lower"
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:173
+msgid "North is up. Unchanged vertices are left blank. Colour saturates at the largest movement in this cell, so shades are comparable within a page but not between pages."
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:182
+msgid "Terrain difference"
+msgstr ""
+
+#: mlox_subset/viz/heightdelta.py:183
+msgid "Absolute heights, decoded and subtracted. Comparing the raw fields is misleading: heights are stored as cumulative deltas, so moving one vertex changes every byte after it."
+msgstr ""
+
+#: mlox_subset/viz/html.py:131
+msgid "Nothing to show."
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:191
+msgid "point %(index)d at (%(x)d, %(y)d, %(z)d)"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:203
+msgid "path point"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:206
+msgid "edge added by the winner"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:207
+msgid "edge removed by the winner"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:208
+msgid "unchanged"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:211
+msgid "connection"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:216
+msgid "Points"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:217
+msgid "Connections"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:218
+msgid "Extent"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:218
+msgid "%(units)d world units"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:222
+msgid "Edges added"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:223
+msgid "Edges removed"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:227
+msgid "The navigation graph is unchanged. These records differ in point positions or flags, not in connectivity."
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:232
+msgid "This mod only removes connections. That is the shape of an accidentally rebuilt path grid, and it is worth checking in game."
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:240
+msgid "Navigation graph"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:243
+msgid "Top-down view, north up. Hover a point for its coordinates."
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:247
+msgid "Path grid"
+msgstr ""
+
+#: mlox_subset/viz/pathgrid.py:248
+msgid "The navigation mesh NPCs follow, and what this plugin changed about it."
+msgstr ""
+
+#: mlox_subset/viz/terrain3d.py:151
+msgid "Height range: %(lo)s to %(hi)s units"
+msgstr ""
+
+#: mlox_subset/viz/terrain3d.py:159
+msgid "Drag to rotate. Shading follows slope, which reads as terrain better than height does."
+msgstr ""
+
+#: mlox_subset/viz/terrain3d.py:161
+msgid "Drag to rotate; switch plugins to see the same cell as each one leaves it. Shading follows slope."
+msgstr ""
+
+#: mlox_subset/viz/terrain3d.py:167
+msgid "Some records could not be decoded: %(detail)s"
+msgstr ""
+
+#: mlox_subset/viz/terrain3d.py:173
+msgid "Surfaces"
+msgstr ""
+
+#: mlox_subset/viz/terrain3d.py:188
+#: mlox_subset/viz/terrain3d.py:175
+msgid "Terrain surface"
+msgstr ""
+
+#: mlox_subset/viz/terrain3d.py:189
+msgid "The same 65x65 height grid the text view lists, as a shape you can turn."
+msgstr ""
+
+#: mlox_subset_sort.py:758
 msgid "couldn't stage '%(name)s': %(error)s"
 msgstr ""
 
-#: mlox_subset_sort.py:2264
+#: mlox_subset_sort.py:2273
 msgid "Backup written: %(path)s"
 msgstr ""
 
-#: mlox_subset_sort.py:2304
+#: mlox_subset_sort.py:2313
 msgid "\n--- DRY RUN: no files written ---"
 msgstr ""
 
-#: mlox_subset_sort.py:2313
+#: mlox_subset_sort.py:2322
 msgid "Wrote updated: %(path)s"
 msgstr ""
 
-#: mlox_subset_sort.py:2477
+#: mlox_subset_sort.py:2448
 msgid "Scanned '%(path)s': %(folders)d mod folder(s), %(plugins)d plugin(s)."
 msgstr ""
 
-#: mlox_subset_sort.py:2485
+#: mlox_subset_sort.py:2456
 msgid "Wrote subset file: %(path)s"
 msgstr ""
 
-#: mlox_subset_sort.py:2578
+#: mlox_subset_sort.py:2549
 msgid "'%(entry)s' from %(source)s doesn't look like a plugin filename or a data folder path (no recognized extension, no slash) -- skipping."
 msgstr ""
 
-#: mlox_subset_sort.py:3291
+#: mlox_subset_sort.py:3257
 msgid "  %(file)s: %(plugins)d plugin(s), %(paths)d data path(s)"
 msgstr ""
 
-#: mlox_subset_sort.py:3302
-#: mlox_subset_sort.py:3359
+#: mlox_subset_sort.py:3268
+#: mlox_subset_sort.py:3325
 msgid "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(paths)s"
 msgstr ""
 
-#: mlox_subset_sort.py:3321
+#: mlox_subset_sort.py:3287
 msgid "  in-memory scan: %(plugins)d plugin(s), %(paths)d data path(s)"
 msgstr ""
 
-#: mlox_subset_sort.py:3328
+#: mlox_subset_sort.py:3294
 msgid "  NOTE: data path insertion found but not sorted (pass --sort-data-paths to include it): %(count)d path"
 msgid_plural "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(count)d paths"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort.py:3348
+#: mlox_subset_sort.py:3314
 msgid "  %(file)s: %(plugins)d content plugin(s), %(paths)d data path(s)"
 msgstr ""
 
-#: mlox_subset_sort.py:3431
+#: mlox_subset_sort.py:3397
 msgid "  Loaded %(count)d plugin entry from %(file)s"
 msgid_plural "  Loaded %(count)d plugin entries from %(file)s"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort.py:3443
+#: mlox_subset_sort.py:3409
 msgid "  WARNING: could not read plugin-order.yml (%(error)s) -- skipping yml checks."
 msgstr ""
 
-#: mlox_subset_sort.py:3456
+#: mlox_subset_sort.py:3422
 msgid "  '%(list)s': %(count)d curated plugin on this list"
 msgid_plural "  '%(list)s': %(count)d curated plugins on this list"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort.py:3465
+#: mlox_subset_sort.py:3431
 msgid "  WARNING: no plugins found for list '%(list)s' in the yml -- check the list name spelling. Curated-set checks skipped."
 msgstr ""
 
-#: mlox_subset_sort.py:3480
+#: mlox_subset_sort.py:3446
 msgid "  Excluded %(count)d curated plugin from the sort: %(names)s"
 msgid_plural "  Excluded %(count)d curated plugins from the sort: %(names)s"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort.py:3535
+#: mlox_subset_sort.py:3501
 msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
 msgstr ""
 
-#: mlox_subset_sort.py:3540
+#: mlox_subset_sort.py:3506
 msgid "  Not in cfg yet, will be inserted: %(names)s"
 msgstr ""
 
-#: mlox_subset_sort.py:3585
+#: mlox_subset_sort.py:3551
 msgid "  Read header masters for %(have)d of %(total)d custom plugin(s)."
 msgstr ""
 
-#: mlox_subset_sort.py:3646
+#: mlox_subset_sort.py:3612
 msgid "\n  No [Conflict]/[Requires]/[Note] warnings triggered."
 msgstr ""
 
-#: mlox_subset_sort.py:3701
+#: mlox_subset_sort.py:3667
 msgid "\n  No plugin-order.yml warnings."
 msgstr ""
 
-#: mlox_subset_sort.py:3744
+#: mlox_subset_sort.py:3710
 msgid "  (plugin files not reachable from the data folders; can't read headers)"
 msgstr ""
 
-#: mlox_subset_sort.py:3761
+#: mlox_subset_sort.py:3727
 msgid "  All masters present and correctly ordered."
 msgstr ""
 
-#: mlox_subset_sort.py:3766
+#: mlox_subset_sort.py:3732
 msgid "master check failed: %(error)s"
 msgstr ""
 
-#: mlox_subset_sort.py:3813
+#: mlox_subset_sort.py:3779
 msgid "\n[STALE] '%(artifact)s' is older than %(count)d active plugin (e.g. %(examples)s%(more)s) -- re-run momw-configurator so it gets rebuilt against the current load order."
 msgid_plural "\n[STALE] '%(artifact)s' is older than %(count)d active plugins (e.g. %(examples)s%(more)s) -- re-run momw-configurator so it gets rebuilt against the current load order."
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort.py:3860
-#: mlox_subset_sort.py:3956
+#: mlox_subset_sort.py:3826
+#: mlox_subset_sort.py:3922
 msgid "  (excluded %(count)d plugin by --exclude)"
 msgid_plural "  (excluded %(count)d plugins by --exclude)"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort.py:3879
+#: mlox_subset_sort.py:3845
 msgid "  Keeping tes3conv JSON dump in: %(path)s"
 msgstr ""
 
-#: mlox_subset_sort.py:3884
-#: mlox_subset_sort_gui.py:2290
+#: mlox_subset_sort.py:3850
+#: mlox_subset_sort_gui.py:2304
 msgid "  Engine: %(engine)s"
 msgstr ""
 
-#: mlox_subset_sort.py:3887
+#: mlox_subset_sort.py:3853
 msgid "built-in parser (record-level)"
 msgstr ""
 
-#: mlox_subset_sort.py:3906
+#: mlox_subset_sort.py:3872
 msgid "\n  Wrote conflict report: %(path)s"
 msgstr ""
 
-#: mlox_subset_sort.py:3908
+#: mlox_subset_sort.py:3874
 msgid "could not write conflict CSV: %(error)s"
 msgstr ""
 
-#: mlox_subset_sort.py:3916
+#: mlox_subset_sort.py:3882
 msgid "  Scanned %(scanned)d plugin(s): %(exterior)d exterior + %(interior)d interior cell(s) touched."
 msgstr ""
 
-#: mlox_subset_sort.py:3927
+#: mlox_subset_sort.py:3893
 msgid "  Wrote cell map: %(path)s  (open it in a browser)"
 msgstr ""
 
-#: mlox_subset_sort.py:3930
+#: mlox_subset_sort.py:3896
 msgid "could not write cell map: %(error)s"
 msgstr ""
 
-#: mlox_subset_sort.py:3967
-#: mlox_subset_sort_gui.py:3166
+#: mlox_subset_sort.py:3933
+#: mlox_subset_sort_gui.py:3180
 msgid "  Scanned %(scanned)d plugin(s); %(cells)d interior cell(s), %(grids)d interior pathgrid(s)."
 msgstr ""
 
-#: mlox_subset_sort.py:3980
+#: mlox_subset_sort.py:3946
 msgid "\n  No lint findings."
 msgstr ""
 
-#: mlox_subset_sort.py:4004
+#: mlox_subset_sort.py:3970
 msgid "\n  Wrote resource report: %(path)s"
 msgstr ""
 
-#: mlox_subset_sort.py:4006
+#: mlox_subset_sort.py:3972
 msgid "could not write resource CSV: %(error)s"
 msgstr ""
 
-#: mlox_subset_sort.py:4028
+#: mlox_subset_sort.py:3994
 msgid "  Pass --sort-data-paths to enable:"
 msgstr ""
 
-#: mlox_subset_sort.py:4048
+#: mlox_subset_sort.py:4014
 msgid "  <-- inserted"
 msgstr ""
 
-#: mlox_subset_sort.py:4246
+#: mlox_subset_sort.py:4212
 msgid "  openmw.cfg left untouched (pass --write-cfg to patch it directly)"
 msgstr ""
 
-#: mlox_subset_sort.py:4287
+#: mlox_subset_sort.py:4253
 msgid "  WARNING: configurator preview failed: %(error)s"
 msgstr ""
 
-#: mlox_subset_sort.py:4290
+#: mlox_subset_sort.py:4256
 msgid "\n  DRY RUN: would write %(path)s\n%(toml)s"
 msgstr ""
 
-#: mlox_subset_sort.py:4296
+#: mlox_subset_sort.py:4262
 msgid "  Wrote corrected customizations: %(path)s"
 msgstr ""
 
-#: mlox_subset_sort.py:4306
+#: mlox_subset_sort.py:4272
 msgid "  Plugins sorted:        %(count)d"
 msgstr ""
 
-#: mlox_subset_sort.py:4308
+#: mlox_subset_sort.py:4274
 msgid "  Data paths inserted:   %(count)d"
 msgstr ""
 
-#: mlox_subset_sort.py:4311
+#: mlox_subset_sort.py:4277
 msgid "  Rule warnings raised:  %(count)d"
 msgstr ""
 
-#: mlox_subset_sort.py:4313
+#: mlox_subset_sort.py:4279
 msgid "  plugin-order.yml warnings: %(count)d"
 msgstr ""
 
-#: mlox_subset_sort.py:4315
+#: mlox_subset_sort.py:4281
 msgid "  openmw.cfg written:    %(answer)s"
 msgstr ""
 
-#: mlox_subset_sort.py:4315
-#: mlox_subset_sort.py:4318
-#: mlox_subset_sort_gui.py:2133
-#: mlox_subset_sort_gui.py:2134
+#: mlox_subset_sort.py:4281
+#: mlox_subset_sort.py:4284
+#: mlox_subset_sort_gui.py:2147
+#: mlox_subset_sort_gui.py:2148
 msgid "yes"
 msgstr ""
 
-#: mlox_subset_sort.py:4315
-#: mlox_subset_sort.py:4318
-#: mlox_subset_sort_gui.py:2133
-#: mlox_subset_sort_gui.py:2134
+#: mlox_subset_sort.py:4281
+#: mlox_subset_sort.py:4284
+#: mlox_subset_sort_gui.py:2147
+#: mlox_subset_sort_gui.py:2148
 msgid "no"
 msgstr ""
 
-#: mlox_subset_sort.py:4317
+#: mlox_subset_sort.py:4283
 msgid "  customizations.toml written: %(answer)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:239
+#: mlox_subset_sort_gui.py:253
 msgid "Rule files (priority = order below, last = highest -- drag rows to reorder)"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:261
+#: mlox_subset_sort_gui.py:275
 msgid "mlox rule files (mlox_base.txt, mlox_user.txt, ...), applied in this order.\nLater files can override/extend earlier ones -- put mlox_base.txt first and your own mlox_user.txt last. Drag rows to reorder, or use the buttons."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:277
+#: mlox_subset_sort_gui.py:291
 msgid "Add File(s)..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:279
+#: mlox_subset_sort_gui.py:293
 msgid "Browse for one or more mlox rule .txt files to add to the list."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:280
+#: mlox_subset_sort_gui.py:294
 msgid "Remove Selected"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:284
+#: mlox_subset_sort_gui.py:298
 msgid "Remove the selected rule file from the list (doesn't delete anything on disk)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:286
-#: mlox_subset_sort_gui.py:500
+#: mlox_subset_sort_gui.py:300
+#: mlox_subset_sort_gui.py:514
 msgid "Move Up"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:288
+#: mlox_subset_sort_gui.py:302
 msgid "Move the selected rule file earlier (lower priority)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:289
-#: mlox_subset_sort_gui.py:509
+#: mlox_subset_sort_gui.py:303
+#: mlox_subset_sort_gui.py:523
 msgid "Move Down"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:291
+#: mlox_subset_sort_gui.py:305
 msgid "Move the selected rule file later (higher priority)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:296
+#: mlox_subset_sort_gui.py:310
 msgid "New Rule..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:300
+#: mlox_subset_sort_gui.py:314
 msgid "Write your own mlox [Order]/[NearStart]/[NearEnd] rule without knowing the syntax: pick plugins (or grab the selected rows from the plugin panel), preview the rule, and append it to a personal rules file that loads LAST so it wins conflicts. This is how rules for modern mods get made -- consider contributing good ones upstream."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:308
+#: mlox_subset_sort_gui.py:322
 msgid "Update Rules..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:312
+#: mlox_subset_sort_gui.py:326
 msgid "Download the CURRENT mlox_base.txt / mlox_user.txt from the actively maintained rules repo (github.com/%(repo)s -- the same source plox uses, and mlox 1.1+ auto-updates from) over the matching files in this list. The old files are kept as timestamped .bak copies. Files with other names (your personal rules) are never touched. Source URL configurable via Sources..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:323
+#: mlox_subset_sort_gui.py:337
 msgid "Sources..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:327
+#: mlox_subset_sort_gui.py:341
 msgid "Configure WHERE 'Update Rules...' and the plugin-order.yml 'Update...' button download from -- point them at a fork or mirror if upstream moves. Blank fields use the built-in defaults."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:341
+#: mlox_subset_sort_gui.py:355
 msgid "(install tkinterdnd2 to drag files in from your file manager)"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:350
-#: mlox_subset_sort_gui.py:358
-#: mlox_subset_sort_gui.py:375
+#: mlox_subset_sort_gui.py:364
+#: mlox_subset_sort_gui.py:372
+#: mlox_subset_sort_gui.py:389
 msgid "Update rules"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:350
+#: mlox_subset_sort_gui.py:364
 msgid "Add mlox_base.txt and/or mlox_user.txt to the list first."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:359
+#: mlox_subset_sort_gui.py:373
 msgid "Download the current rules from github.com/%(repo)s over these files?\n\n%(age)s\n\nTimestamped .bak copies of the old files are kept."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:504
+#: mlox_subset_sort_gui.py:518
 msgid "Move the selected row(s) one position earlier. Works with a multi-selection; you can also drag a contiguous block up with the mouse."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:513
+#: mlox_subset_sort_gui.py:527
 msgid "Move the selected row(s) one position later. Works with a multi-selection; you can also drag a contiguous block down with the mouse."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:518
+#: mlox_subset_sort_gui.py:532
 msgid "Disable / Enable"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:522
+#: mlox_subset_sort_gui.py:536
 msgid "Opt the selected row in or out of the load order. Disabled rows are dimmed and marked, and are left out of Export: a custom item is simply not inserted, and an item already in your openmw.cfg gets a removeContent/removeData entry in the emitted TOML so it's durably removed. Double-click a row to toggle it too."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:533
+#: mlox_subset_sort_gui.py:547
 msgid "Discard any manual dragging and restore the order from the last Sort (your disable/enable choices are kept)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:692
+#: mlox_subset_sort_gui.py:706
 msgid "Plugin load order -- drag to override mlox (red = touched by this sort, purple = master problem)"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:719
+#: mlox_subset_sort_gui.py:733
 msgid "Data path order -- drag to adjust (highlighted = your custom paths)"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1105
+#: mlox_subset_sort_gui.py:1119
 msgid "Drag & drop is disabled (tkinterdnd2 not installed) -- use the Browse buttons below."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1130
+#: mlox_subset_sort_gui.py:1144
 msgid "Required. The openmw.cfg to read the current content= and data= order from, and (if 'Write openmw.cfg directly' is checked) to patch."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1141
+#: mlox_subset_sort_gui.py:1155
 msgid "A momw-configurator/umo customizations TOML to pull the plugin/data-path subset from automatically. Optional if you provide a subset file instead -- provide both and they're combined."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1153
+#: mlox_subset_sort_gui.py:1167
 msgid "A plain text file (one plugin filename or data folder path per line, '#' comments allowed) or a minimal TOML with subset=[...]/data=[...]. Combined with --emit-toml, this alone is enough to generate a brand new customizations.toml with no existing one required."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1176
+#: mlox_subset_sort_gui.py:1190
 msgid "Where to write a corrected customizations.toml (sorted insert blocks, re-anchored). Disabled when 'write directly back' below is checked."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1187
+#: mlox_subset_sort_gui.py:1201
 msgid "list name (optional):"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1208
+#: mlox_subset_sort_gui.py:1222
 msgid "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1229
+#: mlox_subset_sort_gui.py:1243
 msgid "Write directly back to customizations.toml (overwrite in place; a .bak-<timestamp> copy is made first unless backups are disabled below)"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1239
+#: mlox_subset_sort_gui.py:1253
 msgid "Instead of writing to a separate file above, overwrite the customizations.toml given above in place. A timestamped backup is made first (unless disabled), and you'll get a confirmation prompt before it actually happens."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1255
+#: mlox_subset_sort_gui.py:1269
 msgid "Options"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1270
+#: mlox_subset_sort_gui.py:1284
 msgid "Dry run (preview only, don't write files)"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1275
+#: mlox_subset_sort_gui.py:1289
 msgid "When checked, Export shows exactly what it would write without touching any files. Uncheck when you're ready to actually save."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1282
+#: mlox_subset_sort_gui.py:1296
 msgid "Write openmw.cfg directly"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1287
+#: mlox_subset_sort_gui.py:1301
 msgid "Patch the content=/data= lines in openmw.cfg in place on Export. A .bak-<timestamp> copy is made first unless backups are disabled."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1294
+#: mlox_subset_sort_gui.py:1308
 msgid "Sort data= paths too"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1299
+#: mlox_subset_sort_gui.py:1313
 msgid "mlox has no concept of data= folder order -- this positions new data= paths using an explicit after/before anchor if you wrote one, or by scanning the folder for plugins and anchoring next to their neighbor in the sorted content= order. Off by default so a plugin-only run can't surprise-reorder data= too. Also required for the data path order panel to populate."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1309
+#: mlox_subset_sort_gui.py:1323
 msgid "Skip .bak backup of openmw.cfg"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1314
+#: mlox_subset_sort_gui.py:1328
 msgid "Skip making a timestamped backup before overwriting openmw.cfg and/or an in-place customizations.toml. Not recommended."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1322
+#: mlox_subset_sort_gui.py:1336
 msgid "Skip mlox Conflict/Requires/Note warnings"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1328
+#: mlox_subset_sort_gui.py:1342
 msgid "Skip evaluating [Conflict]/[Requires]/[Note] rules against the sorted plugin list. This is purely informational and read-only either way -- it never changes the computed order or what gets written, only whether warnings get printed."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1337
+#: mlox_subset_sort_gui.py:1351
 msgid "Create subset text document (on Scan)"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1342
+#: mlox_subset_sort_gui.py:1356
 msgid "Exclude from conflict / cell scans:"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1356
+#: mlox_subset_sort_gui.py:1370
 msgid "Keep tes3conv JSON dump"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1363
+#: mlox_subset_sort_gui.py:1377
 msgid "tes3conv conversions are written to disk (not held in RAM) and read per-plugin, so big load orders don't blow up memory. They always go to a 'tes3conv_json' folder next to the app and are reused within a run -- so Check Conflicts then Cell Map won't re-run tes3conv (a plugin is only re-converted if it changed). This box just decides what happens on exit: checked = keep that folder (reused next launch too); unchecked = delete it when you close the app."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1374
+#: mlox_subset_sort_gui.py:1388
 msgid "Controls what 'Scan...' does with its result. Checked: write the scanned list to a .txt subset file you choose, and load it (the file stays on disk for reuse). Unchecked: keep the scanned list in memory just for this session and feed it straight to the sort -- nothing is written to disk."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1516
+#: mlox_subset_sort_gui.py:1530
 msgid "Log"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1538
+#: mlox_subset_sort_gui.py:1552
 msgid "Full output from the last Sort and/or Export. Colour key: green = a plugin/path this sort inserted or moved, orange = a heads-up (mlox warning, or a rule your curated cfg order overrode), blue = a section header, bright red = an error worth checking. Plain text = frozen base rows left untouched. Colors follow the syntax highlighting theme picked below."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1554
+#: mlox_subset_sort_gui.py:1568
 msgid "Clear Log"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1557
+#: mlox_subset_sort_gui.py:1571
 msgid "Clear the log panel. Doesn't affect the order panels or any files."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1559
+#: mlox_subset_sort_gui.py:1573
 msgid "Save Log As..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1561
+#: mlox_subset_sort_gui.py:1575
 msgid "Save the current log contents to a text file."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1563
+#: mlox_subset_sort_gui.py:1577
 msgid "Theme:"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1577
+#: mlox_subset_sort_gui.py:1591
 msgid "Colour theme for the whole GUI: window/button colours, syntax highlighting here in the Log panel, and the field-diff JSON viewer (Check Conflicts -> double-click a field). Switching re-themes everything immediately, including any windows already open. Built-in: Dracula, Monokai, Atom One Dark, Gruvbox Dark, plus anything you've imported."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1587
+#: mlox_subset_sort_gui.py:1601
 msgid "Import Theme..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1592
+#: mlox_subset_sort_gui.py:1606
 msgid "Import a custom theme from a JSON file (background/foreground/select/section/warn/error/ok/inserted/dim as hex colors, plus an optional \"chrome\" object for explicit window/button colours) or a base16 scheme file (.yaml/.yml/.json with base00..base0F -- e.g. from the atelierbram/syntax-highlighting or chriskempson/base16 scheme repos). Window colours not given explicitly are derived from the background. Imported themes are saved and appear in the dropdown from then on."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1669
+#: mlox_subset_sort_gui.py:1683
 msgid "Log syntax highlighting: %(name)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1696
+#: mlox_subset_sort_gui.py:1710
 msgid "Import syntax highlighting theme"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1706
+#: mlox_subset_sort_gui.py:1720
 msgid "Import failed"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1706
+#: mlox_subset_sort_gui.py:1720
 msgid "Couldn't import that theme:\n\n%(error)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1719
+#: mlox_subset_sort_gui.py:1733
 msgid "Imported and applied theme: %(name)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1721
+#: mlox_subset_sort_gui.py:1735
 msgid "Theme imported"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1722
+#: mlox_subset_sort_gui.py:1736
 msgid "Imported \"%(name)s\" and set it as the active log theme."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1865
+#: mlox_subset_sort_gui.py:1879
 msgid "Missing input"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1899
+#: mlox_subset_sort_gui.py:1913
 msgid "Select the mods folder to scan"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1906
+#: mlox_subset_sort_gui.py:1920
 msgid "Save generated subset file as"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1916
+#: mlox_subset_sort_gui.py:1930
 msgid "Scanning mods folder..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1927
+#: mlox_subset_sort_gui.py:1941
 msgid "Scan complete -- %(folders)d folder(s), %(plugins)d plugin(s). Subset file loaded."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1933
+#: mlox_subset_sort_gui.py:1947
 msgid "Scan complete -- %(folders)d folder(s), %(plugins)d plugin(s). Held in memory (no file written)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1971
+#: mlox_subset_sort_gui.py:1985
 msgid "Sorting..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1985
+#: mlox_subset_sort_gui.py:1999
 msgid ", %(count)d yml warning(s)"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:1986
+#: mlox_subset_sort_gui.py:2000
 msgid "Sorted %(plugins)d plugin(s), %(warnings)d rule warning(s)%(yml)s. Drag to adjust, then Export."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2070
+#: mlox_subset_sort_gui.py:2084
 msgid "openmw.cfg changed"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2071
+#: mlox_subset_sort_gui.py:2085
 msgid "openmw.cfg has changed on disk since you ran '1. Sort' (did momw-configurator re-run?).\n\nThe order on screen was computed against the OLD contents. It's safer to re-Sort first.\n\nExport anyway?"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2086
+#: mlox_subset_sort_gui.py:2100
 msgid "Overwrite customizations.toml?"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2087
+#: mlox_subset_sort_gui.py:2101
 msgid "This will overwrite:\n%(path)s\n\nin place%(note)s. Continue?"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2101
+#: mlox_subset_sort_gui.py:2115
 msgid "Exporting..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2132
+#: mlox_subset_sort_gui.py:2146
 msgid "Export done -- cfg written: %(cfg)s, toml written: %(toml)s."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2263
+#: mlox_subset_sort_gui.py:2277
 msgid "Building cell map..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2287
+#: mlox_subset_sort_gui.py:2301
 msgid " CELL MAP"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2291
+#: mlox_subset_sort_gui.py:2305
 msgid "built-in parser"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2315
+#: mlox_subset_sort_gui.py:2329
 msgid "  %(exterior)d exterior + %(interior)d interior cell(s) touched across %(scanned)d plugin(s)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2325
+#: mlox_subset_sort_gui.py:2339
 msgid "  Map written to: %(path)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2326
+#: mlox_subset_sort_gui.py:2340
 msgid "Cell map ready (%(exterior)d exterior, %(interior)d interior)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2420
+#: mlox_subset_sort_gui.py:2434
 msgid "Save HTML..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2421
+#: mlox_subset_sort_gui.py:2435
 msgid "Open in browser"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2435
+#: mlox_subset_sort_gui.py:2449
 msgid "(inline render failed — use 'Open in browser' for the full map)"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2454
+#: mlox_subset_sort_gui.py:2468
 msgid "Save cell map"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2466
+#: mlox_subset_sort_gui.py:2480
 msgid "Cell map saved: %(path)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2491
+#: mlox_subset_sort_gui.py:2505
 msgid "If upstream moves or a new fork takes over, point the updaters at the new location here. Blank = built-in defaults. Downloads are always validated before anything is overwritten."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2501
+#: mlox_subset_sort_gui.py:2515
 msgid "mlox rules URL template:"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2509
+#: mlox_subset_sort_gui.py:2523
 msgid "Where 'Update Rules...' downloads from. Must contain {name}, which is replaced with mlox_base.txt / mlox_user.txt per file.\nDefault: %(url)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2518
+#: mlox_subset_sort_gui.py:2532
 msgid "default: %(url)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2522
+#: mlox_subset_sort_gui.py:2536
 msgid "plugin-order.yml URL:"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2529
+#: mlox_subset_sort_gui.py:2543
 msgid "Where the plugin-order.yml 'Update...' button downloads from. Blank tries the built-in candidates in order.\nDefault: %(url)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2538
+#: mlox_subset_sort_gui.py:2552
 msgid "default: %(url)s..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2553
+#: mlox_subset_sort_gui.py:2567
 msgid "Download sources"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2554
+#: mlox_subset_sort_gui.py:2568
 msgid "The rules URL template must contain {name} (it's replaced with the rule filename)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2564
+#: mlox_subset_sort_gui.py:2578
 msgid "Reset to defaults"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2565
+#: mlox_subset_sort_gui.py:2579
 msgid "Save & Close"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2598
+#: mlox_subset_sort_gui.py:2612
 msgid "rules file:"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2604
+#: mlox_subset_sort_gui.py:2618
 msgid "Personal rules file the rule is appended to (created with a header if new). Use your OWN file, not mlox_base/mlox_user -- those get overwritten by 'Update Rules...'. It's auto-added to the rule-files list LAST, so your rules win conflicts."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2613
+#: mlox_subset_sort_gui.py:2627
 msgid "Rule type"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2627
+#: mlox_subset_sort_gui.py:2641
 msgid "Plugins (drag order matters for [Order])"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2649
+#: mlox_subset_sort_gui.py:2663
 msgid "From plugin panel"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2653
+#: mlox_subset_sort_gui.py:2667
 msgid "Add the rows currently SELECTED in the main plugin-order panel, in their displayed order (Ctrl/Shift-click there to multi-select first)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2658
+#: mlox_subset_sort_gui.py:2672
 msgid "Remove"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2672
+#: mlox_subset_sort_gui.py:2686
 msgid "Type a plugin name or mlox pattern (wildcards * ? and <VER> allowed; must end in a plugin extension) and press Enter or Add."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2678
+#: mlox_subset_sort_gui.py:2692
 msgid "Add"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2680
+#: mlox_subset_sort_gui.py:2694
 msgid "comment (optional):"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2687
+#: mlox_subset_sort_gui.py:2701
 msgid "Written above the rule as a ';;' comment. The mlox rule guidelines suggest citing your source, e.g. (Ref: the mod's readme) or (Ref: a forum URL ) -- surround URLs with spaces. Handy if you later contribute the rule upstream."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2695
+#: mlox_subset_sort_gui.py:2709
 msgid "Preview"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2713
+#: mlox_subset_sort_gui.py:2727
 msgid "Append Rule"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2723
+#: mlox_subset_sort_gui.py:2737
 msgid "Select row(s) in the plugin-order panel first."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2776
+#: mlox_subset_sort_gui.py:2790
 msgid "Personal rules file"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2797
-#: mlox_subset_sort_gui.py:2801
-#: mlox_subset_sort_gui.py:2844
+#: mlox_subset_sort_gui.py:2811
+#: mlox_subset_sort_gui.py:2815
+#: mlox_subset_sort_gui.py:2858
 msgid "New rule"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2797
+#: mlox_subset_sort_gui.py:2811
 msgid "Set a rules file first."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2802
+#: mlox_subset_sort_gui.py:2816
 msgid "Don't append personal rules to mlox_base.txt / mlox_user.txt -- 'Update Rules...' overwrites those. Pick your own file (e.g. mlox_my_rules.txt)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2830
+#: mlox_subset_sort_gui.py:2844
 msgid "Rule conflicts with the curated order"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2831
+#: mlox_subset_sort_gui.py:2845
 msgid "This [Order] rule contradicts the frozen curated (MOMW) order for:\n\n%(pairs)s\n\nmlox will DISCARD those orderings (it never reorders the curated list), so the rule won't take effect for them. Write it anyway?"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2853
+#: mlox_subset_sort_gui.py:2867
 msgid "Rule appended to %(file)s. Re-run '1. Sort' to apply it."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2864
-#: mlox_subset_sort_gui.py:2879
-#: mlox_subset_sort_gui.py:2901
+#: mlox_subset_sort_gui.py:2878
+#: mlox_subset_sort_gui.py:2893
+#: mlox_subset_sort_gui.py:2915
 msgid "Update plugin-order.yml"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2865
+#: mlox_subset_sort_gui.py:2879
 msgid "Set the plugin-order.yml path first (or Browse to where you want it created)."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2880
+#: mlox_subset_sort_gui.py:2894
 msgid "Download the current plugin-order.yml from MOMW?\n\n%(age)s.\n\nThe download is validated before anything is written; a timestamped .bak of the old file is kept."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2906
+#: mlox_subset_sort_gui.py:2920
 msgid "Downloading plugin-order.yml..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2919
+#: mlox_subset_sort_gui.py:2933
 msgid "Run '1. Sort' first so there's a load order to check against."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2923
+#: mlox_subset_sort_gui.py:2937
 msgid "Choose an OpenMW save"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2934
+#: mlox_subset_sort_gui.py:2948
 msgid "Save check failed: %(error)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2945
+#: mlox_subset_sort_gui.py:2959
 msgid "Save check: %(count)d missing dependency! See the log."
 msgid_plural "Save check: %(count)d missing dependencies! See the log."
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort_gui.py:2953
 #: mlox_subset_sort_gui.py:2967
+#: mlox_subset_sort_gui.py:2981
 msgid "Save Check"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2964
+#: mlox_subset_sort_gui.py:2978
 msgid "Save check: all %(count)d dependencies present."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2968
+#: mlox_subset_sort_gui.py:2982
 msgid "%(file)s: all %(count)d content files it needs are in the current load order. Safe to export."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2984
+#: mlox_subset_sort_gui.py:2998
 msgid "Set openmw.cfg (or run a Sort) so I know where to look."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2987
+#: mlox_subset_sort_gui.py:3001
 msgid "Scanning for backups..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:2993
+#: mlox_subset_sort_gui.py:3007
 msgid "Found %(count)d backup file."
 msgid_plural "Found %(count)d backup files."
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort_gui.py:2998
+#: mlox_subset_sort_gui.py:3012
 msgid "Backup scan failed: %(error)s"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:3019
+#: mlox_subset_sort_gui.py:3033
 msgid "%(count)d backup file. Restore copies the backup over its original; Delete removes the backup file itself."
 msgid_plural "%(count)d backup files. Restore copies the backup over its original; Delete removes the backup file itself."
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort_gui.py:3053
+#: mlox_subset_sort_gui.py:3067
 msgid "Restore"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:3054
+#: mlox_subset_sort_gui.py:3068
 msgid "Copy %(count)d backup over its original (overwriting it)?"
 msgid_plural "Copy %(count)d backups over their originals (overwriting them)?"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort_gui.py:3073
+#: mlox_subset_sort_gui.py:3087
 msgid "Restored %(count)d backup%(failed)s. Re-run '1. Sort' to refresh checks."
 msgid_plural "Restored %(count)d backups%(failed)s. Re-run '1. Sort' to refresh checks."
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort_gui.py:3080
+#: mlox_subset_sort_gui.py:3094
 msgid ", %(fail)d failed"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:3089
+#: mlox_subset_sort_gui.py:3103
 msgid "Delete"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:3090
+#: mlox_subset_sort_gui.py:3104
 msgid "Permanently delete %(count)d backup file?"
 msgid_plural "Permanently delete %(count)d backup files?"
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort_gui.py:3107
+#: mlox_subset_sort_gui.py:3121
 msgid "Deleted %(count)d backup file."
 msgid_plural "Deleted %(count)d backup files."
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort_gui.py:3117
+#: mlox_subset_sort_gui.py:3131
 msgid "Restore Selected"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:3120
+#: mlox_subset_sort_gui.py:3134
 msgid "Delete Selected"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:3123
+#: mlox_subset_sort_gui.py:3137
 msgid "Refresh"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:3149
+#: mlox_subset_sort_gui.py:3163
 msgid "Linting plugins..."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:3158
+#: mlox_subset_sort_gui.py:3172
 msgid " LINT (tes3lint-style checks, native)"
 msgstr ""
 
-#: mlox_subset_sort_gui.py:3180
+#: mlox_subset_sort_gui.py:3194
 msgid "\n  No lint findings. Clean bill of health."
 msgstr ""
 
-#: mlox_subset_sort_gui.py:3183
+#: mlox_subset_sort_gui.py:3197
 msgid "Lint: %(count)d finding. See the log."
 msgid_plural "Lint: %(count)d findings. See the log."
 msgstr[0] ""
 msgstr[1] ""
 
-#: mlox_subset_sort_gui.py:3190
+#: mlox_subset_sort_gui.py:3204
 msgid "Lint: no findings."
 msgstr ""

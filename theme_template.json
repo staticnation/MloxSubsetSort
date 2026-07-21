@@ -1,0 +1,42 @@
+{
+  "name": "My Custom Theme",
+
+  "_about": "Template for MLOX Subset Sort's Import Theme... button (Log panel). Keys starting with _ are ignored by the importer, as is any other unknown key. Colors are hex: #rrggbb or shorthand #rgb. Base16 scheme files (.yaml/.yml with base00..base0F) are also importable directly - this template is the native format.",
+
+  "_required": "The 9 fields below MUST be present (import fails without them). They drive the log panel, and the window colours are derived from them automatically - background is lightened (dark themes) or darkened (light themes) for panels, buttons and borders.",
+  "background": "#141414",
+  "foreground": "#e6e6e6",
+  "select": "#094771",
+  "section": "#5eb3ff",
+  "warn": "#ffb454",
+  "error": "#ff5c5c",
+  "ok": "#5fd97f",
+  "inserted": "#7ee0a0",
+  "dim": "#8a8a8a",
+
+  "_optional_tokens": "The 7 fields below are OPTIONAL syntax-token colours for the field-diff JSON/HTML viewer (Check Conflicts -> double-click a field). Delete any or all - missing ones fall back to the required roles above (key->section, string->ok, number->warn, keyword->error, punct->dim, tag->error, attr->warn).",
+  "key": "#9cdcfe",
+  "string": "#ce9178",
+  "number": "#b5cea8",
+  "keyword": "#569cd6",
+  "punct": "#8a8a8a",
+  "tag": "#569cd6",
+  "attr": "#9cdcfe",
+
+  "_optional_chrome": "The chrome object below is OPTIONAL and overrides the automatic window-colour derivation. Give any subset of these 11 keys - anything missing (or invalid) is derived from background instead. Delete the whole object to use pure derivation. bg=window/frames, bg2=raised panels, field_bg=entries/lists, border=borders, fg=text, fg_dim=secondary text, select=selection, btn_bg/btn_bg_active=buttons, accent=focus highlight, log_bg=console-style panes (log, previews).",
+  "chrome": {
+    "bg": "#1e1e1e",
+    "bg2": "#252526",
+    "field_bg": "#2d2d30",
+    "border": "#3f3f46",
+    "fg": "#e6e6e6",
+    "fg_dim": "#9a9a9a",
+    "select": "#094771",
+    "btn_bg": "#3a3a3d",
+    "btn_bg_active": "#4a4a4e",
+    "accent": "#3794ff",
+    "log_bg": "#141414"
+  },
+
+  "_aliases": "Field-name tolerance: bg/fg work for background/foreground, selection for select, warning for warn, success/good for ok, muted/comment for dim, header/info for section, added for inserted, property for key, str/num/boolean/punctuation for their obvious fields."
+}

@@ -1,0 +1,111 @@
+[center]
+
+[size=6][b][color=#e8905a]MLOX Subset Sort[/color][/b][/size]
+[i]Sort your custom mods into your OpenMW load order — without ever touching your curated Modding-OpenMW.com list.[/i]
+
+[line]
+
+[size=5][b][color=#e8905a]The problem[/color][/b][/size]
+You built a carefully-tuned mod list from [url=https://modding-openmw.com/]Modding-OpenMW.com[/url] with umo + MOMW Configurator. Then you added a few mods of your own. They need to slot into the load order — but running a whole-list sorter like PLOX would scramble the curated MOMW order, which MOMW [b]explicitly warns against[/b].
+
+[size=5][b][color=#e8905a]What it does[/color][/b][/size]
+MLOX Subset Sort treats your existing [font=Courier New]openmw.cfg[/font] order as [b]frozen[/b] and only works out where [i]your[/i] additions belong — using the real mlox rules — then writes the result back as a corrected [font=Courier New]momw-customizations.toml[/font].
+
+That's the durable fix: it [b]survives every future Configurator rebuild[/b], and your curated list is [b]never reordered[/b]. Only your mods move.
+
+[size=5][b][color=#e8905a]Features[/color][/b][/size]
+[list]
+[*][b]Frozen curated order[/b] — sorts only your custom additions; the MOMW list is left exactly as it is.
+[*][b]Real mlox engine[/b] — ported from mlox and cross-checked against plox: [font=Courier New]*[/font]/[font=Courier New]?[/font] wildcards and the [font=Courier New]<VER>[/font] token, ordering that bridges over plugins you don't have, and [font=Courier New][Conflict]/[Requires]/[Note][/font] warnings that understand [font=Courier New]ALL/ANY/NOT/DESC[/font] plus the [font=Courier New][VER]/[SIZE]/[DESC][/font] functions.
+[*][b]plugin-order.yml aware[/b] — with your list name set, it tells curated-list plugins apart from your true additions and flags [color=#ffb454]redundant[/color], [color=#ffb454]orphan[/color], [color=#ffb454]needs-cleaning[/color], and base-order-drift issues.
+[*][b]Conflict detection[/b] — find records two mods both touch, drill into a [b]field-level diff[/b], and see which plugin wins. Compiled scripts are [b]disassembled[/b] rather than shown as base64, so a script edit reads as the change it actually is.
+[*][b]Cell map[/b] — a heatmap of which mods touch which cells, rendered in-app or in your browser.
+[*][b]Resource (VFS) conflicts[/b] — the loose-file "Data" conflict view for your data paths, in load order.
+[*][b]Health checks[/b] — master presence/order verification, a lint pass, save-file checks and timestamped backups.
+[*][b]tes3cmd frontend[/b] — clean plugins without leaving the app (Morrowind/Tribunal/Bloodmoon are never touched).
+[*][b]One-click mods-folder scan[/b] — point it at your custom mods folder and it builds the subset for you.
+[*][b]Drag-and-drop GUI + full CLI[/b] — reorder rows, with a live, colour-coded log ([color=#7ee0a0]green = inserted/moved[/color], [color=#ffb454]orange = heads-up[/color], red = error).
+[*][b]Fully themeable[/b] — [color=#bd93f9]Dracula[/color], [color=#a6e22e]Monokai[/color], [color=#61afef]Atom One Dark[/color], [color=#fabd2f]Gruvbox[/color] built in, and you can import your own or any [b]base16[/b] scheme. Themes the whole app, and switching applies instantly to every open window.
+[*][b]Opt out what you don't want[/b] — disable plugins/paths (multi-select); anything already in your cfg is removed durably via [font=Courier New]removeContent[/font]/[font=Courier New]removeData[/font].
+[*][b]Safe by default[/b] — dry-run preview, timestamped backups, and it can either emit a corrected TOML (recommended) or patch [font=Courier New]openmw.cfg[/font] directly.
+[*][b]Cross-platform[/b] — Windows, Linux, macOS. Pure Python + tkinter.
+[/list]
+
+[size=5][b][color=#e8905a]New in 3.0[/color][/b][/size]
+[list]
+[*][b]Theming for the whole app[/b] — the theme picker was log-panel-only; it now drives every window, button, frame, tab and list, and re-themes anything already open the moment you switch. Import your own theme as JSON or drop in a base16 scheme; a commented [font=Courier New]theme_template.json[/font] ships alongside to start from.
+[*][b]The engine was rebuilt as a proper package[/b] — the monolithic script is now split by concern (rules, sorting, cfg handling, plugin metadata, downloads, script decoding). This is the invisible half of the release, and the important one: separating the pieces exposed code that was written but never wired up, and [b]that is where several real bugs were hiding[/b]. Most notably, [font=Courier New][SIZE][/font]/[font=Courier New][DESC][/font] rules were claiming matches for plugins that aren't on disk — which could fire a [font=Courier New][Conflict][/font] or [font=Courier New][Requires][/font] warning that was simply wrong.
+[*][b]Verified, not asserted[/b] — 717 automated tests, plus a differential baseline pinning 41 behaviours against a real 687-plugin load order, so the refactor could be made without taking sorting behaviour on trust.
+[/list]
+
+[size=5][b][color=#e8905a]Requirements[/color][/b][/size]
+[list]
+[*]OpenMW with a MOMW list installed via the [url=https://modding-openmw.com/guides/auto/]Automatic Install Guide[/url] (umo + MOMW Configurator).
+[*]Python 3.10+ with tkinter (bundled with the python.org installers on Windows/macOS; on Linux e.g. [font=Courier New]sudo apt install python3-tk[/font]). [i]Not needed if you use the standalone .exe.[/i]
+[*]mlox rule files ([font=Courier New]mlox_base.txt[/font] / [font=Courier New]mlox_user.txt[/font]).
+[*][i]Optional:[/i] MOMW's [font=Courier New]plugin-order.yml[/font], and PyYAML (a built-in parser is used if it's absent).
+[/list]
+
+[size=5][b][color=#e8905a]How to use[/color][/b][/size]
+See the included [b]QUICKSTART[/b] for the 5-minute version. In short:
+[list=1]
+[*]Point it at your [font=Courier New]openmw.cfg[/font] and add [font=Courier New]mlox_base.txt[/font] + [font=Courier New]mlox_user.txt[/font].
+[*]Build your subset: click [b]Scan...[/b] and pick your custom mods folder (or load your [font=Courier New]momw-customizations.toml[/font]).
+[*]Set your [b]list name[/b] (e.g. [font=Courier New]total-overhaul[/font]) and point [b]plugin-order.yml[/b] at MOMW's file.
+[*]Click [b]1. Sort[/b], review the panels and log, then [b]2. Export[/b] a corrected [font=Courier New]momw-customizations.toml[/font].
+[*]Drop that file next to your [font=Courier New]openmw.cfg[/font] and re-run MOMW Configurator. Done — your mods sort into place on every rebuild.
+[/list]
+
+[size=5][b][color=#e8905a]What it will NOT do[/color][/b][/size]
+[list]
+[*]Reorder your curated MOMW list — ever.
+[*]Write anything until you tell it to (dry-run is on by default; backups are made first).
+[*]Guarantee your customizations are conflict-free. It helps you [i]see[/i] and [i]place[/i] them — the rest is on you. Customizations are not supported by the MOMW team.
+[/list]
+
+[size=5][b][color=#e8905a]Credits & acknowledgements[/color][/b][/size]
+This tool stands on a lot of other people's work — the good ideas are theirs. A full [b]CREDITS.md[/b] with copyright and license notices ships alongside the tool.
+[size=4][b][color=#e8905a]Code ported / adapted (MIT)[/color][/b][/size]
+[list]
+[*][b]mlox[/b] — © 2009–2017 John Moonsugar (alias), dragon32, Arthur Moore. The load-order rule engine and the rule databases this tool is built around.
+[*][b]tes3lint[/b] — © 2009 John Moonsugar. Distributed with mlox. Our [b]Lint[/b] feature reimplements its useful checks against plugin binaries; its table of 72 "evil GMSTs" is reproduced with its copyright notice inline, because those values are research we could not rederive.
+[*][url=https://github.com/DanaePlays/mlox-rules]mlox-rules[/url] — maintained by DanaePlays and contributors. The actively-updated rule database that [b]Update Rules...[/b] downloads.
+[*][b]plox[/b] — © 2024 Moritz Baron. Rust reimplementation of mlox, cross-referenced to harden our engine.
+[*][b]tes3conv[/b] — © 2025 Greatness7. Plugin ↔ JSON converter used (optionally) as the exact record/field-diff engine.
+[*][b]momw-configurator[/b] — © Modding-OpenMW.com (johnnyhostile). We read its [font=Courier New]cfg/custom.go[/font] to reimplement its customization-apply logic faithfully, so the Export preview simulates exactly what the Configurator will do.
+[*][b]MWEdit[/b] — © Dave Humphrey and contributors. Its [font=Courier New]Functions.dat[/font] is the primary source for our script-bytecode opcode table. Without it the [b]Bytecode[/b] view would be guesswork — and guesswork is exactly what we refused to ship.
+[*][b]modmapper[/b] — © 2023 Michiel. The inspiration and reference for the cell-map heatmap.
+[*][b]Tes3EditX[/b] — © 2023 Moritz Baron. Referenced for TES3 record handling and conflict UX.
+[*][b]TES3Tool[/b] — © 2019 SaintBahamut. Referenced for the TES3 binary record layout in our built-in parser.
+[/list]
+[size=4][b][color=#e8905a]abot's tes3cmd scripts (idea credited, no code used)[/color][/b][/size]
+[b]missing_pathgrids.pl[/b] and [b]cell_conflicts.pl[/b] — © [b]abot[/b], published on [url=https://abitoftaste.modlist.x10.mx/morrowind/index.php?option=downloads&catid=58&Itemid=50&-Morrowind-tools]Morrowind is Home[/url]. These files carry [b]no licence text[/b], which means the author keeps all rights — making them the most restricted inputs here, not the least. So they were treated as read-only inspiration: [b]no line of either script is in this tool[/b], and both features were written from scratch in Python against plugin binaries. What was taken is the diagnostic idea, which copyright does not cover. abot — if you would rather this were credited differently, or dropped entirely, say the word and it is done.
+
+[size=4][b][color=#e8905a]Approach referenced (no code copied)[/color][/b][/size]
+[list]
+[*][b]TES3 Conflictsolver Editor[/b] — ©2026 kirgan. Credited for the field-level record-diff approach that inspired our field comparison. No licence file is distributed with it and no code was copied; all rights remain with its author.
+[/list]
+[size=4][b][color=#e8905a]Referenced for formats & behavior (GPL — no source copied)[/color][/b][/size]
+[list]
+[*][url=https://openmw.org/]OpenMW[/url] — GPLv3. [font=Courier New]openmw.cfg[/font] semantics, the [font=Courier New].omwaddon[/font]/[font=Courier New].omwscripts[/font] formats, and VFS rules.
+[*][b]Mod Organizer 2[/b] — GPLv3. The "Data" loose-file conflict concept behind our resource-conflict checker.
+[*][b]MWSE[/b] — © NullCascade, Merzasphor, Greatness7 and contributors. [b]GPLv2.[/b] Read only to [i]check[/i] our opcode table, which agreed with MWEdit on all 533 shared opcodes. Because MWSE is copyleft and this tool is not, [b]none of its data was copied[/b] — the shipped table is MWEdit (MIT) plus our own corpus measurements.
+[*][b]MGE XE[/b] — GPLv3. Referenced alongside MWSE for the same cross-check; no source copied.
+[/list]
+[size=4][b][color=#e8905a]Curated data & tooling[/color][/b][/size]
+[list]
+[*][url=https://modding-openmw.com/]Modding-OpenMW.com[/url] — the curated lists, umo, MOMW Configurator, and [font=Courier New]plugin-order.yml[/font]. (Customizations are not supported by the MOMW team.)
+[*][b]tes3cmd[/b] — © 2016 John Moonsugar. The plugin-maintenance Swiss-army knife distributed with the MOMW Tools Pack; our [b]tes3cmd[/b] window is a front-end that stages plugins with their masters so it works correctly on a multi-folder OpenMW VFS. The safe-cleaning workflow — never cleaning the vanilla masters, cleaning masters before dependents — is adapted from the community drag-and-drop cleaning batch by RMWChaos, Pinkertonius, and Spirithawke.
+[/list]
+[size=4][b][color=#e8905a]Runtime & optional libraries[/color][/b][/size]
+[list]
+[*][b]Python[/b] and [b]Tkinter/ttk[/b] — the language and GUI toolkit.
+[*][url=https://github.com/pmgagne/tkinterdnd2]tkinterdnd2[/url] (drag-and-drop), [url=https://pyyaml.org/]PyYAML[/url] (faster [font=Courier New]plugin-order.yml[/font] parsing), [url=https://pywebview.flowrl.com/]pywebview[/url] (in-app cell-map viewer), [url=https://github.com/Andereoo/TkinterWeb]tkinterweb[/url] / [url=https://github.com/bauripalash/tkhtmlview]tkhtmlview[/url] (inline HTML fallbacks) — all optional; the tool degrades gracefully without them.
+[/list]
+[size=4][b][color=#e8905a]And of course[/color][/b][/size]
+[list]
+[*][b]Bethesda Game Studios[/b] — for [i]The Elder Scrolls III: Morrowind[/i].
+[*]The wider [b]OpenMW and Morrowind modding community[/b] — for decades of tools, documentation, and reverse-engineering that everything here depends on.
+[/list]
+
+[/center]

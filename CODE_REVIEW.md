@@ -1047,13 +1047,13 @@ Every figure below was measured, not recalled.
 | `mypy` advisory / crashing | §9.4 | already struck through in §9; it gates, and is clean on 28 files |
 | Module split | §8.1 | §8 carries its own COMPLETE note; 6 subpackages, 28 modules |
 | i18n string extraction | §8.4 | **partially** — plumbing, 141 marked strings, `.pot`, and `tools/make_pot.py` shipped in 3.0. The remaining 127 f-string sites are specified in `I18N_BRIEF.md` |
+| **CI** | §9.3 | `.github/workflows/ci.yml` runs the full gate list (ruff, black, mypy, `check_undefined`, `make_pot --check`, pytest) on Python 3.10 and 3.13. It installs `zstandard` deliberately: without it 3 bytecode tests skip, and a skipped test proves nothing |
+| **Coverage measurement** | §8.5 | `[tool.coverage.*]` configured in `pyproject.toml`, with branch coverage and the GUI omitted (it cannot be imported without Tk, so including it would report a meaningless ~0%). CI publishes an HTML report as an artifact |
 
 ### Still outstanding
 
 | Item | Where | Measured at 3.0 |
 |---|---|---|
-| **CI** | §9.3 | No `.github/`. `ruff check .` + `pytest` in an Action is the cheapest guard on everything 3.0 stabilised, and the only item here with no downside |
-| **Coverage floor** | §8.5 | `pytest-cov` still unconfigured. §8 deferred this until "the split settles" — it has, so this is now unblocked |
 | **`print` → logging** | §8.3 | 75 `print()` in the engine vs 8 `get_logger` uses |
 | **Typing + PEP 257 on the legacy scripts** | §8.2 | `mlox_subset_sort.py` and the GUI still carry `"D", "ANN"` per-file exemptions; only `mlox_subset/` meets the strict standard |
 | **Split the GUI module** | §9.2 | Flagged at ~4,100 lines; now **5,586** |
@@ -1089,13 +1089,487 @@ identically.
 
 ### Suggested order, if someone picks this up
 
-1. **CI** — smallest, protects everything else.
-2. **Coverage floor** — needs CI to be useful, and tells you where the GUI
-   split is riskiest before you attempt it.
-3. **i18n f-strings + `print` → logging together**, per `I18N_BRIEF.md`, whose
+1. **Set the coverage floor.** The config landed without a `fail_under`, on
+   purpose: the honest number comes from the first CI run, not from a figure
+   guessed at a desk. Read it off that run and set the floor slightly below,
+   so it ratchets upward instead of blocking the next PR.
+2. **i18n f-strings + `print` → logging together**, per `I18N_BRIEF.md`, whose
    first step (a static placeholder checker) is the safety net for both.
-4. **GUI split** — the largest and most disruptive; worth having 1–3 first.
-5. `compute_plan` / `build_and_sort` decomposition and the shim deletion are
+3. **GUI split** — the largest and most disruptive; worth having 1–2 first,
+   and the coverage report will show which parts are least protected.
+4. `compute_plan` / `build_and_sort` decomposition and the shim deletion are
    behaviour-risk work pinned by the differential baseline. They are not
    blocked, but neither should be attempted casually, and the shim wants a
    major version.
+
+## 17. The §16 pick-up: what landed, what remains, and why
+
+§16's suggested order was followed as written. Every figure below was
+measured, not recalled.
+
+### 1. The coverage floor (§16 item 1) -- set
+
+Measured on the full suite with `zstandard` installed, branch coverage on:
+**54%** (54.46% at the time of writing). `fail_under = 52` is now in
+`pyproject.toml` -- slightly below the honest number, so it ratchets upward
+instead of blocking the next PR. Discovered on the way: `coverage` cannot
+write its data file on some mounted filesystems ("Operation not permitted" on
+the temp data file), which presents as pytest dying with an INTERNALERROR
+mid-run. `COVERAGE_FILE=/tmp/.coverage` works around it; recorded here
+because the failure looks exactly like a hung test run.
+
+### 2. i18n f-strings + print -> logging, as one pass (§16 items 2, §8.3/§8.4)
+
+**The checker came first**, per `I18N_BRIEF.md`'s "build this *before*
+converting": `tools/check_placeholders.py`, in `check_undefined.py`'s AST
+style. For every `_("...") % {...}` / `ngettext(...) % {...}` it reports
+missing keys (the runtime `KeyError`), unused keys (usually a typo'd twin),
+positional `%s` in any marked string (translators reorder words), and
+non-literal dicts as unverifiable rather than guessed at. `%%` is stripped
+before scanning -- "100%% done" is prose, not a `% d` space-flag conversion,
+a false positive the negative controls caught. It is proven in
+`tests/test_i18n_placeholders.py` against deliberately broken inputs (a
+checker is only trustworthy once it has been watched failing), wired into CI
+between check_undefined and the .pot check, and gated in pytest so a local
+run catches what CI would.
+
+**The conversions**: the .pot went 141 -> 267 messages. Package sites (13),
+CLI (~47 marked + 13 left as data), GUI (~54). Sites that turned out to be
+pure data or decoration -- `content=` echoes, `{w}` warning passthroughs,
+`=== title ===` banners, `removeContent:` lines -- were deliberately left
+unmarked: a msgid with no prose is noise a translator has to skip. Plurals
+use `ngettext`; strings carrying **two** independent counts keep the "(s)"
+style deliberately, since ngettext handles exactly one count and splitting
+the sentence would concatenate fragments (forbidden by i18n.py's own rules).
+
+**The trap fired exactly where predicted.** `build_and_sort` contained
+`_, n = heapq.heappop(ready)`; with `_` now the module-level gettext marker,
+that binding made every earlier `_()` call in the function an
+`UnboundLocalError`. Ruff's F823 flagged it and the test suite reproduced it;
+renamed `_rank`. This is the third time the `_`-shadowing class of bug has
+appeared the moment the marker reached a new file, and the reason the brief
+insisted on AST-based checking over grep.
+
+**print -> logging landed with it**, resolving the question both jobs share
+("which output is report, which is diagnostics") once, per
+`logging_setup.py`'s own contract: the stdout report -- including warnings
+*about the user's mods* -- stays `print()` and is now marked for translation;
+diagnostics *about the run* (unparseable rule file, failed CSV write, failed
+staging) route through `get_logger(__name__)` at WARNING/ERROR. The CLI
+finally gained the missing wiring: a `-v/--verbose` count flag and a
+`setup_logging()` call in `main()` -- the plumbing existed since the
+foundation package landed but had zero callers, which §16's "75 print vs 8
+get_logger uses" measurement was politely understating. With no `-v`,
+behaviour is unchanged except that diagnostics now carry a `WARNING`/`ERROR`
+prefix on stderr; in the GUI they still land in the log panel via logging's
+last-resort stderr handler, which the output-capture redirect picks up.
+
+**End-to-end proof (brief step 6)**: a synthetic German catalogue was
+compiled and loaded at runtime -- translation, plural selection
+(1 Sicherungsdatei / 3 Sicherungsdateien) and English passthrough for
+unmarked strings all behaved. Until this run, nothing had ever exercised a
+non-null catalogue.
+
+### 3. The GUI split (§16 item 3, §9.2) -- done, same discipline as the engine's
+
+`mlox_subset_sort_gui.py`: **5,765 -> 3,203 lines.** New subpackage
+`mlox_subset/gui/`:
+
+| Module | Lines | Contents |
+|---|---|---|
+| `theme.py` | 1,026 | chrome palette (`DARK`), theme parsing (base16/native), live restyle walk, JSON/HTML highlighters |
+| `widgets.py` | 387 | Tooltip, QueueWriter, PathField, DragReorderListbox, typeahead |
+| `t3.py` | 573 | `Tes3cmdMixin` -- the tes3cmd window and its workers |
+| `conflicts.py` | 650 | `ConflictWindowsMixin` -- record/resource windows, field diff, CSV export |
+| `__init__.py` | 91 | `app_base_dir()`, the shared tkinterdnd2 probe, `trace_first_fire()` |
+
+Bodies moved **verbatim**; the main module re-imports every name, so the
+smoke-test instructions and all internal references are unchanged. The two
+window groups are *mixins* -- `class App(Tes3cmdMixin, ConflictWindowsMixin)`
+-- so `self` is the same object and cross-group method calls resolve through
+the MRO exactly as before. `app_base_dir()` moved into the package and now
+derives the source-run app folder from its own location
+(`<app>/mlox_subset/gui/__init__.py` -> two parents up) instead of the GUI
+script's `__file__`; the frozen branch is untouched.
+
+The static check earned its keep again: `check_undefined.py` produced the
+exact import list each new module needed (including the non-obvious
+`scrolledtext` and the optional `mwscript` fallback pair), before anything
+was run. The moved modules carry the legacy scripts' `D`/`ANN`/`PERF203`/
+`S603` exemptions and a mypy `ignore_errors` override -- documented debt in
+`pyproject.toml`, same as the engine relocations were, meant to shrink to
+nothing. They are excluded from coverage for the same reason the GUI script
+is: no Tk in the hermetic suite. Runtime verification is SMOKE_TEST.md §2
+and §5, which exercise precisely the moved windows.
+
+The PEP 20 silenced-errors test immediately caught 12 formerly-exempt
+`except tk.TclError: pass` handlers now living under `mlox_subset/`; each
+now states its reason. The gate did its job the moment the code crossed into
+its jurisdiction.
+
+### 4. PEP audit, third pass (user request: "any PEP not yet applied")
+
+`test_standards.py` already asserts 8, 257, 263, 328, 394, 420, 440, 484,
+508, 517/518, 561, 563, 585/604, 594, 621, 632, 3120, 3131 and the checkable
+line of PEP 20. One applicable PEP was missing: **PEP 639**. `license` was
+the deprecated `{file = ...}` table; it is now the SPDX expression `"MIT"`
+with `license-files` keeping the text in the distribution, `[build-system]`
+bumped to `setuptools>=77` (the first release that understands the field),
+and a new `test_pep639_license_is_an_spdx_expression` pins it -- including
+that no deprecated `License ::` classifier sneaks back in. The 3.13
+classifier CI already tests against was added at the same time.
+
+### Still outstanding after this pass
+
+* **Typing + PEP 257 on the legacy scripts** (§8.2). Unchanged in scope, and
+  now slightly larger on paper: the four relocated GUI modules carry the same
+  per-file exemptions. It is a sweep of hundreds of annotations over
+  `mlox_subset_sort.py` (3,810 lines) and the GUI file (3,203); mechanical
+  but long, and worthless if rushed -- §14's lesson was that 22 of the
+  hand-written annotations were simply wrong until a checker read them.
+* **`compute_plan` (545) / `build_and_sort` (457) decomposition** (§15/§16).
+  Deliberately not attempted at the tail of the session that did everything
+  above. §16's own caveat stands: this is behaviour-risk work on the two
+  functions whose output *is* the product, and it deserves a fresh session
+  with the differential baseline run before, during and after -- not a tired
+  one. The baseline (41 pinned observations) is green and waiting.
+* **The re-export shim** -- 4.0-scoped, per §16. Not touched.
+
+### Suite and gates at the end of this pass
+
+798 tests (724 at §16), 1 deliberate skip. Green: pytest, ruff, black, mypy
+(31 files), check_undefined, check_placeholders, `make_pot --check`,
+coverage >= 52%. CI runs all of it on 3.10 and 3.13.
+
+## 18. §17's two deferrals, picked up: decomposition and the typing pass
+
+§17 left exactly two items open and said why. Both were then done, in the
+order that made the second cheaper: decompose first, annotate the results.
+
+### The oversized functions (§15/§16) -- decomposed
+
+| Function | Before | After | Extracted into |
+|---|---|---|---|
+| `compute_plan` | **644** | **105** | 10 stage helpers in `mlox_subset_sort.py` |
+| `build_and_sort` | **476** | **119** | `_build_edges`, `_anchor_positions`, `_kahn_place` |
+
+Every body moved **verbatim**; the helpers are named for the pipeline stages
+the original comments already marked (`# --- plugin-order.yml ...`,
+`# 1) frozen chain`, `# 3) stable Kahn's ...`), so the split follows seams the
+code had drawn itself rather than ones invented for the occasion. Report and
+trace output are byte-identical by construction, and the 41-observation
+differential baseline stayed green at every step -- which is the only reason a
+refactor of the two functions whose output *is* the product was attempted at
+all.
+
+Method used, worth recording because it is repeatable: cut the stage body,
+paste it under a `def` with the same locals as parameters, run
+`tools/check_undefined.py` on the fragment to get the exact free-variable list,
+then wire the call. The checker named every missing name up front (including
+non-obvious ones like `scrolledtext` and the optional `mwscript` fallback
+pair) instead of surfacing them one `NameError` at a time.
+
+`generate_customizations_toml` (312) was left alone: it is a single linear
+emitter with no internal stage boundaries, so splitting it would mean inventing
+seams rather than following them -- lower value and higher risk than either
+function above.
+
+### The typing pass (§8.2) -- complete for `mlox_subset/gui/`, partial for the scripts
+
+**`mlox_subset/gui/` now meets the package's strict standard.** All four
+relocated modules are fully annotated, PEP 257 clean, and **mypy-clean** --
+so the `D`/`ANN` per-file ignores and the `ignore_errors` mypy override that
+§17 recorded as debt are **deleted**, not relaxed. mypy now gates 33 files
+instead of 28. Only `PERF203` (per-widget `try/except` is mandatory in Tk) and
+`S603` (subprocess argv built entirely from our own paths) remain, each still
+carrying its stated reason.
+
+Turning mypy on found 177 errors. Two classes were worth the trip:
+
+* **The mixin host contract, 106 errors.** A mixin is half a class: the
+  methods reference ~36 attributes and helpers that live on `App`. Rather than
+  silence that, each mixin now declares what it expects from its host in an
+  `if TYPE_CHECKING:` block. The coupling was always there; it is now written
+  down and checked, which is the difference between a documented interface and
+  an implicit one.
+* **A real API defect.** `PluginFileIndex(data_dirs: list[str | Path])` cannot
+  accept a `list[str]` -- `list` is invariant -- and every caller builds
+  exactly that. It happened to work because nothing type-checked those call
+  sites. Fixed at the source (`Sequence`, per mypy's own advice), not papered
+  over at the call site.
+
+The rest were ordinary and real: a function annotated `-> None` that returns a
+value, a `dict[str, object]` scratch dict whose three values have three types,
+`text` assigned a raw field value before being stringified. §14's lesson held
+again -- the annotations I wrote by hand were the ones mypy found wrong.
+
+**The two legacy scripts are improved but NOT finished, and that is stated
+rather than glossed.** Measured now:
+
+| File | Returns typed | Args typed | D/ANN findings |
+|---|---|---|---|
+| `mlox_subset_sort.py` | 25/89 | 19/200 | 337 |
+| `mlox_subset_sort_gui.py` | 87/118 | 2/84 | 165 |
+
+What landed: **96 functions gained `-> None`** by a static pass that only
+annotates a function when its own scope provably returns nothing (nested
+scopes excluded, any `return <value>` or `yield` disqualifies it), plus 87
+auto-fixable docstring corrections. Both files still carry their `D`/`ANN`
+exemptions, because the remainder is **263 `ANN001` argument annotations**
+across 7,300 lines, and those cannot be inferred mechanically -- each needs the
+function read. Doing them fast is precisely how §14's 22 wrong annotations got
+written, and a wrong hint is worse than none because it gets believed. This is
+the next unit of work; it is bounded, uninteresting, and wants its own session
+with mypy turned on per-file as each one lands.
+
+### Gates at the end of this pass
+
+797 passed / 1 deliberate skip. Green: ruff, black, **mypy (33 files, GUI
+package included)**, `check_undefined`, `check_placeholders`,
+`make_pot --check` (269 messages), coverage ≥ 52%.
+
+## 19. Verification pass, third PEP audit, and the hand-off
+
+A pass with no new feature work: re-run everything, re-derive the applicable
+PEP list against the code as it now is, reconcile every figure in the docs
+against the code, and write the remaining work down properly.
+
+### The PEP audit found one gap, and it was in what was *not* exercised
+
+The applicable-PEP list itself came out unchanged -- 8, 257, 263, 328, 394,
+420, 440, 484/526, 508, 517/518, 561, 563, 585/604, 594, 621, 632, 639, 3120,
+3131, plus the checkable line of PEP 20. Nothing newly applicable had appeared.
+
+What *had* gone unverified was PEP 517/518 itself. `[build-system]` and
+`[project]` were declared in §15 "for correctness and inspectability rather
+than because a wheel is published" -- and then nothing ever built a wheel. A
+declaration that is never executed is a claim, not a fact, so it was tested:
+
+* **`python -m build --wheel` succeeds**, producing
+  `mlox_subset_sort-3.0.0-py3-none-any.whl` with all 7 subpackages and both
+  top-level modules collected. The declaration is sound.
+* It also surfaced that the declared floor is real: `setuptools>=77` (needed
+  for PEP 639 licence expressions) is genuinely newer than what ships on a
+  stock Ubuntu 22.04 Python (59.6.0), so an old environment fails with a clear
+  `Missing dependencies: setuptools>=77` rather than a confusing metadata
+  error. That is the correct behaviour and worth knowing before someone
+  reports it as a bug.
+
+Two gates were added rather than leaving this as a one-off observation:
+`test_pep517_build_metadata_is_resolvable` asserts every declared package and
+py-module exists on disk (cheap, runs in the suite), and **CI now runs the
+real `python -m build`** -- the slow half belongs where it can take the time.
+
+A second, smaller check came out of the same audit:
+`test_public_api_all_names_resolve`. `__all__` is the package's stated public
+surface and it is maintained by hand; a rename that misses it is an
+`AttributeError` on `from mlox_subset import *` and a silent hole in what the
+docs promise. All 9 names currently resolve.
+
+### Docs reconciled against measurement, not memory
+
+Every figure was re-derived from the code and corrected where it had drifted
+during the session: the suite is **800 tests** (not 798), the package is
+**7 subpackages / 33 modules** (not 6/28), the `.pot` holds **269 messages**
+(not 267), mypy gates **33 files**, and the theme picker offers **23** presets.
+Two claims in the changelog had become outright false and were rewritten: the
+GUI modules no longer "keep the legacy exemptions for now" (they were paid off
+in the same release), and `gui/` was missing from the subpackage list.
+
+This is the recurring lesson of this log: figures written from memory drift
+within a single session, let alone across releases. Re-derive them.
+
+### The remaining work is written down, not remembered
+
+`TYPING_BRIEF.md` is the hand-off for the last open item -- the `D`/`ANN`
+exemptions on the two legacy scripts. It records the measured scope (502
+findings, 263 of them `ANN001` argument annotations across 7,290 lines), what
+was already done so it is not redone, the per-module method that worked for
+`mlox_subset/gui/`, a definition of done, and the five traps that actually bit
+during that pass -- including the two most expensive: `object` as a
+placeholder annotation turns one missing hint into five new errors, and `list`
+invariance rejects the `list[str]` every caller builds.
+
+It follows `I18N_BRIEF.md`'s format deliberately. That brief was written the
+same way and the work landed from it in one session, along its suggested order,
+with its predicted trap firing exactly where it said it would.
+
+### Gates at the end of this pass
+
+800 tests: 799 passed, 1 deliberate skip. Green: ruff, black, mypy (33 files),
+`check_undefined`, `check_placeholders`, `make_pot --check` (269 messages),
+coverage 54.45% against the 52% floor, and `python -m build` produces a valid
+wheel.
+
+## 20. The typing pass, finished: both legacy scripts, and what mypy caught
+
+`TYPING_BRIEF.md`'s work, done along its own suggested order. Both scripts now
+meet the package standard, so **every `D`/`ANN` per-file ignore and every mypy
+`ignore_errors` override is deleted** -- not relaxed, deleted. mypy gates
+**35 files**, the whole codebase.
+
+| File | Returns typed | Args typed | D/ANN |
+|---|---|---|---|
+| `mlox_subset_sort.py` | 25/89 → **89/89** | 19/200 → **200/200** | 337 → **0** |
+| `mlox_subset_sort_gui.py` | 87/118 → **118/118** | 2/84 → **84/84** | 165 → **0** |
+
+The brief's per-module method held: annotate from the call sites, *then* turn
+mypy on for that file and fix what it finds before moving on. Turning it on
+found **75 errors in the engine and 46 in the GUI**, and the split between
+"my annotation was wrong" and "the code was wrong" is the interesting part.
+
+### Annotations I wrote that were simply wrong
+
+§14's lesson, third confirmation. Seven signatures I had written from reading
+the function name and body were contradicted by the code the moment a checker
+read them:
+
+* `read_plugin_masters_with_sizes` -- I wrote `list[tuple[str, int, int]]`; it
+  returns **pairs**, and the recorded size is `int | None` when the DATA
+  subrecord is absent.
+* `_iter_tes3_records` / `_iter_subrecords` -- I wrote `tuple[str, bytes]`; the
+  record tags are raw **4-byte `bytes`** (`b"CELL"`), never decoded.
+* `_load_sidecar(side: str)` -- `side` is the sidecar **`Path`**, and the very
+  next line calls `side.exists()`.
+* `read_cfg` -- I wrote `list[tuple[str, int]]` for the content order; it pairs
+  each name with its **raw line value**, a `str`.
+* `write_cfg(segments: Mapping)` -- it is a **sequence of
+  `(positions, new_lines)` pairs**, and mypy caught it by refusing to unpack a
+  string.
+* `lint_plugins(progress)` -- I gave the callback three parameters; it is
+  called with **two**.
+
+Every one of these would have been believed by the next reader. None was
+caught by the test suite, because a wrong annotation changes nothing at
+runtime -- which is exactly why the checker has to run.
+
+### Defects in the code, not the annotations
+
+* **A second invariance defect.** `check_predicates(data_dirs: list[str | Path])`
+  cannot accept the `list[str]` its only caller builds -- the same bug as
+  `PluginFileIndex` in §17, in a different function, found the same way. Fixed
+  at the source with `Sequence`. Two independent instances is a pattern, not
+  an accident: prefer `Sequence`/`Mapping` for parameters you only read.
+* **A latent `None` dereference in the tes3cmd worker.**
+  `stage_for_tes3cmd` returns `(Path | None, missing)`, and the GUI used the
+  path after checking only `missing`. If staging ever failed without
+  populating `missing`, that was an `AttributeError` in a worker thread. Now
+  an explicit `staged is None` branch that reports and skips.
+* **A `_get_session` contract that was too weak to be useful.** The mixin
+  declared it `-> object`, which silently made every downstream call
+  (`detect_conflicts`, `dump_tes3conv_json`) an error the moment those gained
+  real signatures. Corrected to `Tes3ConvSession | None`.
+* **A bug I introduced and the linter caught immediately.** Renaming a loop
+  variable to disambiguate two `for k, var in (...)` loops left the body still
+  assigning through the old name. Ruff's `B007` ("loop control variable not
+  used within loop body") flagged it within seconds. Worth recording as the
+  counter-example to "the linter is noise": that one would have silently
+  stopped every boolean setting from being restored.
+
+### Two things deliberately *not* silenced
+
+* **The mixin host contracts stay.** They now also carry `_tes3conv_override`
+  and `worker_running`, which the pass surfaced. Where the two mixins disagreed
+  about a type (`T3_NEVER_CLEAN` declared `frozenset`, defined `set`), the
+  declaration was corrected to match reality rather than the reverse.
+* **`assert` where a contract is real but unprovable.** Three sites -- the
+  export worker's plan, the staging dir on the clean path, the savegame file
+  list after an error check -- assert a condition the caller guarantees but
+  mypy cannot see. Stating it is better than an ignore comment: it documents
+  the contract *and* fails loudly if a future caller breaks it.
+
+### Method notes for next time
+
+`-> None` was inferred mechanically for 96 functions by a static pass that
+only annotates when the function's own scope provably returns nothing (nested
+scopes excluded; any `return <value>` or `yield` disqualifies it). Docstring
+D205 reflows were scripted the same way -- split at the first sentence, but
+only when the resulting summary fits on one line; the ~50 that did not were
+rewritten by hand. Both scripts are in the session's scratch, not shipped:
+they are one-shot migration aids, not tools worth maintaining.
+
+### Gates at the end of this pass
+
+800 tests: 799 passed, 1 deliberate skip. Green: ruff, black, **mypy (35
+files -- the entire codebase)**, `check_undefined`, `check_placeholders`,
+`make_pot --check` (270 messages), coverage 54.43% against the 52% floor.
+
+## 21. Fourth PEP audit, the tooltip gap, and doc retirement
+
+### The audit found one real gap, and it was in a family never enabled
+
+The applicable-PEP list is stable -- three consecutive audits have not grown
+it, which is itself the useful result. So this pass went at the *rule families
+never turned on*, which is where an unexamined decision can hide. Eight were
+measured. Seven are style preferences and are recorded in `REMAINING_WORK.md`
+with their counts, so the choice not to enable them is now informed rather
+than implicit.
+
+One was a genuine standards question: **`DTZ`, naive datetimes.** Nine sites
+call `datetime.now()` without a timezone. Every one is correct -- `.bak`
+filenames, trace lines, the build stamp and the `.pot` header are all read by
+the user against their own wall clock, and UTC would be actively wrong -- but
+none of them *said so*. That is precisely the condition `BLE001` was enabled
+to fix in §13, so `DTZ` is now enabled on the same terms: the rule is on, and
+each of the nine sites carries a `# noqa: DTZ005` with its reason.
+`test_naive_datetimes_are_explicitly_local` pins the shape so a new naive
+`now()` cannot arrive undocumented.
+
+Also checked and clean, worth recording so the next audit skips them: no
+`os.listdir` (PEP 471), no legacy `IOError`/`EnvironmentError` aliases (PEP
+3151), no `raise StopIteration` in a generator (PEP 479), no text I/O without
+an explicit `encoding=`, and ruff's and black's line lengths agree.
+
+### The i18n pass had missed 42 strings, and the claim was wrong
+
+`CHANGELOG.md` said "every user-facing string is marked -- buttons, labels,
+**tooltips**, dialogs". That was false. An AST sweep of `add_tooltip()`,
+`messagebox.*` and the `text=`/`title=`/`message=` keywords found **42
+unmarked literals**: 28 tooltips and 14 dialog bodies and panel titles.
+
+They were missed for an understandable reason and that is the lesson: the
+§17 pass converted *f-strings* to named-placeholder form, and these are plain
+literals, so they never appeared in that pass's 127-site inventory. They also
+sit next to widgets whose `text=` **was** marked, which makes them invisible
+on a read-through.
+
+The `.pot` went **270 -> 312 messages**. A one-off sweep would leave the same
+hole open, so `TestUserFacingStringsAreMarked` now asserts the property
+directly: any string literal in a user-facing call or keyword, in any GUI
+module, must be wrapped. It fails with the offending file, line and text.
+
+**The generalisable point:** "I converted all 127 sites" and "every user-facing
+string is marked" are different claims, and the first was quietly substituted
+for the second in the changelog. A checker that asserts the *property* is the
+only version of that claim worth making.
+
+### Completed briefs retired
+
+`I18N_BRIEF.md`, `THEMING_BRIEF.md` and `TYPING_BRIEF.md` all said COMPLETED
+and together ran to 562 lines of "hand this to a fresh session" instructions
+for work that is done. A hand-off note for finished work is worse than no note:
+a reader picks it up expecting a task. Each is now an ~18-line stub pointing at
+the `CODE_REVIEW.md` section that holds the real record, and the live code
+references (in `engine.py`, `check_placeholders.py`, the CI workflow and the
+placeholder tests) were redirected to those sections so nothing dangles. The
+stubs exist only to keep those references resolving and can be deleted
+outright.
+
+This log's own references to the briefs are left alone: it is append-only, and
+they were correct when written.
+
+Their replacement is **`REMAINING_WORK.md`** -- the only forward-looking
+document, listing what a reviewer would still flag: the deliberate rule
+exemptions and why each stands, the six rule families not enabled and their
+measured counts, the seven oversized functions in priority order with a verdict
+on each, the coverage distribution and why the GUI has none, and a "do not do
+this" section for the decisions that have already been made on evidence.
+
+### Gates at the end of this pass
+
+802 tests: 801 passed, 1 deliberate skip. Green: ruff (now including `DTZ`),
+black, mypy (35 files), `check_undefined`, `check_placeholders`,
+`make_pot --check` (312 messages), and the CI wheel build. Coverage last
+measured at 54.4% against the 52% floor; the sandbox this pass ran in reaped
+the long re-measure, so that figure is carried forward from §20 rather than
+re-derived -- and CI will report it authoritatively on the next run.

@@ -1,0 +1,85 @@
+{
+ "version": "auto-py-to-exe-configuration_v1",
+ "pyinstallerOptions": [
+  {
+   "optionDest": "noconfirm",
+   "value": true
+  },
+  {
+   "optionDest": "filenames",
+   "value": "C:/Users/l33t3/Desktop/subset sort/MLOXSubsetSort/mlox_subset_sort_gui.py"
+  },
+  {
+   "optionDest": "onefile",
+   "value": true
+  },
+  {
+   "optionDest": "console",
+   "value": false
+  },
+  {
+   "optionDest": "icon_file",
+   "value": "C:/Users/l33t3/Desktop/subset sort/MLOXSubsetSort/mlox_subset_sort_icon.ico"
+  },
+  {
+   "optionDest": "clean_build",
+   "value": true
+  },
+  {
+   "optionDest": "strip",
+   "value": false
+  },
+  {
+   "optionDest": "noupx",
+   "value": false
+  },
+  {
+   "optionDest": "disable_windowed_traceback",
+   "value": false
+  },
+  {
+   "optionDest": "uac_admin",
+   "value": false
+  },
+  {
+   "optionDest": "uac_uiaccess",
+   "value": false
+  },
+  {
+   "optionDest": "argv_emulation",
+   "value": false
+  },
+  {
+   "optionDest": "bootloader_ignore_signals",
+   "value": false
+  },
+  {
+   "optionDest": "collect_all",
+   "value": "webview"
+  },
+  {
+   "optionDest": "collect_all",
+   "value": "clr_loader"
+  },
+  {
+   "optionDest": "collect_all",
+   "value": "pythonnet"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "clr"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "webview.platforms.edgechromium"
+  },
+  {
+   "optionDest": "datas",
+   "value": "C:/Users/l33t3/Desktop/subset sort/MLOXSubsetSort/mlox_subset_sort.py;."
+  }
+ ],
+ "nonPyinstallerOptions": {
+  "increaseRecursionLimit": true,
+  "manualArguments": ""
+ }
+}

@@ -181,7 +181,9 @@ def build_pot(messages: dict[tuple[str, str | None], Message], version: str) -> 
     Returns:
         The template text, ending in a trailing newline.
     """
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M%z")
+    # Local clock with offset: that is what gettext's POT-Creation-Date
+    # header is specified to carry.
+    stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M%z")  # noqa: DTZ005
     header = "\n".join(
         (
             f"# Translation template for MLOX Subset Sort {version}.",

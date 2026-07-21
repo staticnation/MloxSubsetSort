@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-mlox_subset_sort_gui.py
+"""mlox_subset_sort_gui.py.
 
 A small drag-and-drop GUI front-end for mlox_subset_sort.py. It doesn't
 reimplement any sorting/warning logic itself -- it just builds the same
@@ -51,24 +50,26 @@ rather than shelling out, so results, exceptions, etc. all stay in-process).
 # only imported for type checking, and no annotation costs import time.
 from __future__ import annotations
 
-import io
+import argparse
 import json
 import os
 import queue
-import re
 import subprocess
 import sys
 import threading
 import traceback
 import types
 import webbrowser
+from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 # Compiled-script disassembly for the field-diff window. Optional: if the
 # package is missing the diff view still works, it just shows the raw base64
 # blob it always did.
+listing_for_bytecode_field: Callable[..., str] | None
+variables_text_for_field: Callable[..., str] | None
 try:
     from mlox_subset.mwscript import (
         listing_for_bytecode_field,
@@ -93,13 +94,17 @@ except ImportError:
 # SVG grid; tkhtmlview only takes an in-memory string and can't draw SVG, so it's
 # a last resort. Without either, the map is written to a file and opened in a
 # browser. (pip install tkinterweb  -- recommended for the in-app window.)
-HTMLViewer = None
+HTMLViewer: Any = None
 try:
-    from tkinterweb import HtmlFrame as HTMLViewer  # supports load_file + SVG
+    from tkinterweb import HtmlFrame as _HtmlFrame
+
+    HTMLViewer = _HtmlFrame  # supports load_file + SVG
 except Exception:  # noqa: BLE001
     # optional 3rd-party import; a broken install must not kill startup
     try:
-        from tkhtmlview import HTMLScrolledText as HTMLViewer
+        from tkhtmlview import HTMLScrolledText as _HTMLScrolledText
+
+        HTMLViewer = _HTMLScrolledText
     except Exception:  # noqa: BLE001
         # optional 3rd-party import; a broken install must not kill startup
         HTMLViewer = None
@@ -118,51 +123,11 @@ except Exception:  # noqa: BLE001
     HAVE_PYWEBVIEW = False
 
 
-_APP_DIR = None
 _TRACE_REQUEST = None  # set by main() from --trace; None = use env var / off
 
-
-def app_base_dir():
-    """A writable folder for everything the app persists (settings, trace log,
-    cell_map.html, the tes3conv_json spool). This MUST NOT be derived from
-    __file__: under PyInstaller / auto-py-to-exe, __file__ lives in a temp
-    extraction dir that's wiped on exit (onefile) or a read-only install dir.
-    Prefer the folder next to the .exe (frozen) or next to the script (source);
-    if that isn't writable, fall back to a per-user data dir. Cached."""
-    global _APP_DIR
-    if _APP_DIR is not None:
-        return _APP_DIR
-    if getattr(sys, "frozen", False):
-        base = Path(sys.executable).resolve().parent  # next to the built .exe
-    else:
-        base = Path(__file__).resolve().parent
-    try:
-        probe = base / ".mlox_write_test"
-        probe.write_text("x", encoding="utf-8")
-        probe.unlink()
-    except OSError:  # the probe is just write_text/unlink
-        if os.name == "nt":
-            root = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
-        elif sys.platform == "darwin":
-            root = Path.home() / "Library" / "Application Support"
-        else:
-            root = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
-        base = root / "MloxSubsetSort"
-        try:
-            base.mkdir(parents=True, exist_ok=True)
-        except OSError:  # mkdir on the per-user data dir
-            base = Path.home()
-    _APP_DIR = base
-    return base
-
-
-# Drag-and-drop is optional -- degrade gracefully to Browse-only if missing.
-try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD
-
-    HAVE_DND = True
-except ImportError:
-    HAVE_DND = False
+# app_base_dir() moved to mlox_subset/gui/__init__.py in the 3.0 split; it is
+# re-imported below (after the sys.path fix-up) so every call site here and in
+# the mixins resolves the same cached answer.
 
 # abspath/dirname deliberately, not Path.resolve(): resolve() follows
 # symlinks, and this file is routinely run through one (MO2 junctions, a
@@ -178,1295 +143,46 @@ except ImportError as e:
 # makes the package findable; hence the E402. Every user-facing literal in this
 # file is wrapped in _() so `tools/make_pot.py` can extract it -- with no
 # catalogue installed this returns the English string unchanged.
-from mlox_subset import _  # noqa: E402
+from mlox_subset import _, ngettext  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# chrome palette -- the app-wide window/widget colours (as opposed to the
-# syntax-highlighting THEME_PRESETS below). Historically a hardcoded dark
-# constant; it is now the *active* chrome palette: set_active_chrome() (below,
-# with the theme code) rewrites these values in place from the selected
-# syntax theme, so every `DARK[...]` read site -- the ttk.Style setup, the
-# plain-widget styler, and per-widget construction -- picks up the theme.
-# The literal values here are the built-in dark defaults, kept as the
-# fallback and as the hand-tuned chrome for the "Dark (default)" preset.
+# GUI support package (split out per CODE_REVIEW.md §16/§9.2, 3.0). Bodies
+# moved verbatim; every name is re-imported here so the rest of this module --
+# and the smoke-test instructions that reference these names -- are unchanged.
+# Imported after the sys.path fix-up, like the gettext marker above.
 # ---------------------------------------------------------------------------
-
-DARK = {
-    "bg": "#1e1e1e",  # window/frame background
-    "bg2": "#252526",  # slightly-raised panel background
-    "field_bg": "#2d2d30",  # entry/listbox/text background
-    "border": "#3f3f46",
-    "fg": "#e6e6e6",  # normal text
-    "fg_dim": "#9a9a9a",  # secondary/status text
-    "select": "#094771",  # selection highlight
-    "btn_bg": "#3a3a3d",
-    "btn_bg_active": "#4a4a4e",
-    "accent": "#3794ff",
-    "log_bg": "#141414",  # console-style text areas (log, previews, detail panes)
-}
-
-
-# ttk base themes that actually honour style.configure(background=...). The
-# Windows-native themes (vista/xpnative/winnative) and aqua draw widgets with
-# the OS renderer and silently ignore our colour options, so a chrome/theme
-# change would appear not to take -- notably in a PyInstaller *onefile* build,
-# where clam's Tcl file can fail to extract, theme_use("clam") then raises, and
-# without this we'd silently stay on vista. These four are defined in ttk's
-# Tcl library; we pick the first that's actually registered.
-_COLOR_CAPABLE_TTK_THEMES = ("clam", "alt", "default", "classic")
-
-
-def _select_color_capable_theme(style):
-    """Switch ``style`` to a theme that respects our colour options.
-
-    Returns the theme name now in use. Traced (not swallowed) so a frozen
-    build that lands on a native, colour-ignoring theme is diagnosable from
-    the log rather than presenting as "the colours just don't change".
-    """
-    try:
-        available = set(style.theme_names())
-    except tk.TclError:
-        available = set()
-    for name in _COLOR_CAPABLE_TTK_THEMES:
-        if name in available:
-            try:
-                style.theme_use(name)
-                core.trace(f"[theme] ttk base theme: using {name!r}")
-                return name
-            except tk.TclError:
-                continue
-    # nothing colour-capable is registered -- almost always a frozen build that
-    # didn't bundle ttk's Tcl theme files. Report loudly; colours on ttk
-    # widgets (buttons/frames/tabs) will not apply until the build includes them.
-    try:
-        active = style.theme_use()
-    except tk.TclError:
-        active = "?"
-    core.trace(
-        f"[theme] WARNING: no colour-capable ttk theme available "
-        f"(have {sorted(available)}); staying on {active!r} -- ttk widget "
-        f"colours will NOT apply. If this is a frozen .exe, the Tcl/tk ttk "
-        f"theme files were not bundled."
-    )
-    return active
-
-
-def apply_dark_theme(root):
-    root.configure(bg=DARK["bg"])
-    style = ttk.Style(root)
-    _select_color_capable_theme(style)
-
-    style.configure(
-        ".",
-        background=DARK["bg"],
-        foreground=DARK["fg"],
-        fieldbackground=DARK["field_bg"],
-        bordercolor=DARK["border"],
-        darkcolor=DARK["bg"],
-        lightcolor=DARK["bg"],
-    )
-    style.configure("TFrame", background=DARK["bg"])
-    style.configure("TLabel", background=DARK["bg"], foreground=DARK["fg"])
-    style.configure(
-        "TLabelframe", background=DARK["bg"], foreground=DARK["fg"], bordercolor=DARK["border"]
-    )
-    style.configure("TLabelframe.Label", background=DARK["bg"], foreground=DARK["fg"])
-    style.configure("TCheckbutton", background=DARK["bg"], foreground=DARK["fg"])
-    style.map(
-        "TCheckbutton",
-        background=[("active", DARK["bg"])],
-        foreground=[("disabled", DARK["fg_dim"])],
-    )
-    # radiobuttons need the same treatment or the focused/active one renders
-    # with a white background on Windows' default theme
-    style.configure("TRadiobutton", background=DARK["bg"], foreground=DARK["fg"])
-    style.map(
-        "TRadiobutton",
-        background=[("active", DARK["bg"]), ("focus", DARK["bg"]), ("selected", DARK["bg"])],
-        foreground=[("disabled", DARK["fg_dim"])],
-    )
-    style.configure(
-        "TEntry",
-        fieldbackground=DARK["field_bg"],
-        foreground=DARK["fg"],
-        insertcolor=DARK["fg"],
-        bordercolor=DARK["border"],
-    )
-    style.map("TEntry", fieldbackground=[("readonly", DARK["field_bg"])])
-    # the closed combobox field. Note: this does NOT reach the dropdown list
-    # itself -- that's a separate plain tk::Listbox the combobox pops up, and
-    # ttk::Style can't touch it; it's themed below via the option database.
-    style.configure(
-        "TCombobox",
-        fieldbackground=DARK["field_bg"],
-        background=DARK["btn_bg"],
-        foreground=DARK["fg"],
-        arrowcolor=DARK["fg"],
-        bordercolor=DARK["border"],
-        selectbackground=DARK["field_bg"],
-        selectforeground=DARK["fg"],
-    )
-    style.map(
-        "TCombobox",
-        fieldbackground=[("readonly", DARK["field_bg"]), ("disabled", DARK["bg2"])],
-        foreground=[("readonly", DARK["fg"]), ("disabled", DARK["fg_dim"])],
-        background=[("active", DARK["btn_bg_active"]), ("readonly", DARK["btn_bg"])],
-        arrowcolor=[("disabled", DARK["fg_dim"])],
-    )
-    # the dropdown list's background/foreground/selection -- ttk::combobox's
-    # popdown is a raw Listbox, so this has to go through Tk's option
-    # database (by widget-class pattern) rather than ttk::Style.
-    root.option_add("*TCombobox*Listbox.background", DARK["field_bg"])
-    root.option_add("*TCombobox*Listbox.foreground", DARK["fg"])
-    root.option_add("*TCombobox*Listbox.selectBackground", DARK["select"])
-    root.option_add("*TCombobox*Listbox.selectForeground", DARK["fg"])
-    root.option_add("*TCombobox*Listbox.font", ("TkDefaultFont",))
-    style.configure(
-        "Conf.Treeview",
-        background=DARK["field_bg"],
-        fieldbackground=DARK["field_bg"],
-        foreground=DARK["fg"],
-        bordercolor=DARK["border"],
-        rowheight=22,
-    )
-    style.map(
-        "Conf.Treeview",
-        background=[("selected", DARK["select"])],
-        foreground=[("selected", DARK["fg"])],
-    )
-    style.configure(
-        "Conf.Treeview.Heading", background=DARK["btn_bg"], foreground=DARK["fg"], relief="flat"
-    )
-    style.map("Conf.Treeview.Heading", background=[("active", DARK["btn_bg_active"])])
-    style.configure("TNotebook", background=DARK["bg"], borderwidth=0, bordercolor=DARK["border"])
-    style.configure(
-        "TNotebook.Tab",
-        background=DARK["btn_bg"],
-        foreground=DARK["fg"],
-        padding=(12, 4),
-        borderwidth=0,
-    )
-    style.map(
-        "TNotebook.Tab",
-        background=[("selected", DARK["select"]), ("active", DARK["btn_bg_active"])],
-        foreground=[("selected", DARK["fg"])],
-    )
-    style.configure(
-        "TButton",
-        background=DARK["btn_bg"],
-        foreground=DARK["fg"],
-        bordercolor=DARK["border"],
-        focuscolor=DARK["bg"],
-    )
-    style.map(
-        "TButton",
-        background=[("active", DARK["btn_bg_active"]), ("disabled", DARK["bg2"])],
-        foreground=[("disabled", DARK["fg_dim"])],
-    )
-    style.configure(
-        "TScrollbar",
-        background=DARK["btn_bg"],
-        troughcolor=DARK["bg2"],
-        bordercolor=DARK["border"],
-        arrowcolor=DARK["fg"],
-    )
-    style.map("TScrollbar", background=[("active", DARK["btn_bg_active"])])
-    return style
-
-
-def style_plain_widget(widget, chrome=None):
-    """For non-ttk widgets (tk.Listbox, scrolledtext.ScrolledText) that ttk
-    theming doesn't reach. Applied option-by-option since the exact set of
-    supported options differs between Listbox and Text (e.g. Listbox has no
-    insertbackground). Reads the *active* chrome palette (``DARK``) at call
-    time unless an explicit chrome mapping is passed, so it serves both
-    construction and the runtime re-apply walk."""
-    chrome = DARK if chrome is None else chrome
-    options = {
-        "background": chrome["field_bg"],
-        "foreground": chrome["fg"],
-        "insertbackground": chrome["fg"],
-        "selectbackground": chrome["select"],
-        "selectforeground": chrome["fg"],
-        "highlightbackground": chrome["border"],
-        "highlightcolor": chrome["accent"],
-        "highlightthickness": 1,
-        "relief": "flat",
-        "borderwidth": 0,
-    }
-    for opt, val in options.items():
-        try:
-            widget.configure(**{opt: val})
-        except tk.TclError:
-            pass
-
-
-# ---------------------------------------------------------------------------
-# syntax highlighting themes -- shared by two places: the Log panel (the
-# console-style output from Sort/Export/Lint/etc.) and the field-diff JSON
-# viewer (Check Conflicts -> double-click a field), which also renders
-# embedded HTML-ish markup (Morrowind book text uses tags like <DIV ALIGN=,
-# <FONT COLOR=, <BR>). One theme picker (next to the log panel) drives both.
-#
-# Each theme has two layers:
-#   - 6 log roles (required): section/warn/error/ok/inserted/dim, plus
-#     background/foreground/select for the text widget itself.
-#   - 7 JSON/HTML token roles (optional -- fall back to the log roles via
-#     _json_syntax_colors if a theme doesn't define them): key/string/number/
-#     keyword/punct/tag/attr.
-#
-# Built-in presets use each scheme's well-known palette. Users can also
-# import their own via "Import Theme..." next to the log panel, in either of
-# two file formats:
-#   1. native JSON -- the 9 required fields above (as hex colors), plus
-#      optionally any of the 7 token-role fields.
-#   2. a base16 scheme file (.yaml/.yml/.json with base00..base0F keys) --
-#      the format used by base16 scheme repos such as chriskempson/base16 and
-#      atelierbram/syntax-highlighting. These get remapped onto all 13 roles
-#      using the standard base16 semantic convention (see _theme_from_base16
-#      below). PyYAML is NOT required -- a small parser below handles the
-#      flat "key: value" shape these scheme files use.
-# ---------------------------------------------------------------------------
-
-THEME_PRESETS = {
-    "Dark (default)": {
-        "background": "#141414",
-        "foreground": "#e6e6e6",
-        "select": "#094771",
-        "section": "#5eb3ff",
-        "warn": "#ffb454",
-        "error": "#ff5c5c",
-        "ok": "#5fd97f",
-        "inserted": "#7ee0a0",
-        "dim": "#8a8a8a",
-        "key": "#9cdcfe",
-        "string": "#ce9178",
-        "number": "#b5cea8",
-        "keyword": "#569cd6",
-        "punct": "#8a8a8a",
-        "tag": "#569cd6",
-        "attr": "#9cdcfe",
-        # chrome: the original hardcoded palette, so the default look is
-        # byte-for-byte unchanged from before themes drove the chrome
-        "chrome": {
-            "bg": "#1e1e1e",
-            "bg2": "#252526",
-            "field_bg": "#2d2d30",
-            "border": "#3f3f46",
-            "fg": "#e6e6e6",
-            "fg_dim": "#9a9a9a",
-            "select": "#094771",
-            "btn_bg": "#3a3a3d",
-            "btn_bg_active": "#4a4a4e",
-            "accent": "#3794ff",
-        },
-    },
-    "Dracula": {
-        "background": "#282a36",
-        "foreground": "#f8f8f2",
-        "select": "#44475a",
-        "section": "#bd93f9",
-        "warn": "#f1fa8c",
-        "error": "#ff5555",
-        "ok": "#50fa7b",
-        "inserted": "#8be9fd",
-        "dim": "#6272a4",
-        "key": "#8be9fd",
-        "string": "#50fa7b",
-        "number": "#bd93f9",
-        "keyword": "#ff79c6",
-        "punct": "#6272a4",
-        "tag": "#ff79c6",
-        "attr": "#8be9fd",
-        # chrome from the published Dracula UI palette (darker sidebar
-        # #21222c, current-line #44475a, comment #6272a4)
-        "chrome": {
-            "bg": "#282a36",
-            "bg2": "#21222c",
-            "field_bg": "#343746",
-            "border": "#44475a",
-            "fg": "#f8f8f2",
-            "fg_dim": "#6272a4",
-            "select": "#44475a",
-            "btn_bg": "#44475a",
-            "btn_bg_active": "#6272a4",
-            "accent": "#bd93f9",
-        },
-    },
-    "Monokai": {
-        "background": "#272822",
-        "foreground": "#f8f8f2",
-        "select": "#49483e",
-        "section": "#66d9ef",
-        "warn": "#e6db74",
-        "error": "#f92672",
-        "ok": "#a6e22e",
-        "inserted": "#66d9ef",
-        "dim": "#75715e",
-        "key": "#66d9ef",
-        "string": "#e6db74",
-        "number": "#ae81ff",
-        "keyword": "#f92672",
-        "punct": "#75715e",
-        "tag": "#f92672",
-        "attr": "#a6e22e",
-        # chrome from Monokai's editor palette (line-highlight #3e3d32,
-        # selection #49483e, comment #75715e)
-        "chrome": {
-            "bg": "#272822",
-            "bg2": "#1e1f1c",
-            "field_bg": "#3e3d32",
-            "border": "#49483e",
-            "fg": "#f8f8f2",
-            "fg_dim": "#75715e",
-            "select": "#49483e",
-            "btn_bg": "#49483e",
-            "btn_bg_active": "#75715e",
-            "accent": "#66d9ef",
-        },
-    },
-    "Atom One Dark": {
-        "background": "#282c34",
-        "foreground": "#abb2bf",
-        "select": "#3e4451",
-        "section": "#61afef",
-        "warn": "#e5c07b",
-        "error": "#e06c75",
-        "ok": "#98c379",
-        "inserted": "#56b6c2",
-        "dim": "#5c6370",
-        "key": "#61afef",
-        "string": "#98c379",
-        "number": "#d19a66",
-        "keyword": "#c678dd",
-        "punct": "#5c6370",
-        "tag": "#e06c75",
-        "attr": "#d19a66",
-        # chrome from Atom One Dark's UI palette (gutter #21252b,
-        # cursor-line #2c313a, selection #3e4451)
-        "chrome": {
-            "bg": "#282c34",
-            "bg2": "#21252b",
-            "field_bg": "#2c313a",
-            "border": "#3e4451",
-            "fg": "#abb2bf",
-            "fg_dim": "#5c6370",
-            "select": "#3e4451",
-            "btn_bg": "#3e4451",
-            "btn_bg_active": "#4b5263",
-            "accent": "#61afef",
-        },
-    },
-    "Gruvbox Dark": {
-        "background": "#282828",
-        "foreground": "#ebdbb2",
-        "select": "#3c3836",
-        "section": "#83a598",
-        "warn": "#fabd2f",
-        "error": "#fb4934",
-        "ok": "#b8bb26",
-        "inserted": "#8ec07c",
-        "dim": "#928374",
-        "key": "#83a598",
-        "string": "#b8bb26",
-        "number": "#fe8019",
-        "keyword": "#d3869b",
-        "punct": "#928374",
-        "tag": "#fb4934",
-        "attr": "#fe8019",
-        # chrome from the gruvbox dark palette (bg0_h #1d2021, bg1 #3c3836,
-        # bg2 #504945, bg3 #665c54, gray #928374)
-        "chrome": {
-            "bg": "#282828",
-            "bg2": "#1d2021",
-            "field_bg": "#3c3836",
-            "border": "#504945",
-            "fg": "#ebdbb2",
-            "fg_dim": "#928374",
-            "select": "#3c3836",
-            "btn_bg": "#504945",
-            "btn_bg_active": "#665c54",
-            "accent": "#83a598",
-        },
-    },
-}
-
-# native-format field -> accepted aliases, for a bit of tolerance in
-# hand-written / hand-edited import files
-_THEME_FIELD_ALIASES = {
-    "background": ("background", "bg"),
-    "foreground": ("foreground", "fg"),
-    "select": ("select", "selection", "selectbackground"),
-    "section": ("section", "header", "info"),
-    "warn": ("warn", "warning"),
-    "error": ("error", "err"),
-    "ok": ("ok", "success", "good"),
-    "inserted": ("inserted", "insert", "added"),
-    "dim": ("dim", "muted", "comment"),
-}
-
-_THEME_REQUIRED = (
-    "background",
-    "foreground",
-    "select",
-    "section",
-    "warn",
-    "error",
-    "ok",
-    "inserted",
-    "dim",
+from mlox_subset.gui import (  # noqa: E402
+    DND_FILES,
+    HAVE_DND,
+    TkinterDnD,
+    app_base_dir,
+    trace_first_fire,
 )
-
-# optional JSON/HTML syntax-highlighting token roles -- used by the field-diff
-# viewer. A theme missing these still works fine (see _json_syntax_colors,
-# which falls back to the required roles above).
-_THEME_OPTIONAL_FIELD_ALIASES = {
-    "key": ("key", "property", "propertyname"),
-    "string": ("string", "str"),
-    "number": ("number", "num", "constant"),
-    "keyword": ("keyword", "boolean"),
-    "punct": ("punct", "punctuation", "bracket"),
-    "tag": ("tag", "htmltag", "tagname"),
-    "attr": ("attr", "attribute", "htmlattr"),
-}
-
-
-def _normalize_hex(value):
-    v = str(value).strip()
-    if not v:
-        raise ValueError("empty color value")
-    if not v.startswith("#"):
-        v = "#" + v
-    if len(v) == 4:  # shorthand #abc -> #aabbcc
-        v = "#" + "".join(c * 2 for c in v[1:])
-    import re as _re
-
-    if not _re.fullmatch(r"#[0-9a-fA-F]{6}", v):
-        raise ValueError(f"{value!r} isn't a valid hex color (expected e.g. #282a36)")
-    return v.lower()
-
-
-def _parse_flat_kv_text(text):
-    """A tiny parser for the flat 'key: value' shape base16 scheme YAML files
-    use (scheme/author/base00..base0F, one per line, values plain or quoted).
-    Deliberately not a general YAML parser -- just enough to read these
-    single-level scheme files without requiring PyYAML to be installed."""
-    data = {}
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith(("#", "---", "%")):
-            continue
-        if ":" not in line:
-            continue
-        k, v = line.split(":", 1)
-        k = k.strip().strip('"').strip("'")
-        v = v.strip().strip('"').strip("'")
-        if v in ("", "|", ">"):
-            continue  # skip block-scalar / nested-mapping starts, not used by base16 scheme files
-        data[k] = v
-    return data
-
-
-def _theme_from_base16(data):
-    """Standard base16 semantic role mapping: base00=bg, base05=fg,
-    base02=selection, base08=red/error (also: variables/XML tags),
-    base0A=yellow/warn, base0B=green/ok (also: strings), base0C=cyan/inserted
-    (also: support/escapes), base0D=blue/section (also: functions/attribute
-    IDs -- used here for JSON keys), base03=comment/dim (also: punctuation),
-    base09=orange (integers/booleans/constants AND xml attributes -- used
-    here for both 'number' and 'attr', per the base16 spec's own slot
-    reuse), base0E=purple (keywords)."""
-    need = (
-        "base00",
-        "base02",
-        "base03",
-        "base05",
-        "base08",
-        "base0A",
-        "base0B",
-        "base0C",
-        "base0D",
-    )
-    if not all(k in data for k in need):
-        return None
-    theme = {
-        "background": _normalize_hex(data["base00"]),
-        "foreground": _normalize_hex(data["base05"]),
-        "select": _normalize_hex(data["base02"]),
-        "section": _normalize_hex(data["base0D"]),
-        "warn": _normalize_hex(data["base0A"]),
-        "error": _normalize_hex(data["base08"]),
-        "ok": _normalize_hex(data["base0B"]),
-        "inserted": _normalize_hex(data["base0C"]),
-        "dim": _normalize_hex(data["base03"]),
-        "key": _normalize_hex(data["base0D"]),
-        "string": _normalize_hex(data["base0B"]),
-        "punct": _normalize_hex(data["base03"]),
-        "tag": _normalize_hex(data["base08"]),
-    }
-    if "base09" in data:
-        theme["number"] = theme["attr"] = _normalize_hex(data["base09"])
-    if "base0E" in data:
-        theme["keyword"] = _normalize_hex(data["base0E"])
-    # chrome from base16's standard UI-role slots when the scheme has them
-    # (base01 = lighter background / status bars, base02 = selection,
-    # base03 = comments, base04 = dark foreground / status text). Absent
-    # those slots, chrome_from_theme() derives the chrome instead.
-    if "base01" in data and "base04" in data:
-        lighter = _normalize_hex(data["base01"])
-        selection = theme["select"]
-        theme["chrome"] = {
-            "bg": theme["background"],
-            "bg2": lighter,
-            "field_bg": lighter,
-            "border": selection,
-            "fg": theme["foreground"],
-            "fg_dim": _normalize_hex(data["base04"]),
-            "select": selection,
-            "btn_bg": selection,
-            "btn_bg_active": theme["dim"],
-            "accent": theme["section"],
-        }
-    return theme
-
-
-def _theme_from_native(data):
-    out = {}
-    for field, aliases in _THEME_FIELD_ALIASES.items():
-        for alias in aliases:
-            if alias in data:
-                out[field] = _normalize_hex(data[alias])
-                break
-    missing = [f for f in _THEME_REQUIRED if f not in out]
-    if missing:
-        return None, missing
-    for field, aliases in _THEME_OPTIONAL_FIELD_ALIASES.items():
-        for alias in aliases:
-            if alias in data:
-                try:
-                    out[field] = _normalize_hex(data[alias])
-                except ValueError:  # _normalize_hex's only raise
-                    pass
-                break
-    # optional explicit chrome (window/button) colours -- any subset of the
-    # 10 chrome keys; anything missing or invalid is derived instead
-    raw_chrome = data.get("chrome")
-    if isinstance(raw_chrome, dict):
-        chrome = {}
-        for key in _CHROME_KEYS:
-            if key in raw_chrome:
-                try:
-                    chrome[key] = _normalize_hex(raw_chrome[key])
-                except ValueError:  # _normalize_hex's only raise
-                    pass
-        if chrome:
-            out["chrome"] = chrome
-    return out, []
-
-
-def parse_theme_file(path):
-    """Reads a theme file (.json, .yaml/.yml, or extensionless) and returns
-    (name, theme_dict). Raises ValueError with a human-readable reason on any
-    format problem. Tries, in order: JSON parse then native-field mapping or
-    base16 mapping; falling back to a flat key:value parse for non-JSON
-    (e.g. base16 .yaml scheme files) with the same two mappings."""
-    import json as _json
-
-    p = Path(path)
-    text = p.read_text(encoding="utf-8", errors="replace")
-    name = p.stem.replace("_", " ").replace("-", " ").strip().title() or "Imported Theme"
-
-    data = None
-    try:
-        parsed = _json.loads(text)
-        if isinstance(parsed, dict):
-            data = parsed
-    except ValueError:  # JSONDecodeError subclasses ValueError
-        data = None
-    if data is None:
-        data = _parse_flat_kv_text(text)
-    if not data:
-        raise ValueError("Couldn't find any 'key: value' pairs in that file.")
-
-    for key in ("name", "scheme"):
-        if isinstance(data.get(key), str) and data[key].strip():
-            name = data[key].strip()
-            break
-
-    theme, missing = _theme_from_native(data)
-    if theme is not None:
-        return name, theme
-
-    b16 = _theme_from_base16(data)
-    if b16 is not None:
-        return name, b16
-
-    raise ValueError(
-        "Not a recognized theme file. Expected either the native format "
-        "(background/foreground/select/section/warn/error/ok/inserted/dim, "
-        "as hex colors) or a base16 scheme (base00..base0F).\n\n"
-        f"Missing native fields: {', '.join(missing) if missing else '(all)'}"
-    )
-
-
-def _json_syntax_colors(theme):
-    """The 7 JSON/HTML token-role colors for a theme, falling back to its
-    required log-panel roles for any that are missing (so an older/plainer
-    imported theme -- or one hand-written without the optional fields --
-    still gets a coherent, if less differentiated, set of colors here)."""
-    return {
-        "key": theme.get("key", theme["section"]),
-        "string": theme.get("string", theme["ok"]),
-        "number": theme.get("number", theme["warn"]),
-        "keyword": theme.get("keyword", theme["error"]),
-        "punct": theme.get("punct", theme["dim"]),
-        "tag": theme.get("tag", theme["error"]),
-        "attr": theme.get("attr", theme["warn"]),
-    }
-
-
-# ---------------------------------------------------------------------------
-# theme -> chrome bridge (task #43). A syntax theme carries 9 required text
-# roles but no window/button colours, so the 11 chrome keys in DARK are
-# produced from a theme in two layers:
-#   1. derived: fg/fg_dim/select/accent map straight onto foreground/dim/
-#      select/section; the five background-family keys (bg, bg2, field_bg,
-#      btn_bg, btn_bg_active) and border are computed by shifting the theme's
-#      `background` toward white (dark themes) or black (light themes) by
-#      fixed fractions, chosen to reproduce the built-in dark palette's
-#      spacing. This is the fallback and covers every imported theme.
-#   2. hand-tuned: a theme may carry an optional "chrome" dict giving any of
-#      the 10 keys explicitly. The built-in presets do (using each scheme's
-#      published UI colours), base16 imports get one from base00..base04's
-#      standard UI-role semantics, and native-JSON imports may supply one.
-# ---------------------------------------------------------------------------
-
-# fraction of the way from `background` toward white/black for each derived
-# chrome key; values reproduce DARK's spacing from the default background
-_CHROME_SHIFTS = {
-    "bg": 0.04,
-    "bg2": 0.07,
-    "field_bg": 0.10,
-    "btn_bg": 0.15,
-    "border": 0.17,
-    "btn_bg_active": 0.21,
-}
-
-_CHROME_KEYS = (
-    "bg",
-    "bg2",
-    "field_bg",
-    "border",
-    "fg",
-    "fg_dim",
-    "select",
-    "btn_bg",
-    "btn_bg_active",
-    "accent",
-    "log_bg",
+from mlox_subset.gui.conflicts import ConflictWindowsMixin  # noqa: E402
+from mlox_subset.gui.t3 import Tes3cmdMixin  # noqa: E402
+from mlox_subset.gui.theme import (  # noqa: E402
+    _THEME_REQUIRED,
+    DARK,
+    THEME_PRESETS,
+    _mix_hex,
+    _normalize_hex,
+    apply_dark_theme,
+    parse_theme_file,
+    restyle_widget_tree,
+    set_active_chrome,
+    style_plain_widget,
 )
-
-
-def _mix_hex(color: str, target: str, fraction: float) -> str:
-    """Blend a ``#rrggbb`` color toward ``target`` by ``fraction`` (0..1)."""
-    mixed = (
-        round(a + (b - a) * fraction)
-        for a, b in zip(
-            (int(color[i : i + 2], 16) for i in (1, 3, 5)),
-            (int(target[i : i + 2], 16) for i in (1, 3, 5)),
-        )
-    )
-    return "#" + "".join(f"{c:02x}" for c in mixed)
-
-
-def _is_light_color(color: str) -> bool:
-    """True if a ``#rrggbb`` color is perceptually light (ITU-R 601 luma)."""
-    r, g, b = (int(color[i : i + 2], 16) for i in (1, 3, 5))
-    return (0.299 * r + 0.587 * g + 0.114 * b) > 127
-
-
-def chrome_from_theme(theme: dict) -> dict[str, str]:
-    """The 11 chrome (window/widget) colours for a syntax theme.
-
-    Derives the background-family keys from ``background`` (lightening on
-    dark themes, darkening on light ones) and maps the text roles directly,
-    then applies any explicit overrides from the theme's optional "chrome"
-    dict. Invalid override values are ignored rather than fatal, since
-    hand-edited log_themes.json entries reach here unvalidated.
-    """
-    base = theme["background"]
-    target = "#000000" if _is_light_color(base) else "#ffffff"
-    chrome = {key: _mix_hex(base, target, frac) for key, frac in _CHROME_SHIFTS.items()}
-    chrome["fg"] = theme["foreground"]
-    chrome["fg_dim"] = theme["dim"]
-    chrome["select"] = theme["select"]
-    chrome["accent"] = theme["section"]
-    chrome["log_bg"] = base  # console-style text areas match the log exactly
-    overrides = theme.get("chrome")
-    if isinstance(overrides, dict):
-        for key in _CHROME_KEYS:
-            if key in overrides:
-                try:
-                    chrome[key] = _normalize_hex(overrides[key])
-                except (ValueError, TypeError):
-                    pass
-    return chrome
-
-
-# the syntax theme the chrome palette was last derived from. The runtime
-# re-apply walk needs the *theme* (not just the derived chrome) to recolour
-# the syntax-highlight tags in any open field-diff viewer.
-_ACTIVE_THEME: dict = THEME_PRESETS["Dark (default)"]
-
-
-def set_active_chrome(theme: dict) -> None:
-    """Point the active chrome palette (``DARK``) at ``theme``, in place.
-
-    Mutating in place is deliberate: the ~106 ``DARK[...]`` read sites then
-    see the new colours without touching any of them. Widgets built after
-    this pick the palette up automatically; *live* widgets are recoloured by
-    ``restyle_widget_tree`` (called from ``App._reapply_chrome``), which also
-    reads the remembered ``_ACTIVE_THEME`` for syntax-tag colours.
-    """
-    global _ACTIVE_THEME
-    _ACTIVE_THEME = theme
-    DARK.update(chrome_from_theme(theme))
-
-
-def _restyle_syntax_tags(widget) -> None:
-    """Re-colour a Text widget's field-diff syntax tags, if it has any.
-
-    The diff viewer's token tags (json_key/json_string/html_tag/...) are
-    configured once when the window opens; without this, a theme switch
-    left an open viewer's tokens in the old theme's colours even though its
-    chrome and background followed the new one. ``style_json_syntax_tags``
-    is written as a (re-)configure, so calling it again is all it takes.
-    """
-    try:
-        if "json_string" not in widget.tag_names():
-            return  # not a syntax-highlighted pane (log/preview/detail)
-        style_json_syntax_tags(widget, _json_syntax_colors(_ACTIVE_THEME))
-    except tk.TclError:
-        pass
-
-
-def _restyle_combobox_popdown(widget) -> None:
-    """Recolour a combobox's dropdown list, if it has been created.
-
-    The dropdown is a plain ``tk::Listbox`` that only reads the option
-    database when it is first built, so a live one must be reconfigured
-    directly through Tk (there is no ttk.Style route to it).
-    """
-    try:
-        popdown = str(widget.tk.call("ttk::combobox::PopdownWindow", widget))
-    except tk.TclError:
-        return
-    listbox_path = popdown + ".f.l"
-    for opt, val in (
-        ("-background", DARK["field_bg"]),
-        ("-foreground", DARK["fg"]),
-        ("-selectbackground", DARK["select"]),
-        ("-selectforeground", DARK["fg"]),
-    ):
-        try:
-            widget.tk.call(listbox_path, "configure", opt, val)
-        except tk.TclError:
-            pass
-
-
-def _configure_each(widget, options: dict) -> None:
-    """Apply options one at a time, skipping any the widget doesn't support.
-
-    Same pattern (and same reason) as style_plain_widget: one unsupported
-    option -- or a widget destroyed mid-loop -- must not blank the rest.
-    """
-    for opt, val in options.items():
-        try:
-            widget.configure(**{opt: val})
-        except tk.TclError:
-            pass
-
-
-def _restyle_plain_live(w) -> bool:
-    """Re-apply the active chrome to one live widget; True if it was handled.
-
-    ttk widgets return False -- the re-configured ttk.Style already reaches
-    them -- except Combobox, whose already-built dropdown needs direct help.
-    """
-    handled = True
-    if isinstance(w, ttk.Combobox):
-        _restyle_combobox_popdown(w)
-    elif isinstance(w, ttk.Widget):
-        handled = False
-    elif isinstance(w, (tk.Tk, tk.Toplevel)):
-        _configure_each(w, {"bg": DARK["bg"]})
-    elif isinstance(w, tk.Text):
-        # every plain Text/ScrolledText in this app is a console-style pane;
-        # the log panel itself is immediately re-coloured again (to the same
-        # value) by _apply_log_theme after the walk
-        style_plain_widget(w)
-        _configure_each(w, {"background": DARK["log_bg"]})
-        _restyle_syntax_tags(w)
-    elif isinstance(w, tk.Listbox):
-        style_plain_widget(w)
-    elif isinstance(w, tk.Canvas):
-        # the pane-divider grips: repaint the canvas and its drawn lines
-        _configure_each(w, {"bg": DARK["btn_bg"], "highlightbackground": DARK["border"]})
-        try:
-            for item in w.find_all():
-                w.itemconfigure(item, fill=DARK["fg_dim"])
-        except tk.TclError:
-            pass
-    elif isinstance(w, tk.Scrollbar):
-        # the scrollbar ScrolledText builds for itself is plain tk
-        _configure_each(
-            w,
-            {
-                "background": DARK["btn_bg"],
-                "troughcolor": DARK["bg2"],
-                "activebackground": DARK["btn_bg_active"],
-                "highlightbackground": DARK["bg"],
-            },
-        )
-    elif isinstance(w, tk.Label):
-        # tooltip label
-        _configure_each(w, {"background": DARK["field_bg"], "foreground": DARK["fg"]})
-    elif isinstance(w, tk.Frame):
-        # e.g. the frame ScrolledText wraps itself in
-        _configure_each(w, {"bg": DARK["bg"]})
-    else:
-        handled = False
-    return handled
-
-
-def restyle_widget_tree(widget) -> int:
-    """Recursively re-apply the active chrome to a live widget tree.
-
-    Returns the number of widgets restyled (traced, for the smoke test).
-    Toplevels created with ``root`` as master are children of ``root`` in
-    Tk's hierarchy, so one walk from the main window reaches every open
-    window. Widgets are created and destroyed dynamically, so both the
-    existence check and every configure tolerate ``TclError``.
-    """
-    try:
-        if not widget.winfo_exists():
-            return 0
-    except tk.TclError:
-        return 0
-    count = 1 if _restyle_plain_live(widget) else 0
-    try:
-        children = widget.winfo_children()
-    except tk.TclError:
-        return count
-    for child in children:
-        count += restyle_widget_tree(child)
-    return count
-
-
-# JSON token regex: strings (used for both keys and values -- disambiguated
-# by what follows), numbers, true/false/null, and the structural punctuation.
-# Whitespace and anything else is left untagged (plain foreground).
-_JSON_TOKEN_RE = re.compile(
-    r'(?P<string>"(?:\\.|[^"\\])*")'
-    r"|(?P<number>-?\d+\.?\d*(?:[eE][+-]?\d+)?)"
-    r"|(?P<keyword>\btrue\b|\bfalse\b|\bnull\b)"
-    r"|(?P<punct>[{}\[\]:,])"
+from mlox_subset.gui.widgets import (  # noqa: E402
+    DragReorderListbox,
+    PathField,
+    QueueWriter,
+    add_tooltip,
+    attach_typeahead,
 )
-
-# a loose HTML-ish tag matcher for markup embedded *inside* JSON string
-# values -- Morrowind book/dialogue text uses tags like <DIV ALIGN="left">,
-# <FONT COLOR="FFFFFF">, <BR>, <P>. Not a real HTML parser (doesn't need to
-# be); just enough to color tag names, attribute names, and attribute values
-# distinctly from the surrounding string text.
-_HTML_TAG_RE = re.compile(
-    r"</?\s*([a-zA-Z][\w:-]*)"
-    r'((?:\s+[a-zA-Z_:][\w:.-]*(?:\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+))?)*)'
-    r"\s*/?>"
-)
-_HTML_ATTR_RE = re.compile(r'([a-zA-Z_:][\w:.-]*)(\s*=\s*)("[^"]*"|\'[^\']*\'|[^\s>]+)?')
-
-
-def _tag_embedded_html(text_widget, text, base, idx):
-    """Tags any HTML-ish markup found in `text` (a slice starting at absolute
-    character offset `base` within whatever was inserted into text_widget)
-    with html_tag/html_attr/html_value/html_punct. `idx(absolute_pos)` must
-    return a Tk Text index. Shared by highlight_json_with_html (HTML nested
-    inside a JSON string token) and highlight_plain_text_with_html (HTML in
-    a field shown as its own raw string, no surrounding JSON quoting)."""
-    for tm in _HTML_TAG_RE.finditer(text):
-        name_s, name_e = tm.span(1)
-        attr_s, attr_e = tm.span(2)
-        text_widget.tag_add("html_punct", idx(base + tm.start()), idx(base + name_s))
-        text_widget.tag_add("html_tag", idx(base + name_s), idx(base + name_e))
-        if attr_e > attr_s:
-            blob = text[attr_s:attr_e]
-            for am in _HTML_ATTR_RE.finditer(blob):
-                an_s, an_e = am.span(1)
-                text_widget.tag_add(
-                    "html_attr", idx(base + attr_s + an_s), idx(base + attr_s + an_e)
-                )
-                if am.group(3):
-                    av_s, av_e = am.span(3)
-                    text_widget.tag_add(
-                        "html_value", idx(base + attr_s + av_s), idx(base + attr_s + av_e)
-                    )
-        text_widget.tag_add("html_punct", idx(base + attr_e), idx(base + tm.end()))
-
-
-def highlight_json_with_html(text_widget, text, colors):
-    """Tags `text` (already inserted into `text_widget`, a normal-state Text
-    widget) as JSON, with any HTML-ish markup inside string values further
-    broken out and colored. `colors` is a _json_syntax_colors(...) dict.
-    Tag *styles* (tag_configure) must already be set on text_widget by the
-    caller -- this only calls tag_add."""
-
-    def idx(pos):
-        return text_widget.index(f"1.0 + {pos} chars")
-
-    for m in _JSON_TOKEN_RE.finditer(text):
-        kind = m.lastgroup
-        s, e = m.start(), m.end()
-        if kind == "string":
-            j = e
-            while j < len(text) and text[j] in " \t\r\n":
-                j += 1
-            is_key = j < len(text) and text[j] == ":"
-            text_widget.tag_add("json_key" if is_key else "json_string", idx(s), idx(e))
-            if is_key:
-                continue
-            _tag_embedded_html(text_widget, text[s:e], s, idx)
-        elif kind == "number":
-            text_widget.tag_add("json_number", idx(s), idx(e))
-        elif kind == "keyword":
-            text_widget.tag_add("json_keyword", idx(s), idx(e))
-        elif kind == "punct":
-            text_widget.tag_add("json_punct", idx(s), idx(e))
-
-    # html_* spans sit inside json_string spans -- make sure they win
-    for t in ("html_punct", "html_tag", "html_attr", "html_value"):
-        try:
-            text_widget.tag_raise(t)
-        except tk.TclError:
-            pass
-
-
-def highlight_plain_text_with_html(text_widget, text, colors):
-    """For a field that's a plain string being shown as its own raw content
-    (see _show_field_detail) -- NOT run through json.dumps, so there's no
-    surrounding quotes and no \\" / \\\\ / \\n escaping to fight through.
-    That's the whole point: json.dumps-ing a book-text field just to display
-    it turns every embedded quote in '<FONT COLOR=\"000000\">' into visual
-    noise for no benefit, since nothing here is being re-parsed as JSON.
-    Colors the whole span with the theme's string color, then layers embedded
-    HTML-ish markup (if any) on top, exactly like a JSON string value would
-    get inside highlight_json_with_html."""
-
-    def idx(pos):
-        return text_widget.index(f"1.0 + {pos} chars")
-
-    text_widget.tag_add("json_string", idx(0), idx(len(text)))
-    _tag_embedded_html(text_widget, text, 0, idx)
-    for t in ("html_punct", "html_tag", "html_attr", "html_value"):
-        try:
-            text_widget.tag_raise(t)
-        except tk.TclError:
-            pass
-
-
-def style_json_syntax_tags(text_widget, colors):
-    """(Re-)configures the tag_configure styles used by highlight_json_with_html
-    and highlight_plain_text_with_html. Call once per Text widget before/after
-    inserting -- tag_add doesn't need the style to exist yet, but nothing
-    will be visible until this runs."""
-    text_widget.tag_configure("json_key", foreground=colors["key"])
-    text_widget.tag_configure("json_string", foreground=colors["string"])
-    text_widget.tag_configure("json_number", foreground=colors["number"])
-    text_widget.tag_configure("json_keyword", foreground=colors["keyword"])
-    text_widget.tag_configure("json_punct", foreground=colors["punct"])
-    text_widget.tag_configure(
-        "html_tag", foreground=colors["tag"], font=("TkFixedFont", 10, "bold")
-    )
-    text_widget.tag_configure("html_attr", foreground=colors["attr"])
-    text_widget.tag_configure("html_value", foreground=colors["string"])
-    text_widget.tag_configure("html_punct", foreground=colors["punct"])
-
-
-# ---------------------------------------------------------------------------
-# a small hover tooltip -- delayed popup, dark-themed to match the rest of
-# the app. Works on any widget (ttk or plain tk).
-# ---------------------------------------------------------------------------
-
-
-class Tooltip:
-    def __init__(self, widget, text, delay=450, wraplength=320):
-        self.widget = widget
-        self.text = text
-        self.delay = delay
-        self.wraplength = wraplength
-        self.tip_window = None
-        self._after_id = None
-        widget.bind("<Enter>", self._schedule, add="+")
-        widget.bind("<Leave>", self._hide, add="+")
-        widget.bind("<ButtonPress>", self._hide, add="+")
-
-    def set_text(self, text):
-        self.text = text
-
-    def _schedule(self, event=None):
-        self._unschedule()
-        try:
-            self._after_id = self.widget.after(self.delay, self._show)
-        except tk.TclError:
-            pass
-
-    def _unschedule(self):
-        if self._after_id is not None:
-            try:
-                self.widget.after_cancel(self._after_id)
-            except tk.TclError:
-                pass
-            self._after_id = None
-
-    def _show(self):
-        if self.tip_window or not self.text:
-            return
-        try:
-            wx = self.widget.winfo_rootx()
-            wy = self.widget.winfo_rooty()
-            wh = self.widget.winfo_height()
-        except tk.TclError:
-            return
-        tw = tk.Toplevel(self.widget)
-        self.tip_window = tw
-        tw.wm_overrideredirect(True)
-        try:
-            tw.attributes("-topmost", True)
-        except tk.TclError:
-            pass
-        tk.Label(
-            tw,
-            text=self.text,
-            justify="left",
-            background=DARK["field_bg"],
-            foreground=DARK["fg"],
-            relief="solid",
-            borderwidth=1,
-            wraplength=self.wraplength,
-            font=("TkDefaultFont", 9),
-            padx=6,
-            pady=4,
-        ).pack()
-        # Position AFTER the label exists so we know the real size, then clamp
-        # to the screen so a tooltip on a right-edge widget (fullscreen) isn't
-        # cut off. Preferred spot is below-left of the widget; flip/slide back
-        # onto the screen when it would overflow.
-        try:
-            tw.update_idletasks()
-            tw_w, tw_h = tw.winfo_reqwidth(), tw.winfo_reqheight()
-            sw, sh = tw.winfo_screenwidth(), tw.winfo_screenheight()
-            margin = 8
-            x = wx + 14
-            if x + tw_w > sw - margin:
-                x = sw - margin - tw_w  # slide left to fit
-            x = max(margin, x)
-            y = wy + wh + 6
-            if y + tw_h > sh - margin:
-                y = wy - tw_h - 6  # not enough room below -> above
-            y = max(margin, y)
-        except tk.TclError:
-            x, y = wx + 14, wy + wh + 6
-        tw.wm_geometry(f"+{x}+{y}")
-
-    def _hide(self, event=None):
-        self._unschedule()
-        if self.tip_window is not None:
-            try:
-                self.tip_window.destroy()
-            except tk.TclError:
-                pass
-            self.tip_window = None
-
-
-def add_tooltip(widget, text):
-    return Tooltip(widget, text)
-
-
-# ---------------------------------------------------------------------------
-# a stdout/stderr-compatible stream that pushes chunks into a thread-safe
-# queue instead of writing to a real terminal, so the worker thread can
-# write freely and the UI thread can drain it on its own schedule
-# ---------------------------------------------------------------------------
-
-
-class QueueWriter(io.TextIOBase):
-    def __init__(self, q: queue.Queue):
-        self.q = q
-
-    def write(self, s):
-        if s:
-            self.q.put(s)
-        return len(s)
-
-    def flush(self):
-        pass
-
-
-# ---------------------------------------------------------------------------
-# small reusable "path field": label + entry + Browse button, optionally
-# a drag-and-drop target
-# ---------------------------------------------------------------------------
-
-
-class PathField:
-    def __init__(
-        self,
-        parent,
-        label,
-        row,
-        var,
-        browse_kind="open",
-        filetypes=(("All files", "*.*"),),
-        on_drop_extra=None,
-        tooltip=None,
-        extra_button=None,
-    ):
-        """browse_kind: 'open', 'save', or 'dir'.
-        extra_button: optional (text, command, tooltip) for a button placed to
-        the right of Browse (e.g. a 'Scan...' action on the subset-file row)."""
-        self.var = var
-        label_widget = ttk.Label(parent, text=label)
-        label_widget.grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
-        entry = ttk.Entry(parent, textvariable=var)
-        entry.grid(row=row, column=1, sticky="ew", pady=4)
-        self.entry = entry
-
-        def browse():
-            if browse_kind == "save":
-                path = filedialog.asksaveasfilename(filetypes=filetypes, defaultextension=".toml")
-            elif browse_kind == "dir":
-                path = filedialog.askdirectory()
-            else:
-                path = filedialog.askopenfilename(filetypes=filetypes)
-            if path:
-                var.set(path)
-
-        self.extra_btn = None
-        if extra_button:
-            # keep everything inside column 2 (a small button bar) so rows that
-            # span columns 0-2 below still line up -- no stray 4th column
-            btnbar = ttk.Frame(parent)
-            btnbar.grid(row=row, column=2, padx=(8, 0), pady=4, sticky="e")
-            browse_btn = ttk.Button(btnbar, text=_("Browse..."), command=browse)
-            browse_btn.pack(side="left")
-            ex_text, ex_cmd = extra_button[0], extra_button[1]
-            ex_tip = extra_button[2] if len(extra_button) > 2 else None
-            self.extra_btn = ttk.Button(btnbar, text=ex_text, command=ex_cmd)
-            self.extra_btn.pack(side="left", padx=(6, 0))
-            if ex_tip:
-                add_tooltip(self.extra_btn, ex_tip)
-        else:
-            browse_btn = ttk.Button(parent, text=_("Browse..."), command=browse)
-            browse_btn.grid(row=row, column=2, padx=(8, 0), pady=4)
-        self.browse_btn = browse_btn
-
-        if tooltip:
-            add_tooltip(label_widget, tooltip)
-            add_tooltip(entry, tooltip)
-            add_tooltip(browse_btn, tooltip)
-
-        if HAVE_DND:
-            entry.drop_target_register(DND_FILES)
-
-            def on_drop(event):
-                paths = parent.tk.splitlist(event.data)
-                if paths:
-                    var.set(paths[0])
-                if on_drop_extra:
-                    on_drop_extra(paths)
-
-            entry.dnd_bind("<<Drop>>", on_drop)
-
-    def set_enabled(self, enabled: bool):
-        state = "normal" if enabled else "disabled"
-        self.entry.configure(state=state)
-        self.browse_btn.configure(state=state)
-
-
-# ---------------------------------------------------------------------------
-# a Listbox you can reorder by clicking and dragging items up/down with the
-# mouse, on top of Listbox's normal behavior (selection, scrolling, etc).
-# This is separate from tkinterdnd2 drag & drop, which is for dragging files
-# in *from the OS* -- reordering items already in the list needs nothing
-# but plain tkinter mouse events, so it works even without tkinterdnd2.
-# ---------------------------------------------------------------------------
-
-
-class DragReorderListbox(tk.Listbox):
-    def __init__(self, *args, on_reorder=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.on_reorder = on_reorder
-        self._drag_block = None  # list of (contiguous) indices being dragged
-        self._moved = False
-        self.bind("<Button-1>", self._on_press, add="+")
-        self.bind("<B1-Motion>", self._on_motion, add="+")
-        self.bind("<ButtonRelease-1>", self._on_release, add="+")
-
-    def _on_press(self, event):
-        idx = self.nearest(event.y)
-        self._moved = False
-        if not (0 <= idx < self.size()):
-            self._drag_block = None
-            return None
-        # This widget-level binding runs BEFORE Listbox's own class binding, so
-        # curselection() here is still the PRE-click selection. If the pressed
-        # row is part of a contiguous multi-selection, drag the whole block and
-        # return "break" to stop the default handler from collapsing it.
-        sel = list(self.curselection())
-        contiguous = bool(sel) and sel == list(range(sel[0], sel[-1] + 1))
-        if len(sel) > 1 and contiguous and idx in sel:
-            self._drag_block = sel
-            return "break"
-        self._drag_block = [idx]
-        return None  # let Listbox's own click handling run
-
-    def _on_motion(self, event):
-        if not self._drag_block:
-            return
-        target = self.nearest(event.y)
-        if not (0 <= target < self.size()):
-            return
-        if target < self._drag_block[0]:
-            self._shift(-1)
-        elif target > self._drag_block[-1]:
-            self._shift(1)
-
-    def _shift(self, direction):
-        block, size = self._drag_block, self.size()
-        if (direction < 0 and block[0] <= 0) or (direction > 0 and block[-1] >= size - 1):
-            return
-        order = block if direction < 0 else list(reversed(block))
-        for i in order:
-            t = self.get(i)
-            self.delete(i)
-            self.insert(i + direction, t)
-        self._drag_block = [i + direction for i in block]
-        self.selection_clear(0, "end")
-        for i in self._drag_block:
-            self.selection_set(i)
-        self.see(self._drag_block[0] if direction < 0 else self._drag_block[-1])
-        self._moved = True
-
-    def _on_release(self, event):
-        if self._moved and self.on_reorder:
-            trace_first_fire("listbox drag-reorder -> on_reorder")
-            core.trace(f"[smoke] drag-reorder committed: {self.size()} row(s) now listed")
-            self.on_reorder()
-        self._drag_block = None
-        self._moved = False
 
 
 def _app_version() -> str:
-    """The running build's version string, or ``?`` if it can't be determined."""
+    """Return the running build's version string, or ``?`` if unknown."""
     try:
         from mlox_subset import __version__
 
@@ -1477,7 +193,7 @@ def _app_version() -> str:
 
 
 def _build_stamp() -> str:
-    """Identifies *which* build is running: frozen exe vs source, and its mtime.
+    """Identify which build is running: frozen exe vs source, plus its mtime.
 
     Exists because a stale .exe presents exactly like a code bug -- new source
     on disk, old behaviour on screen, and nothing in the log to tell them
@@ -1488,31 +204,14 @@ def _build_stamp() -> str:
     frozen = bool(getattr(sys, "frozen", False))
     target = Path(sys.executable) if frozen else Path(__file__)
     try:
-        mtime = _dt.fromtimestamp(target.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+        # Local clock: the build stamp is compared by eye against the user's
+        # own file timestamps in Explorer.
+        mtime = _dt.fromtimestamp(target.stat().st_mtime).strftime(  # noqa: DTZ006
+            "%Y-%m-%d %H:%M:%S"
+        )
     except OSError:
         mtime = "?"
     return f"frozen={frozen} built={mtime} path={target.name}"
-
-
-_FIRED_ONCE: set[str] = set()
-
-
-def trace_first_fire(label: str) -> None:
-    """Record the first time a callback fires, once per session.
-
-    Added for smoke-testing the GUI, which has no automated coverage. Several
-    callbacks were rewritten from ``lambda: self.m()`` to ``self.m``; if such a
-    rewrite were wrong the callback would simply never run, which is invisible
-    on screen and silent in the log. One line per callback proves the binding
-    is live without burying the trace under re-render noise.
-
-    Args:
-        label: Identifier for the callback, e.g. ``"listbox drag-reorder"``.
-    """
-    if label in _FIRED_ONCE:
-        return
-    _FIRED_ONCE.add(label)
-    core.trace(f"[smoke] callback fired for the first time: {label}")
 
 
 # ---------------------------------------------------------------------------
@@ -1523,7 +222,17 @@ def trace_first_fire(label: str) -> None:
 
 
 class RuleFilesPanel:
-    def __init__(self, parent, row, on_new_rule=None, on_sources=None, get_rules_url=None):
+    """The mlox rule-file list: add, remove, reorder, and update from upstream."""
+
+    def __init__(
+        self,
+        parent: tk.Misc,
+        row: int,
+        on_new_rule: Callable[[], None] | None = None,
+        on_sources: Callable[[], None] | None = None,
+        get_rules_url: Callable[[], str] | None = None,
+    ) -> None:
+        """Build the rule-file panel inside ``parent`` at grid ``row``."""
         self._get_rules_url = get_rules_url
         frame = ttk.LabelFrame(
             parent,
@@ -1549,9 +258,11 @@ class RuleFilesPanel:
         self.listbox.grid(row=0, column=0, sticky="nsew")
         add_tooltip(
             self.listbox,
-            "mlox rule files (mlox_base.txt, mlox_user.txt, ...), applied in this order.\n"
-            "Later files can override/extend earlier ones -- put mlox_base.txt first and "
-            "your own mlox_user.txt last. Drag rows to reorder, or use the buttons.",
+            _(
+                "mlox rule files (mlox_base.txt, mlox_user.txt, ...), applied in this order.\n"
+                "Later files can override/extend earlier ones -- put mlox_base.txt first and "
+                "your own mlox_user.txt last. Drag rows to reorder, or use the buttons."
+            ),
         )
         scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.listbox.yview)
         scroll.grid(row=0, column=1, sticky="ns")
@@ -1586,36 +297,44 @@ class RuleFilesPanel:
             new_btn.pack(side="left", padx=(0, 6))
             add_tooltip(
                 new_btn,
-                "Write your own mlox [Order]/[NearStart]/[NearEnd] rule without knowing "
-                "the syntax: pick plugins (or grab the selected rows from the plugin "
-                "panel), preview the rule, and append it to a personal rules file that "
-                "loads LAST so it wins conflicts. This is how rules for modern mods get "
-                "made -- consider contributing good ones upstream.",
+                _(
+                    "Write your own mlox [Order]/[NearStart]/[NearEnd] rule without knowing "
+                    "the syntax: pick plugins (or grab the selected rows from the plugin "
+                    "panel), preview the rule, and append it to a personal rules file that "
+                    "loads LAST so it wins conflicts. This is how rules for modern mods get "
+                    "made -- consider contributing good ones upstream."
+                ),
             )
         upd_btn = ttk.Button(actions, text=_("Update Rules..."), command=self._update_rules)
         upd_btn.pack(side="left", padx=(0, 6))
         add_tooltip(
             upd_btn,
-            "Download the CURRENT mlox_base.txt / mlox_user.txt from the actively "
-            f"maintained rules repo (github.com/{core.RULES_REPO} -- the same source "
-            "plox uses, and mlox 1.1+ auto-updates from) over the matching files in "
-            "this list. The old files are kept as timestamped .bak copies. Files "
-            "with other names (your personal rules) are never touched. Source URL "
-            "configurable via Sources...",
+            _(
+                "Download the CURRENT mlox_base.txt / mlox_user.txt from the actively "
+                "maintained rules repo (github.com/%(repo)s -- the same source "
+                "plox uses, and mlox 1.1+ auto-updates from) over the matching files in "
+                "this list. The old files are kept as timestamped .bak copies. Files "
+                "with other names (your personal rules) are never touched. Source URL "
+                "configurable via Sources..."
+            )
+            % {"repo": core.RULES_REPO},
         )
         if on_sources is not None:
             src_btn = ttk.Button(actions, text=_("Sources..."), command=on_sources)
             src_btn.pack(side="left", padx=(0, 6))
             add_tooltip(
                 src_btn,
-                "Configure WHERE 'Update Rules...' and the plugin-order.yml "
-                "'Update...' button download from -- point them at a fork or "
-                "mirror if upstream moves. Blank fields use the built-in defaults.",
+                _(
+                    "Configure WHERE 'Update Rules...' and the plugin-order.yml "
+                    "'Update...' button download from -- point them at a fork or "
+                    "mirror if upstream moves. Blank fields use the built-in defaults."
+                ),
             )
 
         if HAVE_DND:
-            self.listbox.drop_target_register(DND_FILES)
-            self.listbox.dnd_bind("<<Drop>>", self._on_drop)
+            # tkinterdnd2 adds these to the widget at runtime.
+            self.listbox.drop_target_register(DND_FILES)  # type: ignore[attr-defined]
+            self.listbox.dnd_bind("<<Drop>>", self._on_drop)  # type: ignore[attr-defined]
         else:
             ttk.Label(
                 actions,
@@ -1623,7 +342,7 @@ class RuleFilesPanel:
                 foreground=DARK["fg_dim"],
             ).pack(side="left", padx=(12, 0))
 
-    def _update_rules(self):
+    def _update_rules(self) -> None:
         paths = self.get_paths()
         managed = [p for p in paths if Path(p).name.lower() in ("mlox_base.txt", "mlox_user.txt")]
         if not managed:
@@ -1637,14 +356,17 @@ class RuleFilesPanel:
         )
         if not messagebox.askyesno(
             _("Update rules"),
-            f"Download the current rules from github.com/{core.RULES_REPO} over these "
-            f"files?\n\n{age_txt}\n\nTimestamped .bak copies of the old files are kept.",
+            _(
+                "Download the current rules from github.com/%(repo)s over these "
+                "files?\n\n%(age)s\n\nTimestamped .bak copies of the old files are kept."
+            )
+            % {"repo": core.RULES_REPO, "age": age_txt},
         ):
             return
 
         custom = (self._get_rules_url() if self._get_rules_url else "") or None
 
-        def work():
+        def work() -> None:
             try:
                 report = core.update_rule_files(managed, url_template=custom)
             except Exception as e:  # noqa: BLE001
@@ -1654,22 +376,27 @@ class RuleFilesPanel:
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _on_drop(self, event):
+    # Any: tkinterdnd2 synthesises its own event object, which has no published
+    # type -- only the `.data` string this reads.
+    def _on_drop(self, event: Any) -> None:  # noqa: ANN401
         for p in self.listbox.tk.splitlist(event.data):
             self.listbox.insert("end", p)
 
-    def add_files(self):
+    def add_files(self) -> None:
+        """Prompt for rule files and append them to the list."""
         paths = filedialog.askopenfilenames(
             filetypes=(("mlox rule files", "*.txt"), ("All files", "*.*"))
         )
         for p in paths:
             self.listbox.insert("end", p)
 
-    def remove_selected(self):
+    def remove_selected(self) -> None:
+        """Remove the selected rule files from the list."""
         for idx in reversed(self.listbox.curselection()):
             self.listbox.delete(idx)
 
-    def move(self, direction):
+    def move(self, direction: int) -> None:
+        """Move the selection one row in ``direction`` (-1 up, +1 down)."""
         sel = list(self.listbox.curselection())
         if not sel:
             return
@@ -1682,109 +409,14 @@ class RuleFilesPanel:
                 self.listbox.insert(new_idx, text)
                 self.listbox.selection_set(new_idx)
 
-    def get_paths(self):
+    def get_paths(self) -> list[Path]:
+        """Return the rule files, in priority order."""
         return [Path(p) for p in self.listbox.get(0, "end")]
 
 
-# ---------------------------------------------------------------------------
-# generic draggable-list panel: a titled list with Move Up/Down + Reset,
-# used for both the plugin load order and the data= path order. Items
-# matching highlighted_items (case-insensitive) get a highlighted background
-# so it's obvious what a sort actually touched vs. what was already correct.
-# Dragging rows here never re-runs anything -- it's a manual override of a
-# computed order, applied at Export time.
-# ---------------------------------------------------------------------------
-
-
-def attach_typeahead(listbox, strip=None, feedback=None):
-    """Windows-Explorer-style type-to-jump for a Listbox: type letters to jump
-    to the first row whose name starts with what you typed (falls back to a
-    substring match), press one letter repeatedly to cycle through its
-    matches, Backspace edits, Esc clears. The buffer resets after a short
-    pause. `strip` maps display text back to the real name; `feedback` (if
-    given) is called with the current buffer for a UI hint."""
-    import time as _time
-
-    st = {"buf": "", "at": 0.0, "after": None}
-    strip = strip or (lambda s: s)
-
-    def _feedback():
-        if feedback:
-            try:
-                feedback(st["buf"])
-            except Exception:  # noqa: BLE001
-                # caller-supplied feedback callback into Tk; purely cosmetic
-                pass
-
-    def _clear(_e=None):
-        st["buf"] = ""
-        _feedback()
-
-    def _schedule_reset():
-        if st["after"] is not None:
-            try:
-                listbox.after_cancel(st["after"])
-            except tk.TclError:  # after_cancel on a stale/expired id
-                pass
-        st["after"] = listbox.after(1200, _clear)
-
-    def _jump(idx):
-        listbox.selection_clear(0, "end")
-        listbox.selection_set(idx)
-        listbox.activate(idx)
-        listbox.see(idx)
-        listbox.event_generate("<<ListboxSelect>>")
-
-    def _on_key(e):
-        ks = e.keysym
-        if ks == "Escape":
-            _clear()
-            return "break"
-        if ks == "BackSpace":
-            if st["buf"]:
-                st["buf"] = st["buf"][:-1]
-                st["at"] = _time.time()
-                _feedback()
-                _schedule_reset()
-                return "break"
-            return None
-        ch = e.char
-        if not ch or not ch.isprintable() or (e.state & 0x0004):  # ignore Ctrl-chords
-            return None
-        now = _time.time()
-        if now - st["at"] > 1.2:
-            st["buf"] = ""
-        # leaving single-key cycling: start a fresh buffer with the new key
-        if len(st["buf"]) > 1 and set(st["buf"]) == {st["buf"][0]} and ch.lower() != st["buf"][0]:
-            st["buf"] = ""
-        st["at"] = now
-        cl = ch.lower()
-        items = [strip(listbox.get(i)).lower() for i in range(listbox.size())]
-        if st["buf"] and set(st["buf"]) == {cl}:
-            # same key again: cycle through rows starting with that letter
-            st["buf"] += cl
-            cur = listbox.curselection()
-            start = (cur[0] + 1) if cur else 0
-            for i in list(range(start, len(items))) + list(range(start)):
-                if items[i].startswith(cl):
-                    _jump(i)
-                    break
-        else:
-            st["buf"] += cl
-            buf = st["buf"]
-            hit = next((i for i, s in enumerate(items) if s.startswith(buf)), None)
-            if hit is None:
-                hit = next((i for i, s in enumerate(items) if buf in s), None)
-            if hit is not None:
-                _jump(hit)
-        _feedback()
-        _schedule_reset()
-        return "break"
-
-    listbox.bind("<KeyPress>", _on_key, add="+")
-
-
 class ReorderPanel:
+    """A titled drag-reorderable list with Move Up/Down, Reset and disable support."""
+
     # "touched by this sort" row highlight. Deliberately a warm amber rather
     # than a blue -- blue was both low-contrast against the dark field bg and
     # easily confused with the blue selection highlight (#094771). Amber on
@@ -1815,7 +447,14 @@ class ReorderPanel:
     ERROR: ClassVar[dict[str, str]] = {"background": "#8e24aa", "foreground": "#ffffff"}
     DISABLE_PREFIX = "✗ "  # "X " marker shown on opted-out rows
 
-    def __init__(self, parent, title, reset_label="Reset to Computed Order", listbox_tooltip=None):
+    def __init__(
+        self,
+        parent: tk.Misc,
+        title: str,
+        reset_label: str = "Reset to Computed Order",
+        listbox_tooltip: str | None = None,
+    ) -> None:
+        """Build a titled reorderable panel inside ``parent``."""
         frame = ttk.LabelFrame(parent, text=title)
         frame.pack(fill="both", expand=True)
         frame.columnconfigure(0, weight=1)
@@ -1846,7 +485,7 @@ class ReorderPanel:
         attach_typeahead(
             self.listbox,
             strip=self._strip,
-            feedback=lambda buf, _f=frame, _t=title: _f.configure(
+            feedback=lambda buf, _f=frame, _t=title: _f.configure(  # type: ignore[misc]
                 text=(_t + (f"   [find: {buf}]" if buf else ""))
             ),
         )
@@ -1862,43 +501,60 @@ class ReorderPanel:
         up_btn.pack(fill="x", pady=2)
         add_tooltip(
             up_btn,
-            "Move the selected row(s) one position earlier. Works with a multi-"
-            "selection; you can also drag a contiguous block up with the mouse.",
+            _(
+                "Move the selected row(s) one position earlier. Works with a multi-"
+                "selection; you can also drag a contiguous block up with the mouse."
+            ),
         )
         down_btn = ttk.Button(btns, text=_("Move Down"), command=lambda: self.move(1))
         down_btn.pack(fill="x", pady=2)
         add_tooltip(
             down_btn,
-            "Move the selected row(s) one position later. Works with a multi-"
-            "selection; you can also drag a contiguous block down with the mouse.",
+            _(
+                "Move the selected row(s) one position later. Works with a multi-"
+                "selection; you can also drag a contiguous block down with the mouse."
+            ),
         )
         toggle_btn = ttk.Button(btns, text=_("Disable / Enable"), command=self.toggle_selected)
         toggle_btn.pack(fill="x", pady=(10, 2))
         add_tooltip(
             toggle_btn,
-            "Opt the selected row in or out of the load order. Disabled rows are dimmed and "
-            "marked, and are left out of Export: a custom item is simply not inserted, and an "
-            "item already in your openmw.cfg gets a removeContent/removeData entry in the "
-            "emitted TOML so it's durably removed. Double-click a row to toggle it too.",
+            _(
+                "Opt the selected row in or out of the load order. Disabled rows are dimmed and "
+                "marked, and are left out of Export: a custom item is simply not inserted, and an "
+                "item already in your openmw.cfg gets a removeContent/removeData entry in the "
+                "emitted TOML so it's durably removed. Double-click a row to toggle it too."
+            ),
         )
         reset_btn = ttk.Button(btns, text=reset_label, command=self.reset)
         reset_btn.pack(fill="x", pady=(2, 2))
         add_tooltip(
             reset_btn,
-            "Discard any manual dragging and restore the order from the last Sort "
-            "(your disable/enable choices are kept).",
+            _(
+                "Discard any manual dragging and restore the order from the last Sort "
+                "(your disable/enable choices are kept)."
+            ),
         )
 
-        self._original_order = []
-        self._highlight_lower = set()
-        self._error_lower = set()  # rows flagged with an active problem (bright red)
-        self._disabled = set()  # real item texts the user has opted out
+        self._original_order: list[str] = []
+        self._highlight_lower: set[str] = set()
+        # rows flagged with an active problem (bright red)
+        self._error_lower: set[str] = set()
+        self._disabled: set[str] = set()  # real item texts the user has opted out
 
-    def load(self, items, highlighted_items=(), disabled_items=()):
-        """Called after a successful Sort -- populates the list and remembers
+    def load(
+        self,
+        items: Sequence[str],
+        highlighted_items: Collection[str] = (),
+        disabled_items: Collection[str] = (),
+    ) -> None:
+        """Populate the list after a successful Sort.
+
+        Remembers
         it (for Reset), which items render highlighted, and which are disabled.
         disabled_items lets a re-Sort carry the previous opt-outs forward for
-        any item still present."""
+        any item still present.
+        """
         self._original_order = list(items)
         self._highlight_lower = {str(x).lower() for x in highlighted_items}
         self._error_lower = set()
@@ -1906,30 +562,33 @@ class ReorderPanel:
         self._disabled = {str(d) for d in disabled_items if str(d) in present}
         self._refill(self._original_order)
 
-    def set_errors(self, items):
-        """Flag rows with an active problem (e.g. a missing master) -- they
-        render bright red until the next load()."""
+    def set_errors(self, items: Collection[str]) -> None:
+        """Flag rows with an active problem (e.g.
+
+        a missing master) -- they render bright red until the next load().
+        """
         self._error_lower = {str(x).lower() for x in (items or ())}
         self._restyle()
 
-    def reset(self):
+    def reset(self) -> None:
+        """Restore the computed order, discarding manual edits."""
         self._refill(self._original_order)
 
-    def _display(self, real):
+    def _display(self, real: str) -> str:
         return self.DISABLE_PREFIX + real if real in self._disabled else real
 
-    def _strip(self, display):
+    def _strip(self, display: str) -> str:
         if display.startswith(self.DISABLE_PREFIX):
             return display[len(self.DISABLE_PREFIX) :]
         return display
 
-    def _refill(self, items):
+    def _refill(self, items: Sequence[str]) -> None:
         self.listbox.delete(0, "end")
         for real in items:
             self.listbox.insert("end", self._display(real))
         self._restyle()
 
-    def _restyle(self):
+    def _restyle(self) -> None:
         trace_first_fire("plugin list restyle")
         """Apply per-row colours: disabled = dim, else problem rows = bright
         red, else highlighted, else normal. Explicit on every row so
@@ -1945,14 +604,17 @@ class ReorderPanel:
             else:
                 self.listbox.itemconfig(i, **self._row_normal())
 
-    def _on_double(self, _event):
+    def _on_double(self, _event: tk.Event) -> str:
         self.toggle_selected()
         return "break"
 
-    def toggle_selected(self):
-        """Opt the selected row(s) in/out. With several rows selected: if any is
-        currently enabled, disable them all; otherwise enable them all (so a bulk
-        click has one predictable outcome). A single row just flips."""
+    def toggle_selected(self) -> None:
+        """Opt the selected row(s) in/out.
+
+        With several rows selected: if any is currently enabled, disable them all;
+        otherwise enable them all (so a bulk click has one predictable outcome). A
+        single row just flips.
+        """
         sel = list(self.listbox.curselection())
         if not sel:
             return
@@ -1970,10 +632,13 @@ class ReorderPanel:
             self.listbox.selection_set(i)
         self.listbox.see(sel[0])
 
-    def move(self, direction):
-        """Move all selected rows one step up (direction<0) or down (>0),
+    def move(self, direction: int) -> None:
+        """Move all selected rows one step up or down.
+
+        Direction < 0 is up, > 0 is down;
         together, preserving their order and selection. Blocked if the leading
-        selected row is already at the edge."""
+        selected row is already at the edge.
+        """
         sel = sorted(self.listbox.curselection())
         if not sel:
             return
@@ -2000,27 +665,34 @@ class ReorderPanel:
             self.listbox.selection_set(i)
         self.listbox.see(new_sel[0] if direction < 0 else new_sel[-1])
 
-    def get_order(self):
+    def get_order(self) -> list[str]:
         """All rows, in current order, real text (opt-out marker stripped)."""
         return [self._strip(x) for x in self.listbox.get(0, "end")]
 
-    def get_enabled(self):
+    def get_enabled(self) -> list[str]:
         """Only the rows that are still enabled, in order."""
         return [r for r in self.get_order() if r not in self._disabled]
 
-    def get_disabled(self):
+    def get_disabled(self) -> set[str]:
+        """Return the rows the user opted out of."""
         return set(self._disabled)
 
-    def has_order(self):
+    def has_order(self) -> bool:
+        """Report whether the panel currently holds an order."""
         return self.listbox.size() > 0
 
 
 class PluginOrderPanel(ReorderPanel):
-    def __init__(self, parent):
+    """The plugin load-order panel."""
+
+    def __init__(self, parent: tk.Misc) -> None:
+        """Build the panel inside ``parent``."""
         super().__init__(
             parent,
-            title="Plugin load order -- drag to override mlox (red = touched by this sort, "
-            "purple = master problem)",
+            title=_(
+                "Plugin load order -- drag to override mlox (red = touched by this sort, "
+                "purple = master problem)"
+            ),
             reset_label="Reset to mlox Order",
             listbox_tooltip="The content= load order mlox computed, after '1. Sort'. Drag rows to "
             "manually override it before Exporting -- red rows are the ones "
@@ -2033,12 +705,15 @@ class PluginOrderPanel(ReorderPanel):
 
 
 class DataPathOrderPanel(ReorderPanel):
-    """Same idea as PluginOrderPanel but for data= folder paths. Only
-    populated when a Sort was run with 'Sort data= paths too' checked --
-    otherwise stays empty, since there's nothing computed to show or
-    override (see App._sort_finished)."""
+    """Same idea as PluginOrderPanel but for data= folder paths.
 
-    def __init__(self, parent):
+    Only populated when a Sort was run with 'Sort data= paths too' checked -- otherwise
+    stays empty, since there's nothing computed to show or override (see
+    App._sort_finished).
+    """
+
+    def __init__(self, parent: tk.Misc) -> None:
+        """Build the panel inside ``parent``."""
         super().__init__(
             parent,
             title=_("Data path order -- drag to adjust (highlighted = your custom paths)"),
@@ -2058,7 +733,9 @@ class DataPathOrderPanel(ReorderPanel):
 # ---------------------------------------------------------------------------
 
 
-class App:
+class App(Tes3cmdMixin, ConflictWindowsMixin):
+    """The main application window."""
+
     # Colors for the log panel's tags now come from the selected syntax
     # highlighting theme (THEME_PRESETS / imported custom themes) rather than
     # a fixed palette -- see _log_tag_style, _apply_log_theme. section/error
@@ -2066,7 +743,7 @@ class App:
     # be able to spot at a glance; everything else is a plain-weight color.
 
     @staticmethod
-    def _log_tag_style(theme):
+    def _log_tag_style(theme: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
         return {
             "section": {"foreground": theme["section"], "font": ("TkFixedFont", 10, "bold")},
             "warn": {"foreground": theme["warn"]},
@@ -2078,7 +755,8 @@ class App:
             "dim": {"foreground": theme["dim"]},
         }
 
-    def __init__(self, root):
+    def __init__(self, root: tk.Tk) -> None:
+        """Build the whole application UI on ``root``."""
         self.root = root
         root.title("MLOX Subset Sort")
         root.geometry("1320x820")
@@ -2086,14 +764,16 @@ class App:
 
         self.log_queue = queue.Queue()
         self.worker_running = False
-        self._log_group_tag = None
+        self._log_group_tag: str | None = None
         self._current_plan = None
-        self._scanned_subset_lines = None  # in-memory scan result (when not saved to a file)
+        # in-memory scan result (when not saved to a file)
+        self._scanned_subset_lines: list[str] | None = None
         self._tes3conv_override = None  # user-set path to tes3conv (for field-level diffs)
         self._tes3cmd_override = None  # user-set path to tes3cmd (frontend window)
         self._conf_session = None
         self._conf_paths = {}
-        self._session = None  # reused disk-backed Tes3ConvSession
+        # reused disk-backed Tes3ConvSession
+        self._session: core.Tes3ConvSession | None = None
         self._keep_json = False
 
         # Announce the running build in the Log panel on EVERY start, with no
@@ -2119,7 +799,7 @@ class App:
             )
             if req:
                 if isinstance(req, str) and req.lower() not in ("1", "true", "yes", "on", ""):
-                    path = req
+                    path: str | Path = req
                 else:
                     path = app_base_dir() / "mlox_subset_sort_trace.log"
                 core.set_trace_file(path)
@@ -2143,7 +823,7 @@ class App:
             # enabling tracing must never be the thing that breaks startup
             pass
 
-        self._custom_log_themes = {}  # name -> theme dict, imported by the user
+        self._custom_log_themes: dict[str, dict] = {}  # name -> theme dict, imported by the user
         self._load_custom_log_themes()
         self.log_theme_var = tk.StringVar(value="Dark (default)")
         # the saved theme must drive the chrome palette *before* the ttk.Style
@@ -2168,10 +848,10 @@ class App:
 
     # -- settings persistence ----------------------------------------------
 
-    def _settings_file(self):
+    def _settings_file(self) -> Path:
         return app_base_dir() / "mlox_subset_sort_settings.json"
 
-    def _saved_log_theme_name(self):
+    def _saved_log_theme_name(self) -> str | None:
         """Just the saved theme name, readable before any widget exists."""
         try:
             d = json.loads(self._settings_file().read_text(encoding="utf-8"))
@@ -2180,7 +860,7 @@ class App:
         name = d.get("log_theme")
         return name if isinstance(name, str) else None
 
-    def _gather_settings(self):
+    def _gather_settings(self) -> dict[str, Any]:
         return {
             "cfg": self.cfg_var.get(),
             "customizations": self.customizations_var.get(),
@@ -2205,7 +885,7 @@ class App:
             "log_theme": self.log_theme_var.get(),
         }
 
-    def _load_settings(self):
+    def _load_settings(self) -> None:
         import json
 
         try:
@@ -2226,7 +906,7 @@ class App:
         for k, var in setters.items():
             if isinstance(d.get(k), str):
                 var.set(d[k])
-        for k, var in (
+        for k, bvar in (  # BooleanVars; `var` above was the StringVar loop
             ("write_toml_inplace", self.write_toml_inplace_var),
             ("dry_run", self.dry_run_var),
             ("write_cfg", self.write_cfg_var),
@@ -2237,7 +917,7 @@ class App:
             ("keep_json", self.keep_json_var),
         ):
             if isinstance(d.get(k), bool):
-                var.set(d[k])
+                bvar.set(d[k])
         if d.get("tes3conv"):
             self._tes3conv_override = d["tes3conv"]
         if d.get("tes3cmd"):
@@ -2251,7 +931,7 @@ class App:
             self.log_theme_var.set(d["log_theme"])
         self._on_toggle_inplace()
 
-    def _save_settings(self):
+    def _save_settings(self) -> None:
         import json
 
         try:
@@ -2261,7 +941,7 @@ class App:
         except (OSError, TypeError, ValueError):  # unwritable path / unserialisable value
             pass
 
-    def _on_close(self):
+    def _on_close(self) -> None:
         self._save_settings()
         s = getattr(self, "_session", None)
         if s is not None:
@@ -2274,13 +954,16 @@ class App:
 
     # -- layout ------------------------------------------------------------
 
-    def _paned(self, parent, orient):
-        """A tk.PanedWindow (not ttk -- ttk's has no visible grip) styled to
+    def _paned(self, parent: tk.Misc, orient: str) -> tk.PanedWindow:
+        """Build a themed tk.PanedWindow with a draggable grip.
+
+        Plain tk, not ttk (ttk's has no visible grip), styled to
         match the dark theme. The default square handle is turned off; a
-        hamburger-style grip is overlaid instead by _attach_hamburger_grip()."""
+        hamburger-style grip is overlaid instead by _attach_hamburger_grip().
+        """
         return tk.PanedWindow(
             parent,
-            orient=orient,
+            orient=orient,  # type: ignore[arg-type]
             sashwidth=8,
             sashrelief="flat",
             showhandle=False,
@@ -2290,12 +973,15 @@ class App:
             sashpad=0,
         )
 
-    def _attach_hamburger_grip(self, paned, orient):
-        """Overlay a hamburger-style (three-line) draggable grip centered on the
+    def _attach_hamburger_grip(self, paned: tk.Misc, orient: str) -> None:
+        """Overlay a hamburger-style (three-line) draggable grip on a sash.
+
+        Centred on the
         single sash of a two-pane PanedWindow. Cross-platform: cursor names are
         tried in order and any failure is ignored, and if the sash geometry
         can't be read the grip just hides itself -- the sash stays draggable
-        either way, so this is purely a nicer-looking handle, never load-bearing."""
+        either way, so this is purely a nicer-looking handle, never load-bearing.
+        """
         horizontal = orient == "horizontal"  # horizontal paned -> vertical sash
         long_px, thick_px = 34, 12
         w = thick_px if horizontal else long_px
@@ -2328,9 +1014,9 @@ class App:
             except tk.TclError:
                 continue
 
-        def reposition(_event=None):
+        def reposition(_event: tk.Event | None = None) -> None:
             try:
-                x, y = paned.sash_coord(0)
+                x, y = paned.sash_coord(0)  # type: ignore[attr-defined]
                 half = int(paned.cget("sashwidth")) // 2
             except (tk.TclError, IndexError, TypeError, ValueError):
                 grip.place_forget()
@@ -2340,17 +1026,21 @@ class App:
             else:
                 grip.place(relx=0.5, y=y + half, anchor="center")
 
-        def on_drag(event):
+        def on_drag(event: tk.Event) -> None:
             try:
                 if horizontal:
-                    paned.sash_place(0, max(1, event.x_root - paned.winfo_rootx()), 1)
+                    paned.sash_place(  # type: ignore[attr-defined]
+                        0, max(1, event.x_root - paned.winfo_rootx()), 1
+                    )
                 else:
-                    paned.sash_place(0, 1, max(1, event.y_root - paned.winfo_rooty()))
+                    paned.sash_place(  # type: ignore[attr-defined]
+                        0, 1, max(1, event.y_root - paned.winfo_rooty())
+                    )
             except tk.TclError:
                 pass
             reposition()
 
-        def reposition_soon(_event=None):
+        def reposition_soon(_event: tk.Event | None = None) -> None:
             # On a resize (esp. maximize/restore/fullscreen) the <Configure>
             # event fires before the PanedWindow has moved its sash, so reading
             # sash_coord() right now returns the OLD position and the grip lands
@@ -2366,7 +1056,7 @@ class App:
         paned.bind("<ButtonRelease-1>", lambda e: reposition(), add="+")
         paned.after(200, reposition)
 
-    def _build_widgets(self):
+    def _build_widgets(self) -> None:
         outer = ttk.Frame(self.root, padding=8)
         outer.pack(fill="both", expand=True)
 
@@ -2405,7 +1095,7 @@ class App:
         self._attach_hamburger_grip(left_pane, "vertical")
         self._attach_hamburger_grip(right_pane, "vertical")
 
-    def _build_controls(self, top):
+    def _build_controls(self, top: tk.Misc) -> None:
         top.columnconfigure(1, weight=1)
 
         if not HAVE_DND:
@@ -2437,8 +1127,10 @@ class App:
             start_row,
             self.cfg_var,
             filetypes=(("openmw.cfg", "*.cfg"), ("All files", "*.*")),
-            tooltip="Required. The openmw.cfg to read the current content= and data= order "
-            "from, and (if 'Write openmw.cfg directly' is checked) to patch.",
+            tooltip=_(
+                "Required. The openmw.cfg to read the current content= and data= order "
+                "from, and (if 'Write openmw.cfg directly' is checked) to patch."
+            ),
         )
         PathField(
             top,
@@ -2446,9 +1138,11 @@ class App:
             start_row + 1,
             self.customizations_var,
             filetypes=(("TOML files", "*.toml"), ("All files", "*.*")),
-            tooltip="A momw-configurator/umo customizations TOML to pull the plugin/data-path "
-            "subset from automatically. Optional if you provide a subset file instead -- "
-            "provide both and they're combined.",
+            tooltip=_(
+                "A momw-configurator/umo customizations TOML to pull the plugin/data-path "
+                "subset from automatically. Optional if you provide a subset file instead -- "
+                "provide both and they're combined."
+            ),
         )
         PathField(
             top,
@@ -2456,10 +1150,12 @@ class App:
             start_row + 2,
             self.subset_file_var,
             filetypes=(("Text/TOML", "*.txt *.toml"), ("All files", "*.*")),
-            tooltip="A plain text file (one plugin filename or data folder path per line, "
-            "'#' comments allowed) or a minimal TOML with subset=[...]/data=[...]. "
-            "Combined with --emit-toml, this alone is enough to generate a brand new "
-            "customizations.toml with no existing one required.",
+            tooltip=_(
+                "A plain text file (one plugin filename or data folder path per line, "
+                "'#' comments allowed) or a minimal TOML with subset=[...]/data=[...]. "
+                "Combined with --emit-toml, this alone is enough to generate a brand new "
+                "customizations.toml with no existing one required."
+            ),
             extra_button=(
                 "Scan...",
                 self.on_scan_mods,
@@ -2477,8 +1173,10 @@ class App:
             self.emit_toml_var,
             browse_kind="save",
             filetypes=(("TOML files", "*.toml"), ("All files", "*.*")),
-            tooltip="Where to write a corrected customizations.toml (sorted insert blocks, "
-            "re-anchored). Disabled when 'write directly back' below is checked.",
+            tooltip=_(
+                "Where to write a corrected customizations.toml (sorted insert blocks, "
+                "re-anchored). Disabled when 'write directly back' below is checked."
+            ),
         )
 
         # listName for the emitted TOML. momw-configurator REQUIRES this -- it
@@ -2507,12 +1205,14 @@ class App:
             start_row + 5,
             self.plugin_order_yml_var,
             filetypes=(("YAML files", "*.yml *.yaml"), ("All files", "*.*")),
-            tooltip="MOMW's plugin-order.yml (source of truth for which plugins belong to which "
-            "curated list). With the list name above set, curated plugins for that list "
-            "are excluded from the sort (never reordered) so only your custom additions "
-            "are touched, and read-only warnings are emitted: redundant, orphan, "
-            "needs-cleaning, and a base-order drift check. PyYAML used if installed, "
-            "else a built-in parser.",
+            tooltip=_(
+                "MOMW's plugin-order.yml (source of truth for which plugins belong to which "
+                "curated list). With the list name above set, curated plugins for that list "
+                "are excluded from the sort (never reordered) so only your custom additions "
+                "are touched, and read-only warnings are emitted: redundant, orphan, "
+                "needs-cleaning, and a base-order drift check. PyYAML used if installed, "
+                "else a built-in parser."
+            ),
             extra_button=(
                 "Update...",
                 self.on_update_plugin_order_yml,
@@ -2526,17 +1226,21 @@ class App:
 
         inplace_chk = ttk.Checkbutton(
             top,
-            text="Write directly back to customizations.toml (overwrite in place; "
-            "a .bak-<timestamp> copy is made first unless backups are disabled below)",
+            text=_(
+                "Write directly back to customizations.toml (overwrite in place; "
+                "a .bak-<timestamp> copy is made first unless backups are disabled below)"
+            ),
             variable=self.write_toml_inplace_var,
             command=self._on_toggle_inplace,
         )
         inplace_chk.grid(row=start_row + 6, column=0, columnspan=3, sticky="w", pady=(0, 4))
         add_tooltip(
             inplace_chk,
-            "Instead of writing to a separate file above, overwrite the customizations.toml "
-            "given above in place. A timestamped backup is made first (unless disabled), and "
-            "you'll get a confirmation prompt before it actually happens.",
+            _(
+                "Instead of writing to a separate file above, overwrite the customizations.toml "
+                "given above in place. A timestamped backup is made first (unless disabled), and "
+                "you'll get a confirmation prompt before it actually happens."
+            ),
         )
 
         self.rules_panel = RuleFilesPanel(
@@ -2568,8 +1272,10 @@ class App:
         dry_chk.grid(row=0, column=0, sticky="w", padx=8, pady=4)
         add_tooltip(
             dry_chk,
-            "When checked, Export shows exactly what it would write without "
-            "touching any files. Uncheck when you're ready to actually save.",
+            _(
+                "When checked, Export shows exactly what it would write without "
+                "touching any files. Uncheck when you're ready to actually save."
+            ),
         )
 
         write_cfg_chk = ttk.Checkbutton(
@@ -2578,8 +1284,10 @@ class App:
         write_cfg_chk.grid(row=0, column=1, sticky="w", padx=8, pady=4)
         add_tooltip(
             write_cfg_chk,
-            "Patch the content=/data= lines in openmw.cfg in place on Export. "
-            "A .bak-<timestamp> copy is made first unless backups are disabled.",
+            _(
+                "Patch the content=/data= lines in openmw.cfg in place on Export. "
+                "A .bak-<timestamp> copy is made first unless backups are disabled."
+            ),
         )
 
         sort_data_chk = ttk.Checkbutton(
@@ -2588,11 +1296,13 @@ class App:
         sort_data_chk.grid(row=0, column=2, sticky="w", padx=8, pady=4)
         add_tooltip(
             sort_data_chk,
-            "mlox has no concept of data= folder order -- this positions new data= paths "
-            "using an explicit after/before anchor if you wrote one, or by scanning the "
-            "folder for plugins and anchoring next to their neighbor in the sorted content= "
-            "order. Off by default so a plugin-only run can't surprise-reorder data= too. "
-            "Also required for the data path order panel to populate.",
+            _(
+                "mlox has no concept of data= folder order -- this positions new data= paths "
+                "using an explicit after/before anchor if you wrote one, or by scanning the "
+                "folder for plugins and anchoring next to their neighbor in the sorted content= "
+                "order. Off by default so a plugin-only run can't surprise-reorder data= too. "
+                "Also required for the data path order panel to populate."
+            ),
         )
 
         no_backup_chk = ttk.Checkbutton(
@@ -2601,8 +1311,10 @@ class App:
         no_backup_chk.grid(row=1, column=0, sticky="w", padx=8, pady=4)
         add_tooltip(
             no_backup_chk,
-            "Skip making a timestamped backup before overwriting openmw.cfg "
-            "and/or an in-place customizations.toml. Not recommended.",
+            _(
+                "Skip making a timestamped backup before overwriting openmw.cfg "
+                "and/or an in-place customizations.toml. Not recommended."
+            ),
         )
 
         no_warn_chk = ttk.Checkbutton(
@@ -2613,9 +1325,11 @@ class App:
         no_warn_chk.grid(row=1, column=1, sticky="w", padx=8, pady=4)
         add_tooltip(
             no_warn_chk,
-            "Skip evaluating [Conflict]/[Requires]/[Note] rules against the sorted plugin "
-            "list. This is purely informational and read-only either way -- it never changes "
-            "the computed order or what gets written, only whether warnings get printed.",
+            _(
+                "Skip evaluating [Conflict]/[Requires]/[Note] rules against the sorted plugin "
+                "list. This is purely informational and read-only either way -- it never changes "
+                "the computed order or what gets written, only whether warnings get printed."
+            ),
         )
 
         create_doc_chk = ttk.Checkbutton(
@@ -2646,19 +1360,23 @@ class App:
         keep_json_chk.grid(row=3, column=1, columnspan=2, sticky="w", padx=8, pady=4)
         add_tooltip(
             keep_json_chk,
-            "tes3conv conversions are written to disk (not held in RAM) and read per-plugin, "
-            "so big load orders don't blow up memory. They always go to a 'tes3conv_json' "
-            "folder next to the app and are reused within a run -- so Check Conflicts then Cell "
-            "Map won't re-run tes3conv (a plugin is only re-converted if it changed). This box "
-            "just decides what happens on exit: checked = keep that folder (reused next launch "
-            "too); unchecked = delete it when you close the app.",
+            _(
+                "tes3conv conversions are written to disk (not held in RAM) and read per-plugin, "
+                "so big load orders don't blow up memory. They always go to a 'tes3conv_json' "
+                "folder next to the app and are reused within a run -- so Check Conflicts then Cell "
+                "Map won't re-run tes3conv (a plugin is only re-converted if it changed). This box "
+                "just decides what happens on exit: checked = keep that folder (reused next launch "
+                "too); unchecked = delete it when you close the app."
+            ),
         )
         add_tooltip(
             create_doc_chk,
-            "Controls what 'Scan...' does with its result. Checked: write the scanned list "
-            "to a .txt subset file you choose, and load it (the file stays on disk for reuse). "
-            "Unchecked: keep the scanned list in memory just for this session and feed it "
-            "straight to the sort -- nothing is written to disk.",
+            _(
+                "Controls what 'Scan...' does with its result. Checked: write the scanned list "
+                "to a .txt subset file you choose, and load it (the file stays on disk for reuse). "
+                "Unchecked: keep the scanned list in memory just for this session and feed it "
+                "straight to the sort -- nothing is written to disk."
+            ),
         )
 
         # action area: Sort computes the plan (never writes anything) and
@@ -2674,7 +1392,14 @@ class App:
         row2 = ttk.Frame(action_area)
         row2.pack(fill="x", pady=(4, 0))
 
-        def _btn(bar, text, cmd, tip, state="normal", pad=(0, 6)):
+        def _btn(
+            bar: tk.Misc,
+            text: str,
+            cmd: Callable[[], None],
+            tip: str,
+            state: str = "normal",
+            pad: tuple[int, int] = (0, 6),
+        ) -> ttk.Button:
             b = ttk.Button(bar, text=text, command=cmd, state=state)
             b.pack(side="left", padx=pad)
             add_tooltip(b, tip)
@@ -2784,7 +1509,7 @@ class App:
             "copies) across the data folders, with restore/delete.",
         )
 
-    def _build_log(self, log_container):
+    def _build_log(self, log_container: tk.Misc) -> None:
         log_container.columnconfigure(0, weight=1)
         log_container.rowconfigure(0, weight=1)
 
@@ -2810,11 +1535,13 @@ class App:
         self.log_text.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
         add_tooltip(
             self.log_text,
-            "Full output from the last Sort and/or Export. Colour key: green = a plugin/path "
-            "this sort inserted or moved, orange = a heads-up (mlox warning, or a rule your "
-            "curated cfg order overrode), blue = a section header, bright red = an error worth "
-            "checking. Plain text = frozen base rows left untouched. Colors follow the "
-            "syntax highlighting theme picked below.",
+            _(
+                "Full output from the last Sort and/or Export. Colour key: green = a plugin/path "
+                "this sort inserted or moved, orange = a heads-up (mlox warning, or a rule your "
+                "curated cfg order overrode), blue = a section header, bright red = an error worth "
+                "checking. Plain text = frozen base rows left untouched. Colors follow the "
+                "syntax highlighting theme picked below."
+            ),
         )
         # tags get their real colors from _apply_log_theme once the theme is
         # known (see __init__) -- configure with placeholders now so nothing
@@ -2847,12 +1574,14 @@ class App:
         )
         add_tooltip(
             self.theme_combo,
-            "Colour theme for the whole GUI: window/button colours, syntax "
-            "highlighting here in the Log panel, and the field-diff JSON viewer "
-            "(Check Conflicts -> double-click a field). Switching re-themes "
-            "everything immediately, including any windows already open. Built-in: "
-            "Dracula, Monokai, Atom One Dark, Gruvbox Dark, plus anything you've "
-            "imported.",
+            _(
+                "Colour theme for the whole GUI: window/button colours, syntax "
+                "highlighting here in the Log panel, and the field-diff JSON viewer "
+                "(Check Conflicts -> double-click a field). Switching re-themes "
+                "everything immediately, including any windows already open. Built-in: "
+                "Dracula, Monokai, Atom One Dark, Gruvbox Dark, plus anything you've "
+                "imported."
+            ),
         )
         import_theme_btn = ttk.Button(
             log_btns, text=_("Import Theme..."), command=self._import_log_theme
@@ -2860,21 +1589,23 @@ class App:
         import_theme_btn.pack(side="left", padx=(8, 0))
         add_tooltip(
             import_theme_btn,
-            "Import a custom theme from a JSON file (background/foreground/select/"
-            "section/warn/error/ok/inserted/dim as hex colors, plus an optional "
-            '"chrome" object for explicit window/button colours) or a base16 scheme '
-            "file (.yaml/.yml/.json with base00..base0F -- e.g. from the atelierbram/"
-            "syntax-highlighting or chriskempson/base16 scheme repos). Window colours "
-            "not given explicitly are derived from the background. Imported themes are "
-            "saved and appear in the dropdown from then on.",
+            _(
+                "Import a custom theme from a JSON file (background/foreground/select/"
+                "section/warn/error/ok/inserted/dim as hex colors, plus an optional "
+                '"chrome" object for explicit window/button colours) or a base16 scheme '
+                "file (.yaml/.yml/.json with base00..base0F -- e.g. from the atelierbram/"
+                "syntax-highlighting or chriskempson/base16 scheme repos). Window colours "
+                "not given explicitly are derived from the background. Imported themes are "
+                "saved and appear in the dropdown from then on."
+            ),
         )
 
     # -- log panel syntax highlighting themes --------------------------------
 
-    def _custom_themes_file(self):
+    def _custom_themes_file(self) -> Path:
         return app_base_dir() / "log_themes.json"
 
-    def _load_custom_log_themes(self):
+    def _load_custom_log_themes(self) -> None:
         try:
             raw = json.loads(self._custom_themes_file().read_text(encoding="utf-8"))
         except (OSError, ValueError):  # unreadable file / bad JSON
@@ -2889,7 +1620,7 @@ class App:
             except (KeyError, TypeError, ValueError):  # missing key / non-dict entry / bad hex
                 continue  # skip a corrupted entry rather than lose the rest
 
-    def _save_custom_log_themes(self):
+    def _save_custom_log_themes(self) -> None:
         try:
             self._custom_themes_file().write_text(
                 json.dumps(self._custom_log_themes, indent=2), encoding="utf-8"
@@ -2897,13 +1628,13 @@ class App:
         except (OSError, TypeError, ValueError):  # unwritable path / unserialisable value
             pass
 
-    def _theme_names(self):
+    def _theme_names(self) -> list[str]:
         return list(THEME_PRESETS.keys()) + sorted(self._custom_log_themes.keys())
 
-    def _resolve_theme(self, name):
+    def _resolve_theme(self, name: str) -> dict | None:
         return THEME_PRESETS.get(name) or self._custom_log_themes.get(name)
 
-    def _apply_log_theme(self, name, announce=True):
+    def _apply_log_theme(self, name: str, announce: bool = True) -> None:
         theme = self._resolve_theme(name)
         if theme is None:
             name = "Dark (default)"
@@ -2935,9 +1666,9 @@ class App:
         for tag, cfg in self._log_tag_style(theme).items():
             log_text.tag_configure(tag, **cfg)
         if announce:
-            self.status_var.set(f"Log syntax highlighting: {name}")
+            self.status_var.set(_("Log syntax highlighting: %(name)s") % {"name": name})
 
-    def _reapply_chrome(self):
+    def _reapply_chrome(self) -> None:
         """Re-theme the live GUI after the chrome palette changed.
 
         Three passes, because three different mechanisms own the colours:
@@ -2949,7 +1680,7 @@ class App:
            ttk.Style can't touch.
         3. The reorder panels' per-row itemconfig colours are re-applied.
         """
-        apply_dark_theme(self.root)
+        apply_dark_theme(self.root)  # type: ignore[arg-type]
         count = restyle_widget_tree(self.root)
         for panel in (getattr(self, "order_panel", None), getattr(self, "data_order_panel", None)):
             if panel is not None:
@@ -2960,7 +1691,7 @@ class App:
         trace_first_fire("theme runtime re-apply walk (restyle_widget_tree)")
         core.trace(f"[theme] re-applied chrome to {count} plain-tk widgets (ttk covered by Style)")
 
-    def _import_log_theme(self):
+    def _import_log_theme(self) -> None:
         path = filedialog.askopenfilename(
             title=_("Import syntax highlighting theme"),
             filetypes=(("Theme files", "*.json *.yaml *.yml"), ("All files", "*.*")),
@@ -2971,7 +1702,9 @@ class App:
             name, theme = parse_theme_file(path)
         except (OSError, ValueError) as e:
             # parse_theme_file's documented contract, plus read errors
-            messagebox.showerror(_("Import failed"), f"Couldn't import that theme:\n\n{e}")
+            messagebox.showerror(
+                _("Import failed"), _("Couldn't import that theme:\n\n%(error)s") % {"error": e}
+            )
             return
         base_name, existing = name, self._theme_names()
         n = 2
@@ -2983,9 +1716,10 @@ class App:
         self.theme_combo.configure(values=self._theme_names())
         self.log_theme_var.set(name)
         self._apply_log_theme(name, announce=False)
-        self.status_var.set(f"Imported and applied theme: {name}")
+        self.status_var.set(_("Imported and applied theme: %(name)s") % {"name": name})
         messagebox.showinfo(
-            _("Theme imported"), f'Imported "{name}" and set it as the active log theme.'
+            _("Theme imported"),
+            _('Imported "%(name)s" and set it as the active log theme.') % {"name": name},
         )
 
     # -- log handling --------------------------------------------------------
@@ -3049,7 +1783,7 @@ class App:
             return "dim"
         return ""
 
-    def _append_log(self, text: str):
+    def _append_log(self, text: str) -> None:
         self.log_text.configure(state="normal")
         for line in text.splitlines(keepends=True):
             stripped = line.strip("\n")
@@ -3069,7 +1803,7 @@ class App:
         self.log_text.see("end")
         self.log_text.configure(state="disabled")
 
-    def _poll_log_queue(self):
+    def _poll_log_queue(self) -> None:
         drained = []
         try:
             while True:
@@ -3080,13 +1814,15 @@ class App:
             self._append_log("".join(drained))
         self.root.after(80, self._poll_log_queue)
 
-    def clear_log(self):
+    def clear_log(self) -> None:
+        """Empty the log panel."""
         self.log_text.configure(state="normal")
         self.log_text.delete("1.0", "end")
         self.log_text.configure(state="disabled")
         self._log_group_tag = None
 
-    def save_log(self):
+    def save_log(self) -> None:
+        """Write the log panel's contents to a file the user picks."""
         path = filedialog.asksaveasfilename(
             defaultextension=".log", filetypes=(("Log files", "*.log"), ("All files", "*.*"))
         )
@@ -3096,7 +1832,7 @@ class App:
 
     # -- run -----------------------------------------------------------------
 
-    def _on_toggle_inplace(self):
+    def _on_toggle_inplace(self) -> None:
         inplace = self.write_toml_inplace_var.get()
         self.emit_toml_field.set_enabled(not inplace)
 
@@ -3150,11 +1886,14 @@ class App:
             subset_lines=(self._scanned_subset_lines if has_mem_scan else None),
         )
 
-    def on_scan_mods(self):
-        """Scan a mods folder to build a subset. If 'Create subset text document'
-        is checked, write it to a .txt you choose and load that file; otherwise
-        keep the result in memory for this session only (no file written). Runs
-        in a worker thread since a big tree can take a moment to walk."""
+    def on_scan_mods(self) -> None:
+        """Scan a mods folder to build a subset.
+
+        If 'Create subset text document' is checked, write it to a .txt you choose and
+        load that file; otherwise keep the result in memory for this session only (no
+        file written). Runs in a worker thread since a big tree can take a moment to
+        walk.
+        """
         if self.worker_running:
             return
         folder = filedialog.askdirectory(title=_("Select the mods folder to scan"))
@@ -3177,7 +1916,7 @@ class App:
         self.status_var.set(_("Scanning mods folder..."))
         threading.Thread(target=self._scan_worker, args=(folder, out), daemon=True).start()
 
-    def _scan_worker(self, folder, out):
+    def _scan_worker(self, folder: str, out: str | None) -> None:
         writer = QueueWriter(self.log_queue)
         written, mem_lines = None, None
         try:
@@ -3185,16 +1924,16 @@ class App:
                 lines, n_folders, n_plugins = core.scan_mod_directories(folder, out)
             if out:
                 written = out
-                status = (
-                    f"Scan complete -- {n_folders} folder(s), {n_plugins} plugin(s). "
-                    f"Subset file loaded."
-                )
+                status = _(
+                    "Scan complete -- %(folders)d folder(s), %(plugins)d plugin(s). "
+                    "Subset file loaded."
+                ) % {"folders": n_folders, "plugins": n_plugins}
             else:
                 mem_lines = lines
-                status = (
-                    f"Scan complete -- {n_folders} folder(s), {n_plugins} plugin(s). "
-                    f"Held in memory (no file written)."
-                )
+                status = _(
+                    "Scan complete -- %(folders)d folder(s), %(plugins)d plugin(s). "
+                    "Held in memory (no file written)."
+                ) % {"folders": n_folders, "plugins": n_plugins}
         except Exception:  # noqa: BLE001
             # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: scan failed:\n" + traceback.format_exc())
@@ -3202,7 +1941,9 @@ class App:
         finally:
             self.root.after(0, self._scan_finished, written, mem_lines, status)
 
-    def _scan_finished(self, written_path, mem_lines, status):
+    def _scan_finished(
+        self, written_path: str | None, mem_lines: list[str] | None, status: str
+    ) -> None:
         self.worker_running = False
         self.sort_button.configure(state="normal")
         self.export_button.configure(state="normal" if self._current_plan else "disabled")
@@ -3214,7 +1955,8 @@ class App:
             self.subset_file_var.set("")  # in-memory: no file path to show
         self.status_var.set(status)
 
-    def on_sort(self):
+    def on_sort(self) -> None:
+        """Run step 1: compute the plan, in a worker."""
         if self.worker_running:
             return
         args = self._validate()
@@ -3231,7 +1973,7 @@ class App:
         thread = threading.Thread(target=self._sort_worker, args=(args,), daemon=True)
         thread.start()
 
-    def _sort_worker(self, args):
+    def _sort_worker(self, args: argparse.Namespace) -> None:
         writer = QueueWriter(self.log_queue)
         plan = None
         try:
@@ -3240,11 +1982,11 @@ class App:
             n_warn = len(plan.get("predicate_warnings") or [])
             n_yml = len(plan.get("yml_warnings") or [])
             n_plugins = len(plan.get("final_order") or [])
-            yml_bit = f", {n_yml} yml warning(s)" if n_yml else ""
-            status = (
-                f"Sorted {n_plugins} plugin(s), {n_warn} rule warning(s){yml_bit}. "
-                f"Drag to adjust, then Export."
-            )
+            yml_bit = (_(", %(count)d yml warning(s)") % {"count": n_yml}) if n_yml else ""
+            status = _(
+                "Sorted %(plugins)d plugin(s), %(warnings)d rule warning(s)%(yml)s. "
+                "Drag to adjust, then Export."
+            ) % {"plugins": n_plugins, "warnings": n_warn, "yml": yml_bit}
         except SystemExit as e:
             writer.write(f"\nERROR: {e}\n")
             status = "Sort failed -- see log."
@@ -3255,7 +1997,7 @@ class App:
         finally:
             self.root.after(0, self._sort_finished, plan, status)
 
-    def _cfg_snapshot(self):
+    def _cfg_snapshot(self) -> tuple[int, int] | None:
         """(mtime_ns, size) of the cfg file, for drift detection."""
         try:
             st = Path(self.cfg_var.get().strip()).stat()
@@ -3263,7 +2005,7 @@ class App:
         except OSError:
             return None
 
-    def _sort_finished(self, plan, status):
+    def _sort_finished(self, plan: dict | None, status: str) -> None:
         self.worker_running = False
         self.sort_button.configure(state="normal")
         self.status_var.set(status)
@@ -3293,7 +2035,7 @@ class App:
         }
         user_norms.discard("")
 
-        def _is_ours(line, is_new):
+        def _is_ours(line: str, is_new: bool) -> bool:
             if is_new:
                 return True
             p = core.normalize_data_path(core.extract_data_path_value(line) or "")
@@ -3308,7 +2050,8 @@ class App:
         self.resource_button.configure(state="normal" if final_order else "disabled")
         self.lint_button.configure(state="normal" if final_order else "disabled")
 
-    def on_export(self):
+    def on_export(self) -> None:
+        """Run step 2: write the plan out, in a worker."""
         if self.worker_running or not self._current_plan:
             return
         args = (
@@ -3325,10 +2068,12 @@ class App:
             and self._cfg_snapshot() != snap_then
             and not messagebox.askyesno(
                 _("openmw.cfg changed"),
-                "openmw.cfg has changed on disk since you ran '1. Sort' (did "
-                "momw-configurator re-run?).\n\nThe order on screen was computed "
-                "against the OLD contents. It's safer to re-Sort first.\n\n"
-                "Export anyway?",
+                _(
+                    "openmw.cfg has changed on disk since you ran '1. Sort' (did "
+                    "momw-configurator re-run?).\n\nThe order on screen was computed "
+                    "against the OLD contents. It's safer to re-Sort first.\n\n"
+                    "Export anyway?"
+                ),
             )
         ):
             return
@@ -3339,7 +2084,8 @@ class App:
             )
             if not messagebox.askyesno(
                 _("Overwrite customizations.toml?"),
-                f"This will overwrite:\n{args.emit_toml}\n\nin place{backup_note}. Continue?",
+                _("This will overwrite:\n%(path)s\n\nin place%(note)s. Continue?")
+                % {"path": args.emit_toml, "note": backup_note},
             ):
                 return
 
@@ -3361,8 +2107,18 @@ class App:
         )
         thread.start()
 
-    def _export_worker(self, args, final_order, data_order, disabled_plugins, disabled_data):
+    def _export_worker(
+        self,
+        args: argparse.Namespace,
+        final_order: list[str],
+        data_order: list[str],
+        disabled_plugins: Collection[str],
+        disabled_data: Collection[str],
+    ) -> None:
         writer = QueueWriter(self.log_queue)
+        # on_export() only starts this worker once a plan exists; state it so
+        # the contract is checked rather than assumed.
+        assert self._current_plan is not None  # noqa: S101
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
                 result = core.write_plan(
@@ -3373,10 +2129,10 @@ class App:
                     disabled_plugins=disabled_plugins,
                     disabled_data=disabled_data,
                 )
-            status = (
-                f"Export done -- cfg written: {'yes' if result['wrote_cfg'] else 'no'}, "
-                f"toml written: {'yes' if result['wrote_toml'] else 'no'}."
-            )
+            status = _("Export done -- cfg written: %(cfg)s, toml written: %(toml)s.") % {
+                "cfg": _("yes") if result["wrote_cfg"] else _("no"),
+                "toml": _("yes") if result["wrote_toml"] else _("no"),
+            }
         except SystemExit as e:
             writer.write(f"\nERROR: {e}\n")
             status = "Export failed -- see log."
@@ -3387,7 +2143,7 @@ class App:
         finally:
             self.root.after(0, self._export_finished, status)
 
-    def _export_finished(self, status):
+    def _export_finished(self, status: str) -> None:
         self.worker_running = False
         self.sort_button.configure(state="normal")
         self.export_button.configure(state="normal" if self._current_plan else "disabled")
@@ -3398,9 +2154,12 @@ class App:
 
     # -- conflict detection --------------------------------------------------
 
-    def _apply_exclusions(self, order):
-        """Drop plugins matching the user's exclude patterns (Options field);
-        logs what was skipped."""
+    def _apply_exclusions(self, order: Sequence[str]) -> list[str]:
+        """Drop plugins matching the user's exclude patterns.
+
+        From the Options field;
+        logs what was skipped.
+        """
         import re as _re
 
         pats = [p for p in _re.split(r"[,\n]", self.exclude_var.get()) if p.strip()]
@@ -3414,13 +2173,13 @@ class App:
             )
         return kept
 
-    def _tes3conv_json_dir(self):
-        return app_base_dir() / "tes3conv_json"
+    def _on_keep_json_toggle(self) -> None:
+        """Return the folder the tes3conv JSON dump lives in.
 
-    def _on_keep_json_toggle(self):
-        """The JSON dump always lives in the same 'tes3conv_json' folder so it's
+        Always the same 'tes3conv_json' folder so it's
         reused within a run; this checkbox only decides whether it's KEPT on close
-        or removed. Flipping it just updates the live session's keep flag."""
+        or removed. Flipping it just updates the live session's keep flag.
+        """
         keep = bool(self.keep_json_var.get())
         self._keep_json = keep
         s = getattr(self, "_session", None)
@@ -3433,14 +2192,17 @@ class App:
             else f"tes3conv JSON dump ({dest}) will be removed on close."
         )
 
-    def _get_session(self, conv):
-        """Reuse ONE disk-backed tes3conv session across scans, ALWAYS dumping to the
+    def _get_session(self, conv: str | None) -> core.Tes3ConvSession | None:
+        """Return the shared disk-backed tes3conv session, creating it if needed.
+
+        Reused across scans, always dumping to the
         same 'tes3conv_json' folder -- so every plugin is converted at most once per
         run (Check Conflicts then Cell Map reuse the JSON, no re-running tes3conv).
         A cached JSON is re-used only if it's newer than its plugin (mtime check in
         core), so an edited plugin still re-converts. The 'Keep tes3conv JSON dump'
         option only controls whether that folder is removed on close. Called from a
-        worker thread; self._keep_json is snapshotted on the main thread."""
+        worker thread; self._keep_json is snapshotted on the main thread.
+        """
         if not conv:
             return None
         keep = bool(getattr(self, "_keep_json", False))
@@ -3458,32 +2220,14 @@ class App:
         self._session = s
         return s
 
-    def on_check_conflicts(self):
-        """Scan the current (sorted, enabled) plugins for TES3 record conflicts.
-        Runs in a worker since parsing every plugin can take a moment."""
-        if self.worker_running or not self._current_plan:
-            return
-        order = self._apply_exclusions(self.order_panel.get_enabled())
-        if not order:
-            return
-        dirs = self._plan_scan_dirs()
-        subset = self._current_plan.get("subset") or []
-        self._keep_json = self.keep_json_var.get()
-        self._conf_subset_lower = {str(s).lower() for s in subset}  # your custom mods
-        self.worker_running = True
-        self.sort_button.configure(state="disabled")
-        self.export_button.configure(state="disabled")
-        self.conflicts_button.configure(state="disabled")
-        self.status_var.set(_("Scanning for conflicts..."))
-        threading.Thread(
-            target=self._conflicts_worker, args=(order, dirs, subset), daemon=True
-        ).start()
+    def _plan_scan_dirs(self) -> list[str]:
+        """Return every folder the scans should search for this run.
 
-    def _plan_scan_dirs(self):
-        """All folders the scans should search for THIS run: the cfg's data=
+        The cfg's data=
         dirs plus the pending custom data paths (scan / customizations TOML)
         that aren't in the cfg yet -- so Check Conflicts / Cell Map / Resource
-        Conflicts can see your custom mods BEFORE the cfg is written."""
+        Conflicts can see your custom mods BEFORE the cfg is written.
+        """
         plan = self._current_plan or {}
         dirs = plan.get("scan_dirs")
         if dirs:
@@ -3495,61 +2239,10 @@ class App:
             plan.get("data_inserts"),
         )
 
-    def _conflicts_worker(self, order, dirs, subset):
-        writer = QueueWriter(self.log_queue)
-        conflicts, stats, session = [], {}, None
-        try:
-            with redirect_stdout(writer), redirect_stderr(writer):
-                index = core.PluginFileIndex(dirs)
-                cfg_dir = (
-                    str(Path(self.cfg_var.get().strip()).parent)
-                    if self.cfg_var.get().strip()
-                    else None
-                )
-                conv = core.find_tes3conv(explicit=self._tes3conv_override, extra_dirs=[cfg_dir])
-                session = self._get_session(conv)
-                print("\n" + "=" * 70)
-                print(_(" TES3 RECORD CONFLICTS (read-only)"))
-                print("=" * 70)
-                if session:
-                    print(f"  Engine: tes3conv ({conv}) -- field-level diffs available.")
-                else:
-                    print(
-                        "  Engine: built-in parser (record-level). Point the Conflicts window at "
-                        "a tes3conv binary for field-level diffs."
-                    )
-                conflicts, stats = core.detect_conflicts(
-                    order, index, subset_names=subset, session=session
-                )
-                print(core.format_conflict_report(conflicts, stats, limit=200))
-            n_sub = sum(1 for c in conflicts if c.get("involves_subset"))
-            status = (
-                f"Conflicts: {stats.get('conflicts', 0)} record(s), "
-                f"{n_sub} involving your mods. See the Conflicts window."
-            )
-        except Exception:  # noqa: BLE001
-            # worker top level: reports the traceback into the log panel
-            writer.write("\nERROR: conflict scan failed:\n" + traceback.format_exc())
-            status = "Conflict scan failed -- see log."
-        finally:
-            self.root.after(0, self._conflicts_finished, conflicts, stats, session, status)
-
-    def _conflicts_finished(self, conflicts, stats, session, status):
-        self.worker_running = False
-        self.sort_button.configure(state="normal")
-        self.export_button.configure(state="normal" if self._current_plan else "disabled")
-        self.conflicts_button.configure(state="normal" if self._current_plan else "disabled")
-        self.cellmap_button.configure(state="normal" if self._current_plan else "disabled")
-        self.resource_button.configure(state="normal" if self._current_plan else "disabled")
-        self.lint_button.configure(state="normal" if self._current_plan else "disabled")
-        self.status_var.set(status)
-        self._conf_session = session
-        self._conf_paths = (stats or {}).get("paths", {})
-        self._show_conflict_window(conflicts, stats)
-
     # -- cell map (modmapper) ------------------------------------------------
 
-    def on_cell_map(self):
+    def on_cell_map(self) -> None:
+        """Build the cell-coverage map, in a worker."""
         if self.worker_running or not self._current_plan:
             return
         order = self._apply_exclusions(self.order_panel.get_enabled())
@@ -3572,11 +2265,11 @@ class App:
             target=self._cellmap_worker, args=(order, dirs, subset), daemon=True
         ).start()
 
-    def _cellmap_file(self):
+    def _cellmap_file(self) -> Path:
         """Stable, user-findable, writable location for the generated map."""
         return app_base_dir() / "cell_map.html"
 
-    def _cellmap_worker(self, order, dirs, subset):
+    def _cellmap_worker(self, order: list[str], dirs: list[str], subset: list[str]) -> None:
         writer = QueueWriter(self.log_queue)
         path = None
         core.trace(f"cell map: start, {len(order)} plugin(s)")
@@ -3593,7 +2286,10 @@ class App:
                 print("\n" + "=" * 70)
                 print(_(" CELL MAP"))
                 print("=" * 70)
-                print(f"  Engine: {'tes3conv' if conv else 'built-in parser'}")
+                print(
+                    _("  Engine: %(engine)s")
+                    % {"engine": "tes3conv" if conv else _("built-in parser")}
+                )
                 cov = core.build_cell_coverage(order, index, subset_names=subset, session=session)
                 core.trace(
                     f"cell map: coverage built, {len(cov['exterior'])} ext, {len(cov['interior'])} int"
@@ -3616,11 +2312,21 @@ class App:
                 del html
                 core.trace(f"cell map: written to {path}")
                 print(
-                    f"  {len(cov['exterior'])} exterior + {len(cov['interior'])} interior cell(s) "
-                    f"touched across {cov['scanned']} plugin(s)."
+                    _(
+                        "  %(exterior)d exterior + %(interior)d interior cell(s) "
+                        "touched across %(scanned)d plugin(s)."
+                    )
+                    % {
+                        "exterior": len(cov["exterior"]),
+                        "interior": len(cov["interior"]),
+                        "scanned": cov["scanned"],
+                    }
                 )
-                print(f"  Map written to: {path}")
-            status = f"Cell map ready ({len(cov['exterior'])} exterior, {len(cov['interior'])} interior)."
+                print(_("  Map written to: %(path)s") % {"path": path})
+            status = _("Cell map ready (%(exterior)d exterior, %(interior)d interior).") % {
+                "exterior": len(cov["exterior"]),
+                "interior": len(cov["interior"]),
+            }
         except Exception:  # noqa: BLE001
             # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: cell map failed:\n" + traceback.format_exc())
@@ -3628,7 +2334,7 @@ class App:
         finally:
             self.root.after(0, self._cellmap_finished, path, status)
 
-    def _cellmap_finished(self, path, status):
+    def _cellmap_finished(self, path: str | None, status: str) -> None:
         self.worker_running = False
         self.sort_button.configure(state="normal")
         for b in (
@@ -3675,11 +2381,14 @@ class App:
                 status + "  (opened in browser — pip install pywebview " "for an in-app window)"
             )
 
-    def _open_cell_map_pywebview(self, path):
-        """Show the map in an embedded OS webview by re-invoking ourselves with
+    def _open_cell_map_pywebview(self, path: str | Path) -> None:
+        """Show the map in an embedded OS webview.
+
+        Re-invokes this executable with
         --show-map in a SEPARATE process (webview.start() needs its own main
         thread). Frozen-safe: a built .exe re-runs the .exe; from source we re-run
-        the script -- never 'python -c', which a frozen exe can't do."""
+        the script -- never 'python -c', which a frozen exe can't do.
+        """
         ap = os.path.abspath(path)  # noqa: PTH100 - must not resolve symlinks
         # IMPORTANT: only CREATE_NO_WINDOW here (suppresses a console flash) -- do
         # NOT use the SW_HIDE startupinfo from _no_window_kwargs(): that STARTUPINFO
@@ -3692,12 +2401,12 @@ class App:
             else:
                 cmd = [sys.executable, os.path.abspath(__file__), "--show-map", ap]  # noqa: PTH100
             core.trace(f"cell map: launching pywebview child: {cmd}")
-            subprocess.Popen(cmd, **nw)
+            subprocess.Popen(cmd, **nw)  # type: ignore[call-overload]
         except (OSError, ValueError):  # Popen: missing exe or bad argv
             core.trace("cell map: pywebview child launch FAILED:\n" + traceback.format_exc())
             self._open_cell_map_browser()
 
-    def _show_cell_map_window(self, path):
+    def _show_cell_map_window(self, path: str | Path) -> None:
         win = getattr(self, "_cellmap_win", None)
         if win is not None and win.winfo_exists():
             win.destroy()
@@ -3728,7 +2437,7 @@ class App:
                 ),
             ).pack(anchor="w")
 
-    def _open_cell_map_browser(self):
+    def _open_cell_map_browser(self) -> None:
         p = getattr(self, "_last_cell_file", None)
         if not p or not Path(p).exists():
             return
@@ -3737,7 +2446,7 @@ class App:
         except (OSError, ValueError, webbrowser.Error):  # as_uri on a relative path / no browser
             pass
 
-    def _save_cell_map(self):
+    def _save_cell_map(self) -> None:
         src = getattr(self, "_last_cell_file", None)
         if not src or not Path(src).exists():
             return
@@ -3754,71 +2463,16 @@ class App:
 
             if os.path.abspath(out) != os.path.abspath(src):  # noqa: PTH100
                 shutil.copyfile(src, out)
-            self.status_var.set(f"Cell map saved: {out}")
+            self.status_var.set(_("Cell map saved: %(path)s") % {"path": out})
         except OSError as e:
             messagebox.showerror(_("Save failed"), str(e))
 
     # -- resource (VFS) conflicts --------------------------------------------
 
-    def on_resource_conflicts(self):
-        if self.worker_running or not self._current_plan:
-            return
-        dirs = self._plan_scan_dirs()
-        if not dirs:
-            self.status_var.set(_("No data= folders to scan."))
-            return
-        subset_dirs = self._current_plan.get("custom_data_dirs") or core.pending_custom_dirs(
-            self._current_plan.get("raw_toml_data_inserts"), self._current_plan.get("data_inserts")
-        )
-        self.worker_running = True
-        for b in (
-            self.sort_button,
-            self.export_button,
-            self.conflicts_button,
-            self.cellmap_button,
-            self.resource_button,
-        ):
-            b.configure(state="disabled")
-        self.status_var.set(_("Scanning data folders for file conflicts..."))
-        threading.Thread(
-            target=self._resource_worker, args=(dirs, subset_dirs), daemon=True
-        ).start()
-
-    def _resource_worker(self, dirs, subset_dirs):
-        writer = QueueWriter(self.log_queue)
-        conflicts, stats = [], {}
-        try:
-            with redirect_stdout(writer), redirect_stderr(writer):
-                print("\n" + "=" * 70)
-                print(_(" DATA-PATH RESOURCE (VFS) CONFLICTS"))
-                print("=" * 70)
-                conflicts, stats = core.detect_resource_conflicts(dirs, subset_dirs=subset_dirs)
-                print(core.format_resource_report(conflicts, stats, limit=200))
-            status = f"Resource conflicts: {stats.get('conflicts', 0)} file(s). See the window."
-        except Exception:  # noqa: BLE001
-            # worker top level: reports the traceback into the log panel
-            writer.write("\nERROR: resource scan failed:\n" + traceback.format_exc())
-            status = "Resource scan failed -- see log."
-        finally:
-            self.root.after(0, self._resource_finished, conflicts, stats, status)
-
-    def _resource_finished(self, conflicts, stats, status):
-        self.worker_running = False
-        self.sort_button.configure(state="normal")
-        for b in (
-            self.export_button,
-            self.conflicts_button,
-            self.cellmap_button,
-            self.resource_button,
-            self.lint_button,
-        ):
-            b.configure(state="normal" if self._current_plan else "disabled")
-        self.status_var.set(status)
-        self._show_resource_window(conflicts, stats)
-
     # -- download sources dialog ---------------------------------------------
 
-    def on_sources(self):
+    def on_sources(self) -> None:
+        """Open the download-sources dialog."""
         win = getattr(self, "_src_win", None)
         if win is not None and win.winfo_exists():
             win.lift()
@@ -3834,9 +2488,11 @@ class App:
 
         ttk.Label(
             top,
-            text="If upstream moves or a new fork takes over, point the updaters at "
-            "the new location here. Blank = built-in defaults. Downloads are "
-            "always validated before anything is overwritten.",
+            text=_(
+                "If upstream moves or a new fork takes over, point the updaters at "
+                "the new location here. Blank = built-in defaults. Downloads are "
+                "always validated before anything is overwritten."
+            ),
             foreground=DARK["fg_dim"],
             wraplength=720,
             justify="left",
@@ -3847,13 +2503,21 @@ class App:
         rent.grid(row=1, column=1, sticky="ew", padx=6, pady=2)
         add_tooltip(
             rent,
-            "Where 'Update Rules...' downloads from. Must contain {name}, which "
-            "is replaced with mlox_base.txt / mlox_user.txt per file.\n"
-            f"Default: {core.RULES_URL_TEMPLATE}",
+            # {name} is a literal token the user types into the URL template,
+            # not a placeholder of THIS string -- hence %% -escaping is not
+            # needed (this is %-formatted, and "{name}" contains no %).
+            _(
+                "Where 'Update Rules...' downloads from. Must contain {name}, which "
+                "is replaced with mlox_base.txt / mlox_user.txt per file.\n"
+                "Default: %(url)s"
+            )
+            % {"url": core.RULES_URL_TEMPLATE},
         )
-        ttk.Label(top, text=f"default: {core.RULES_URL_TEMPLATE}", foreground=DARK["fg_dim"]).grid(
-            row=2, column=1, sticky="w", padx=6
-        )
+        ttk.Label(
+            top,
+            text=_("default: %(url)s") % {"url": core.RULES_URL_TEMPLATE},
+            foreground=DARK["fg_dim"],
+        ).grid(row=2, column=1, sticky="w", padx=6)
 
         ttk.Label(top, text=_("plugin-order.yml URL:")).grid(
             row=3, column=0, sticky="w", pady=(10, 0)
@@ -3862,28 +2526,35 @@ class App:
         pent.grid(row=3, column=1, sticky="ew", padx=6, pady=(10, 2))
         add_tooltip(
             pent,
-            "Where the plugin-order.yml 'Update...' button downloads from. "
-            "Blank tries the built-in candidates in order.\n"
-            f"Default: {core.PLUGIN_ORDER_URLS[0]}",
+            _(
+                "Where the plugin-order.yml 'Update...' button downloads from. "
+                "Blank tries the built-in candidates in order.\n"
+                "Default: %(url)s"
+            )
+            % {"url": core.PLUGIN_ORDER_URLS[0]},
         )
         ttk.Label(
-            top, text=f"default: {core.PLUGIN_ORDER_URLS[0][:96]}...", foreground=DARK["fg_dim"]
+            top,
+            text=_("default: %(url)s...") % {"url": core.PLUGIN_ORDER_URLS[0][:96]},
+            foreground=DARK["fg_dim"],
         ).grid(row=4, column=1, sticky="w", padx=6)
 
         row = ttk.Frame(top)
         row.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(16, 0))
 
-        def _reset():
+        def _reset() -> None:
             self.rules_url_var.set("")
             self.plugin_order_url_var.set("")
 
-        def _close():
+        def _close() -> None:
             t = self.rules_url_var.get().strip()
             if t and "{name}" not in t:
                 messagebox.showerror(
                     _("Download sources"),
-                    "The rules URL template must contain {name} (it's replaced "
-                    "with the rule filename).",
+                    _(
+                        "The rules URL template must contain {name} (it's replaced "
+                        "with the rule filename)."
+                    ),
                     parent=win,
                 )
                 return
@@ -3895,9 +2566,12 @@ class App:
 
     # -- mlox user-rules maker -----------------------------------------------
 
-    def _default_rules_file(self):
-        """Prefill: an existing personal file already in the rules list, else
-        'mlox_my_rules.txt' next to the first rule file (or the cfg)."""
+    def _default_rules_file(self) -> str:
+        """Return the rules file to prefill the maker with.
+
+        An existing personal file already in the rules list, else
+        'mlox_my_rules.txt' next to the first rule file (or the cfg).
+        """
         for p in self.rules_panel.get_paths():
             if Path(p).name.lower() not in ("mlox_base.txt", "mlox_user.txt"):
                 return str(p)
@@ -3905,7 +2579,8 @@ class App:
         base = Path(paths[0]).parent if paths else Path(self._cfg_dir() or ".")
         return str(base / "mlox_my_rules.txt")
 
-    def on_rule_maker(self):
+    def on_rule_maker(self) -> None:
+        """Open the mlox user-rules maker."""
         win = getattr(self, "_rm_win", None)
         if win is not None and win.winfo_exists():
             win.lift()
@@ -3926,10 +2601,12 @@ class App:
         fent.grid(row=0, column=1, sticky="ew", padx=6)
         add_tooltip(
             fent,
-            "Personal rules file the rule is appended to (created with a header "
-            "if new). Use your OWN file, not mlox_base/mlox_user -- those get "
-            "overwritten by 'Update Rules...'. It's auto-added to the rule-files "
-            "list LAST, so your rules win conflicts.",
+            _(
+                "Personal rules file the rule is appended to (created with a header "
+                "if new). Use your OWN file, not mlox_base/mlox_user -- those get "
+                "overwritten by 'Update Rules...'. It's auto-added to the rule-files "
+                "list LAST, so your rules win conflicts."
+            ),
         )
         ttk.Button(top, text=_("Browse..."), command=self._rm_browse_file).grid(row=0, column=2)
 
@@ -3973,14 +2650,16 @@ class App:
         b.pack(fill="x", pady=2)
         add_tooltip(
             b,
-            "Add the rows currently SELECTED in the main plugin-order panel, in "
-            "their displayed order (Ctrl/Shift-click there to multi-select first).",
+            _(
+                "Add the rows currently SELECTED in the main plugin-order panel, in "
+                "their displayed order (Ctrl/Shift-click there to multi-select first)."
+            ),
         )
         ttk.Button(rbtns, text=_("Remove"), command=self._rm_remove).pack(fill="x", pady=2)
         ttk.Button(
             rbtns,
             text=_("Clear"),
-            command=lambda: (self._rm_list.delete(0, "end"), self._rm_refresh()),
+            command=lambda: (self._rm_list.delete(0, "end"), self._rm_refresh()),  # type: ignore[func-returns-value]
         ).pack(fill="x", pady=2)
         af = ttk.Frame(pf)
         af.grid(row=1, column=0, columnspan=3, sticky="ew", padx=8, pady=(0, 8))
@@ -3990,8 +2669,10 @@ class App:
         aent.grid(row=0, column=0, sticky="ew")
         add_tooltip(
             aent,
-            "Type a plugin name or mlox pattern (wildcards * ? and <VER> allowed; "
-            "must end in a plugin extension) and press Enter or Add.",
+            _(
+                "Type a plugin name or mlox pattern (wildcards * ? and <VER> allowed; "
+                "must end in a plugin extension) and press Enter or Add."
+            ),
         )
         aent.bind("<Return>", lambda e: self._rm_add_typed())
         ttk.Button(af, text=_("Add"), command=self._rm_add_typed).grid(row=0, column=1, padx=(6, 0))
@@ -4003,10 +2684,12 @@ class App:
         cent.bind("<KeyRelease>", lambda e: self._rm_refresh())
         add_tooltip(
             cent,
-            "Written above the rule as a ';;' comment. The mlox rule guidelines "
-            "suggest citing your source, e.g. (Ref: the mod's readme) or "
-            "(Ref: a forum URL ) -- surround URLs with spaces. Handy if you "
-            "later contribute the rule upstream.",
+            _(
+                "Written above the rule as a ';;' comment. The mlox rule guidelines "
+                "suggest citing your source, e.g. (Ref: the mod's readme) or "
+                "(Ref: a forum URL ) -- surround URLs with spaces. Handy if you "
+                "later contribute the rule upstream."
+            ),
         )
 
         vf = ttk.LabelFrame(top, text=_("Preview"))
@@ -4031,10 +2714,10 @@ class App:
         ttk.Button(row, text=_("Close"), command=win.destroy).pack(side="right")
         self._rm_refresh()
 
-    def _rm_names(self):
+    def _rm_names(self) -> list[str]:
         return list(self._rm_list.get(0, "end"))
 
-    def _rm_add_from_panel(self):
+    def _rm_add_from_panel(self) -> None:
         sel = sorted(self.order_panel.listbox.curselection())
         if not sel:
             self.status_var.set(_("Select row(s) in the plugin-order panel first."))
@@ -4046,19 +2729,19 @@ class App:
                 self._rm_list.insert("end", name)
         self._rm_refresh()
 
-    def _rm_add_typed(self):
+    def _rm_add_typed(self) -> None:
         v = self._rm_add_var.get().strip()
         if v and v.lower() not in {n.lower() for n in self._rm_names()}:
             self._rm_list.insert("end", v)
             self._rm_add_var.set("")
         self._rm_refresh()
 
-    def _rm_remove(self):
+    def _rm_remove(self) -> None:
         for i in reversed(self._rm_list.curselection()):
             self._rm_list.delete(i)
         self._rm_refresh()
 
-    def _rm_preview_text(self):
+    def _rm_preview_text(self) -> str:
         try:
             names = self._rm_names()
             if not names:
@@ -4083,7 +2766,7 @@ class App:
             # live rule preview; any failure becomes preview text
             return f"error: {e}"
 
-    def _rm_browse_file(self):
+    def _rm_browse_file(self) -> None:
         """Ask for a personal rules file and remember the choice.
 
         A cancelled dialog returns an empty string, which must leave the
@@ -4100,7 +2783,7 @@ class App:
         if chosen:
             self._rm_file_var.set(chosen)
 
-    def _rm_refresh(self):
+    def _rm_refresh(self) -> None:
         trace_first_fire("rules-maker refresh (radio / reorder)")
         txt = self._rm_preview_text()
         self._rm_preview.configure(state="normal")
@@ -4108,7 +2791,7 @@ class App:
         self._rm_preview.insert("1.0", txt)
         self._rm_preview.configure(state="disabled")
 
-    def _rm_append(self):
+    def _rm_append(self) -> None:
         path = self._rm_file_var.get().strip()
         if not path:
             messagebox.showerror(_("New rule"), _("Set a rules file first."), parent=self._rm_win)
@@ -4116,9 +2799,11 @@ class App:
         if Path(path).name.lower() in ("mlox_base.txt", "mlox_user.txt"):
             messagebox.showerror(
                 _("New rule"),
-                "Don't append personal rules to mlox_base.txt / mlox_user.txt -- "
-                "'Update Rules...' overwrites those. Pick your own file "
-                "(e.g. mlox_my_rules.txt).",
+                _(
+                    "Don't append personal rules to mlox_base.txt / mlox_user.txt -- "
+                    "'Update Rules...' overwrites those. Pick your own file "
+                    "(e.g. mlox_my_rules.txt)."
+                ),
                 parent=self._rm_win,
             )
             return
@@ -4143,10 +2828,13 @@ class App:
                 )
                 if not messagebox.askyesno(
                     _("Rule conflicts with the curated order"),
-                    f"This [Order] rule contradicts the frozen curated (MOMW) order for:\n\n"
-                    f"{pairs}\n\nmlox will DISCARD those orderings (it never reorders the "
-                    f"curated list), so the rule won't take effect for them. Write it "
-                    f"anyway?",
+                    _(
+                        "This [Order] rule contradicts the frozen curated (MOMW) order "
+                        "for:\n\n%(pairs)s\n\nmlox will DISCARD those orderings (it never "
+                        "reorders the curated list), so the rule won't take effect for "
+                        "them. Write it anyway?"
+                    )
+                    % {"pairs": pairs},
                     parent=self._rm_win,
                 ):
                     return
@@ -4161,11 +2849,15 @@ class App:
         self._rm_list.delete(0, "end")
         self._rm_comment.set("")
         self._rm_refresh()
-        self.status_var.set(f"Rule appended to {Path(path).name}. Re-run '1. Sort' to apply it.")
+        self.status_var.set(
+            _("Rule appended to %(file)s. Re-run '1. Sort' to apply it.")
+            % {"file": Path(path).name}
+        )
 
     # -- plugin-order.yml updater --------------------------------------------
 
-    def on_update_plugin_order_yml(self):
+    def on_update_plugin_order_yml(self) -> None:
+        """Download a fresh plugin-order.yml, with confirmation."""
         p = self.plugin_order_yml_var.get().strip()
         if not p:
             messagebox.showinfo(
@@ -4185,16 +2877,19 @@ class App:
         )
         if not messagebox.askyesno(
             _("Update plugin-order.yml"),
-            f"Download the current plugin-order.yml from MOMW?\n\n{age_txt}.\n\n"
-            f"The download is validated before anything is written; a timestamped "
-            f".bak of the old file is kept.",
+            _(
+                "Download the current plugin-order.yml from MOMW?\n\n%(age)s.\n\n"
+                "The download is validated before anything is written; a timestamped "
+                ".bak of the old file is kept."
+            )
+            % {"age": age_txt},
         ):
             return
 
         custom = self.plugin_order_url_var.get().strip()
         urls = [custom] if custom else None
 
-        def work():
+        def work() -> None:
             try:
                 report = core.update_plugin_order_yml(p, urls=urls)
             except Exception as e:  # noqa: BLE001
@@ -4204,7 +2899,7 @@ class App:
                 0,
                 lambda: (
                     messagebox.showinfo(_("Update plugin-order.yml"), "\n".join(report)),
-                    self.status_var.set(report[0] if report else ""),
+                    self.status_var.set(report[0] if report else ""),  # type: ignore[func-returns-value]
                 ),
             )
 
@@ -4213,7 +2908,8 @@ class App:
 
     # -- savegame dependency check -------------------------------------------
 
-    def on_save_check(self):
+    def on_save_check(self) -> None:
+        """Check a savegame's content files against the current order."""
         order = (
             self.order_panel.get_enabled()
             if self.order_panel.has_order()
@@ -4235,8 +2931,9 @@ class App:
         writer.write("\n" + "=" * 70 + f"\n SAVEGAME CHECK: {Path(p).name}\n" + "=" * 70 + "\n")
         if err:
             writer.write(f"  ERROR: {err}\n")
-            self.status_var.set(f"Save check failed: {err}")
+            self.status_var.set(_("Save check failed: %(error)s") % {"error": err})
             return
+        assert files is not None  # err is None here  # noqa: S101
         writer.write(f"  Save depends on {len(files)} content file(s).\n")
         if missing:
             for m in missing:
@@ -4244,7 +2941,14 @@ class App:
                     f"\n[MISSING SAVE DEP] '{m}' is required by this save but not in "
                     f"the current load order -- OpenMW will refuse to load it.\n"
                 )
-            self.status_var.set(f"Save check: {len(missing)} missing dependencies! See the log.")
+            self.status_var.set(
+                ngettext(
+                    "Save check: %(count)d missing dependency! See the log.",
+                    "Save check: %(count)d missing dependencies! See the log.",
+                    len(missing),
+                )
+                % {"count": len(missing)}
+            )
             messagebox.showwarning(
                 _("Save Check"),
                 f"{Path(p).name} depends on {len(missing)} content file(s) that are NOT in "
@@ -4256,16 +2960,22 @@ class App:
             )
         else:
             writer.write("  All dependencies present -- this save is safe with this order.\n")
-            self.status_var.set(f"Save check: all {len(files)} dependencies present.")
+            self.status_var.set(
+                _("Save check: all %(count)d dependencies present.") % {"count": len(files)}
+            )
             messagebox.showinfo(
                 _("Save Check"),
-                f"{Path(p).name}: all {len(files)} content files it needs are in "
-                f"the current load order. Safe to export.",
+                _(
+                    "%(file)s: all %(count)d content files it needs are in "
+                    "the current load order. Safe to export."
+                )
+                % {"file": Path(p).name, "count": len(files)},
             )
 
     # -- backup manager ------------------------------------------------------
 
-    def on_backups(self):
+    def on_backups(self) -> None:
+        """Scan for backup files and open the restore/delete window."""
         if self.worker_running:
             return
         dirs = self._plan_scan_dirs()
@@ -4277,18 +2987,20 @@ class App:
         self.status_var.set(_("Scanning for backups..."))
         threading.Thread(target=self._backups_worker, args=(dirs, cfg), daemon=True).start()
 
-    def _backups_worker(self, dirs, cfg):
+    def _backups_worker(self, dirs: list[str], cfg: str | None) -> None:
         try:
             found = core.scan_backups(dirs, cfg_path=cfg)
-            status = f"Found {len(found)} backup file(s)."
+            status = ngettext(
+                "Found %(count)d backup file.", "Found %(count)d backup files.", len(found)
+            ) % {"count": len(found)}
         except Exception as e:  # noqa: BLE001
             # worker top level: status line carries the failure
-            found, status = [], f"Backup scan failed: {e}"
+            found, status = [], _("Backup scan failed: %(error)s") % {"error": e}
         finally:
             self.worker_running = False
         self.root.after(0, self._show_backups_window, found, status)
 
-    def _show_backups_window(self, found, status):
+    def _show_backups_window(self, found: Sequence[Any], status: str) -> None:
         self.status_var.set(status)
         win = getattr(self, "_bk_win", None)
         if win is not None and win.winfo_exists():
@@ -4304,8 +3016,14 @@ class App:
         top.rowconfigure(1, weight=1)
         ttk.Label(
             top,
-            text=f"{len(found)} backup file(s). Restore copies the backup over its "
-            f"original; Delete removes the backup file itself.",
+            text=ngettext(
+                "%(count)d backup file. Restore copies the backup over its "
+                "original; Delete removes the backup file itself.",
+                "%(count)d backup files. Restore copies the backup over its "
+                "original; Delete removes the backup file itself.",
+                len(found),
+            )
+            % {"count": len(found)},
             foreground=DARK["fg_dim"],
         ).grid(row=0, column=0, columnspan=2, sticky="w")
         lb = tk.Listbox(top, selectmode="extended", exportselection=False, activestyle="dotbox")
@@ -4324,16 +3042,21 @@ class App:
         btns = ttk.Frame(top)
         btns.grid(row=2, column=0, sticky="w")
 
-        def _selected():
+        def _selected() -> list[Any]:
             return [self._bk_rows[i] for i in lb.curselection()]
 
-        def _restore():
+        def _restore() -> None:
             sel = [r for r in _selected() if r[1]]
             if not sel:
                 return
             if not messagebox.askyesno(
                 _("Restore"),
-                f"Copy {len(sel)} backup(s) over their " f"originals (overwriting them)?",
+                ngettext(
+                    "Copy %(count)d backup over its original (overwriting it)?",
+                    "Copy %(count)d backups over their originals (overwriting them)?",
+                    len(sel),
+                )
+                % {"count": len(sel)},
                 parent=win,
             ):
                 return
@@ -4347,16 +3070,30 @@ class App:
                 except OSError:
                     fail += 1
             self.status_var.set(
-                f"Restored {ok} backup(s){f', {fail} failed' if fail else ''}. "
-                f"Re-run '1. Sort' to refresh checks."
+                ngettext(
+                    "Restored %(count)d backup%(failed)s. Re-run '1. Sort' to refresh checks.",
+                    "Restored %(count)d backups%(failed)s. Re-run '1. Sort' to refresh checks.",
+                    ok,
+                )
+                % {
+                    "count": ok,
+                    "failed": (_(", %(fail)d failed") % {"fail": fail}) if fail else "",
+                }
             )
 
-        def _delete():
+        def _delete() -> None:
             sel = _selected()
             if not sel:
                 return
             if not messagebox.askyesno(
-                _("Delete"), f"Permanently delete {len(sel)} backup " f"file(s)?", parent=win
+                _("Delete"),
+                ngettext(
+                    "Permanently delete %(count)d backup file?",
+                    "Permanently delete %(count)d backup files?",
+                    len(sel),
+                )
+                % {"count": len(sel)},
+                parent=win,
             ):
                 return
             ok = 0
@@ -4366,7 +3103,14 @@ class App:
                     ok += 1
                 except OSError:
                     pass
-            self.status_var.set(f"Deleted {ok} backup file(s).")
+            self.status_var.set(
+                ngettext(
+                    "Deleted %(count)d backup file.",
+                    "Deleted %(count)d backup files.",
+                    ok,
+                )
+                % {"count": ok}
+            )
             win.destroy()
             self.on_backups()
 
@@ -4375,13 +3119,16 @@ class App:
         )
         ttk.Button(btns, text=_("Delete Selected"), command=_delete).pack(side="left", padx=(0, 6))
         ttk.Button(
-            btns, text=_("Refresh"), command=lambda: (win.destroy(), self.on_backups())
+            btns,
+            text=_("Refresh"),
+            command=lambda: (win.destroy(), self.on_backups()),  # type: ignore[func-returns-value]
         ).pack(side="left")
         ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
 
     # -- lint (tes3lint-style native checks) ---------------------------------
 
-    def on_lint(self):
+    def on_lint(self) -> None:
+        """Run the tes3lint-style checks, in a worker."""
         if self.worker_running or not self._current_plan:
             return
         order = self._apply_exclusions(self.order_panel.get_enabled())
@@ -4402,9 +3149,9 @@ class App:
         self.status_var.set(_("Linting plugins..."))
         threading.Thread(target=self._lint_worker, args=(order, dirs, subset), daemon=True).start()
 
-    def _lint_worker(self, order, dirs, subset):
+    def _lint_worker(self, order: list[str], dirs: list[str], subset: list[str]) -> None:
         writer = QueueWriter(self.log_queue)
-        stats = {}
+        stats: dict = {}
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
                 print("\n" + "=" * 70)
@@ -4416,9 +3163,15 @@ class App:
                     order, index, subset_names=subset, origins=subset_origins
                 )
                 print(
-                    f"  Scanned {stats.get('scanned', 0)} plugin(s); "
-                    f"{stats.get('interior_cells', 0)} interior cell(s), "
-                    f"{stats.get('pathgrids', 0)} interior pathgrid(s)."
+                    _(
+                        "  Scanned %(scanned)d plugin(s); %(cells)d interior cell(s), "
+                        "%(grids)d interior pathgrid(s)."
+                    )
+                    % {
+                        "scanned": stats.get("scanned", 0),
+                        "cells": stats.get("interior_cells", 0),
+                        "grids": stats.get("pathgrids", 0),
+                    }
                 )
                 if warnings:
                     for w in warnings:
@@ -4426,7 +3179,16 @@ class App:
                 else:
                     print(_("\n  No lint findings. Clean bill of health."))
             n = stats.get("warnings", 0)
-            status = f"Lint: {n} finding(s). See the log." if n else "Lint: no findings."
+            status = (
+                ngettext(
+                    "Lint: %(count)d finding. See the log.",
+                    "Lint: %(count)d findings. See the log.",
+                    n,
+                )
+                % {"count": n}
+                if n
+                else _("Lint: no findings.")
+            )
         except Exception:  # noqa: BLE001
             # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: lint failed:\n" + traceback.format_exc())
@@ -4434,7 +3196,7 @@ class App:
         finally:
             self.root.after(0, self._lint_finished, status)
 
-    def _lint_finished(self, status):
+    def _lint_finished(self, status: str) -> None:
         self.worker_running = False
         self.sort_button.configure(state="normal")
         for b in (
@@ -4472,594 +3234,11 @@ class App:
     # content depends on byte-for-byte, and causes in-game failures.
     T3_NEVER_CLEAN: ClassVar[set[str]] = {"morrowind.esm", "tribunal.esm", "bloodmoon.esm"}
 
-    def on_tes3cmd_window(self):
-        win = getattr(self, "_t3_win", None)
-        if win is not None and win.winfo_exists():
-            win.lift()
-            return
-        win = tk.Toplevel(self.root)
-        self._t3_win = win
-        win.title("tes3cmd")
-        win.configure(bg=DARK["bg"])
-        win.geometry("760x520")
-        top = ttk.Frame(win, padding=10)
-        top.pack(fill="both", expand=True)
-        top.columnconfigure(1, weight=1)
-
-        # tes3cmd binary path (auto-detected; MOMW Tools Pack ships tes3cmd.exe)
-        ttk.Label(top, text=_("tes3cmd:")).grid(row=0, column=0, sticky="w")
-        self._t3_path_var = tk.StringVar(value=self._tes3cmd_override or "")
-        ent = ttk.Entry(top, textvariable=self._t3_path_var)
-        ent.grid(row=0, column=1, sticky="ew", padx=6)
-        add_tooltip(
-            ent,
-            "Path to tes3cmd. Leave empty to auto-detect (PATH, next to this app, "
-            "next to openmw.cfg). End users normally have the compiled tes3cmd.exe "
-            "from the MOMW Tools Pack; the pure-perl script works too if perl is "
-            "installed.",
-        )
-
-        def _browse():
-            p = filedialog.askopenfilename(
-                title=_("Locate tes3cmd"),
-                filetypes=(("tes3cmd", "tes3cmd*"), ("Executables", "*.exe"), ("All files", "*.*")),
-            )
-            if p:
-                self._t3_path_var.set(p)
-
-        ttk.Button(top, text=_("Browse..."), command=_browse).grid(row=0, column=2, padx=(0, 0))
-
-        detected = core.find_tes3cmd(explicit=None, extra_dirs=[self._cfg_dir()])
-        note = (
-            f"auto-detected: {detected}"
-            if detected
-            else "not found -- install the MOMW Tools Pack or Browse to it"
-        )
-        ttk.Label(top, text=note, foreground=DARK["fg_dim"]).grid(
-            row=1, column=1, columnspan=2, sticky="w", padx=6, pady=(2, 6)
-        )
-
-        # plugin list
-        lf = ttk.LabelFrame(top, text=_("Plugins to run on"))
-        lf.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=(4, 6))
-        top.rowconfigure(2, weight=1)
-        lf.columnconfigure(0, weight=1)
-        lf.rowconfigure(0, weight=1)
-        self._t3_list = tk.Listbox(
-            lf, selectmode="extended", exportselection=False, activestyle="dotbox"
-        )
-        style_plain_widget(self._t3_list)
-        attach_typeahead(self._t3_list)
-        self._t3_list.grid(row=0, column=0, sticky="nsew", padx=(8, 0), pady=8)
-        sc = ttk.Scrollbar(lf, orient="vertical", command=self._t3_list.yview)
-        sc.grid(row=0, column=1, sticky="ns", pady=8)
-        self._t3_list.configure(yscrollcommand=sc.set)
-        self._t3_files = []  # full paths, parallel to listbox rows
-
-        btns = ttk.Frame(lf)
-        btns.grid(row=0, column=2, sticky="n", padx=8, pady=8)
-        b1 = ttk.Button(btns, text=_("My mods (last sort)"), command=self._t3_add_from_plan)
-        b1.pack(fill="x", pady=2)
-        add_tooltip(
-            b1,
-            "Add every custom mod from the last Sort whose file could be located "
-            "(curated plugins are the list's job, not yours).",
-        )
-        b1b = ttk.Button(btns, text=_("MOMW needs-cleaning"), command=self._t3_add_needs_cleaning)
-        b1b.pack(fill="x", pady=2)
-        add_tooltip(
-            b1b,
-            "Add every ACTIVE plugin that plugin-order.yml flags as "
-            "needs_cleaning (MOMW's own 'clean this one' list), resolved across "
-            "the data folders. Requires the plugin-order.yml path on the main tab.",
-        )
-        b2 = ttk.Button(btns, text=_("Add file(s)..."), command=self._t3_add_files)
-        b2.pack(fill="x", pady=2)
-        b3 = ttk.Button(btns, text=_("Remove selected"), command=self._t3_remove_selected)
-        b3.pack(fill="x", pady=2)
-        b4 = ttk.Button(btns, text=_("Clear"), command=lambda: self._t3_set_files([]))
-        b4.pack(fill="x", pady=2)
-
-        # command choice
-        cf = ttk.LabelFrame(top, text=_("Command"))
-        cf.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(0, 6))
-        self._t3_cmd_var = tk.StringVar(value="sync")
-        for i, (val, label) in enumerate(self.T3_COMMANDS):
-            ttk.Radiobutton(cf, text=label, value=val, variable=self._t3_cmd_var).grid(
-                row=i, column=0, sticky="w", padx=8, pady=1
-            )
-        xf = ttk.Frame(cf)
-        xf.grid(row=len(self.T3_COMMANDS), column=0, sticky="ew", padx=8, pady=(4, 6))
-        ttk.Label(xf, text=_("extra arguments:")).pack(side="left")
-        self._t3_extra_var = tk.StringVar()
-        xent = ttk.Entry(xf, textvariable=self._t3_extra_var, width=48)
-        xent.pack(side="left", padx=6, fill="x", expand=True)
-        add_tooltip(
-            xent,
-            "Optional extra tes3cmd switches, e.g. --instances for clean, "
-            "--author/--description for header. Passed through verbatim.",
-        )
-
-        row = ttk.Frame(top)
-        row.grid(row=4, column=0, columnspan=3, sticky="ew")
-        self._t3_run_btn = ttk.Button(row, text=_("Run"), command=self._t3_run)
-        self._t3_run_btn.pack(side="left")
-        add_tooltip(
-            self._t3_run_btn,
-            "Output streams to the main Log. Modifying commands ask "
-            "for confirmation first; tes3cmd makes its own backups.",
-        )
-        ttk.Button(row, text=_("Close"), command=win.destroy).pack(side="right")
-
-    def _cfg_dir(self):
+    def _cfg_dir(self) -> str | None:
         c = self.cfg_var.get().strip()
         return str(Path(c).parent) if c else None
 
-    def _t3_set_files(self, paths):
-        self._t3_files = list(paths)
-        self._t3_list.delete(0, "end")
-        for p in self._t3_files:
-            self._t3_list.insert("end", f"{Path(p).name}    ({Path(p).parent})")
-
-    def _t3_remove_selected(self):
-        trace_first_fire("tes3cmd Remove selected")
-        before = len(self._t3_files)
-        keep = [
-            p for i, p in enumerate(self._t3_files) if i not in set(self._t3_list.curselection())
-        ]
-        core.trace(f"[smoke] tes3cmd Remove selected: {before} -> {len(keep)} file(s)")
-        self._t3_set_files(keep)
-
-    def _t3_add_from_plan(self):
-        plan = self._current_plan or {}
-        subset = plan.get("subset") or []
-        if not subset:
-            self.status_var.set(_("Run '1. Sort' first so I know which mods are yours."))
-            return
-        index = core.PluginFileIndex(self._plan_scan_dirs())
-        found, missing = [], 0
-        have = {str(p).lower() for p in self._t3_files}
-        for n in subset:
-            if str(n).lower().endswith(".omwscripts"):
-                continue  # not a TES3 file; nothing for tes3cmd to do
-            p = index.find(n)
-            if p is None:
-                missing += 1
-            elif str(p).lower() not in have:
-                found.append(str(p))
-        self._t3_set_files(self._t3_files + found)
-        msg = f"tes3cmd: added {len(found)} of your mods"
-        if missing:
-            msg += f" ({missing} file(s) not found in the data folders)"
-        self.status_var.set(msg + ".")
-
-    def _t3_add_needs_cleaning(self):
-        """Add active plugins that MOMW's plugin-order.yml flags needs_cleaning."""
-        yml = self.plugin_order_yml_var.get().strip()
-        if not yml:
-            self.status_var.set(_("Set the plugin-order.yml path on the main tab first."))
-            return
-        try:
-            entries = core.parse_plugin_order_yml(Path(yml))
-            nc = core.needs_cleaning_set(entries)
-        except Exception as e:  # noqa: BLE001
-            # untrusted plugin-order.yml; status line carries the failure
-            self.status_var.set(f"Couldn't read plugin-order.yml: {e}")
-            return
-        plan = self._current_plan or {}
-        active = plan.get("final_order") or plan.get("base_order_names") or []
-        if not active:
-            self.status_var.set(_("Run '1. Sort' first so I know the active load order."))
-            return
-        index = core.PluginFileIndex(self._plan_scan_dirs())
-        have = {str(p).lower() for p in self._t3_files}
-        found, unfound = [], 0
-        for n in active:
-            if n.lower() not in nc or n.lower() in self.T3_NEVER_CLEAN:
-                continue
-            p = index.find(n)
-            if p is None:
-                unfound += 1
-            elif str(p).lower() not in have:
-                found.append(str(p))
-        self._t3_set_files(self._t3_files + found)
-        msg = f"tes3cmd: added {len(found)} needs-cleaning plugin(s)"
-        if unfound:
-            msg += f" ({unfound} not found in the data folders)"
-        self.status_var.set(msg + ".")
-
-    def _t3_add_files(self):
-        ps = filedialog.askopenfilenames(
-            title=_("Choose plugin file(s)"),
-            filetypes=(("TES3 plugins", "*.esp *.esm *.omwaddon *.omwgame"), ("All files", "*.*")),
-        )
-        if ps:
-            have = {str(p).lower() for p in self._t3_files}
-            self._t3_set_files(self._t3_files + [p for p in ps if str(p).lower() not in have])
-
-    def _t3_run(self):
-        if self.worker_running:
-            return
-        cmd = self._t3_cmd_var.get()
-        extra = self._t3_extra_var.get().split()
-        files = list(self._t3_files)
-
-        # "sync" runs entirely in-app (VFS-aware) -- tes3cmd not needed, and
-        # its own --synchronize writes EMPTY master sizes when the masters
-        # aren't in the plugin's folder (OpenMW multi-folder layouts).
-        if cmd == "sync":
-            if not files:
-                messagebox.showinfo(
-                    _("tes3cmd"), _("Add at least one plugin file first."), parent=self._t3_win
-                )
-                return
-            if not messagebox.askyesno(
-                _("Resync master sizes"),
-                f"Rewrite the recorded master sizes in {len(files)} plugin file(s) to "
-                f"match the installed masters?\n\nOnly the 8-byte size fields change; a "
-                f"one-time .masterfix.bak copy of each file is kept.",
-                parent=self._t3_win,
-            ):
-                return
-            self.worker_running = True
-            self._t3_run_btn.configure(state="disabled")
-            self.sort_button.configure(state="disabled")
-            self.status_var.set(_("Resyncing master sizes..."))
-            threading.Thread(target=self._t3_sync_worker, args=(files,), daemon=True).start()
-            return
-
-        # A manually-entered path must WIN or fail loudly -- never silently
-        # fall back to some other tes3cmd found on the system.
-        explicit = self._t3_path_var.get().strip() or None
-        if explicit:
-            if not Path(explicit).is_file():
-                messagebox.showerror(
-                    _("tes3cmd"),
-                    f"'{explicit}' does not exist. Fix the path " f"or clear it to auto-detect.",
-                    parent=self._t3_win,
-                )
-                return
-            exe = explicit
-        else:
-            exe = core.find_tes3cmd(extra_dirs=[self._cfg_dir()])
-        if not exe:
-            messagebox.showerror(
-                _("tes3cmd"),
-                _("tes3cmd not found. Browse to the compiled " "tes3cmd.exe (MOMW Tools Pack)."),
-                parent=self._t3_win,
-            )
-            return
-        argv, err = core.tes3cmd_invocation(exe)
-        if err:
-            messagebox.showerror(_("tes3cmd"), err, parent=self._t3_win)
-            return
-        self._tes3cmd_override = explicit  # persist a manual path in settings
-        if not files:
-            messagebox.showinfo(
-                _("tes3cmd"), _("Add at least one plugin file first."), parent=self._t3_win
-            )
-            return
-        if cmd == "clean":
-            guarded = [f for f in files if Path(f).name.lower() in self.T3_NEVER_CLEAN]
-            if guarded:
-                files = [f for f in files if Path(f).name.lower() not in self.T3_NEVER_CLEAN]
-                messagebox.showwarning(
-                    _("tes3cmd"),
-                    "Skipping the vanilla master(s):\n\n  "
-                    + "\n  ".join(Path(f).name for f in guarded)
-                    + "\n\nMorrowind.esm, Tribunal.esm and Bloodmoon.esm are never cleaned -- "
-                    "even a careful GMST-preserving clean rewrites bytes that other content "
-                    "depends on and causes in-game failures.",
-                    parent=self._t3_win,
-                )
-                if not files:
-                    return
-            # masters before dependents: cleaning changes the master a
-            # dependent is compared against, so sequence by the sorted load
-            # order (fallback: masters first, then name)
-            order = {
-                n.lower(): i
-                for i, n in enumerate((self._current_plan or {}).get("final_order") or [])
-            }
-            files.sort(
-                key=lambda f: (
-                    order.get(Path(f).name.lower(), 1 << 30),
-                    not Path(f).name.lower().endswith((".esm", ".omwgame")),
-                    Path(f).name.lower(),
-                )
-            )
-            if not messagebox.askyesno(
-                _("tes3cmd clean"),
-                f"Clean {len(files)} plugin file(s)?\n\nEach is staged into a private "
-                f"'Data Files' with its masters so tes3cmd sees the full VFS; plugins "
-                f"whose masters can't be found are skipped. A one-time .preclean.bak "
-                f"copy of each modified file is kept.",
-                parent=self._t3_win,
-            ):
-                return
-        self.worker_running = True
-        self._t3_run_btn.configure(state="disabled")
-        self.sort_button.configure(state="disabled")
-        self.status_var.set(f"tes3cmd {cmd} running...")
-        threading.Thread(
-            target=self._t3_worker, args=(argv, cmd, extra, files), daemon=True
-        ).start()
-
-    def _t3_staging_dir(self):
-        """Persistent staging root (next to the app, like the tes3conv dump):
-        hardlinked/copied masters are reused across runs, so staging a plugin
-        costs almost nothing after the first time."""
-        return app_base_dir() / "tes3cmd_staging"
-
-    def _t3_worker(self, argv, cmd, extra, files):
-        import subprocess
-
-        writer = QueueWriter(self.log_queue)
-        ok = fail = skipped = changed = 0
-        # clean: --replace makes tes3cmd overwrite its input (we work on a
-        # staged COPY and copy back ourselves); --hide-backups keeps its own
-        # backup clutter inside the disposable staging dir
-        sub = {"clean": ["clean", "--replace", "--hide-backups"], "header": ["header"]}[cmd]
-
-        def _run_t3(args, cwd):
-            env = dict(os.environ)
-            env["PWD"] = str(cwd)  # tes3cmd trusts $PWD over getcwd when set
-            # check=False: the caller inspects returncode itself and reports it
-            # in the log rather than raising.
-            return subprocess.run(
-                args,
-                capture_output=True,
-                text=True,
-                errors="replace",
-                timeout=900,
-                cwd=str(cwd),
-                env=env,
-                check=False,
-                **core._no_window_kwargs(),
-            )
-
-        try:
-            with redirect_stdout(writer), redirect_stderr(writer):
-                print("\n" + "=" * 70)
-                print(
-                    f" TES3CMD {' '.join(sub).upper()}"
-                    + (" (staged, VFS-aware)" if cmd == "clean" else "")
-                )
-                print("=" * 70)
-                print(f"  Engine: {' '.join(argv)}")
-                index = None
-                staging = None
-                if cmd == "clean":
-                    dirs = self._plan_scan_dirs()
-                    dirs += [str(Path(f).parent) for f in files]
-                    index = core.PluginFileIndex(list(dict.fromkeys(dirs)))
-                    staging = self._t3_staging_dir()
-                    print(f"  Staging dir: {staging}")
-                for f in files:
-                    name = Path(f).name
-                    print(f"\n--- {' '.join(sub)}: {f}")
-                    try:
-                        if cmd == "header":
-                            r = _run_t3(argv + sub + extra + [name], Path(f).parent)
-                            print(
-                                ((r.stdout or "") + (("\n" + r.stderr) if r.stderr else "")).strip()
-                                or "(no output)"
-                            )
-                            ok += 1 if r.returncode == 0 else 0
-                            fail += 0 if r.returncode == 0 else 1
-                            continue
-                        # clean: stage plugin + masters, run there, copy back
-                        staged, missing = core.stage_for_tes3cmd(staging, f, index)
-                        if missing:
-                            skipped += 1
-                            print(
-                                f"  SKIPPED: master(s) not found in any data folder: "
-                                f"{', '.join(missing)} -- cleaning without the masters "
-                                f"present gives wrong results."
-                            )
-                            continue
-                        before = staged.read_bytes()
-                        r = _run_t3(argv + sub + extra + [staged.name], staged.parent)
-                        print(
-                            ((r.stdout or "") + (("\n" + r.stderr) if r.stderr else "")).strip()
-                            or "(no output)"
-                        )
-                        if r.returncode != 0:
-                            fail += 1
-                            print(f"  (exit code {r.returncode}) -- original NOT touched")
-                            continue
-                        after = staged.read_bytes()
-                        if after == before:
-                            ok += 1
-                            print(_("  no changes -- already clean"))
-                            continue
-                        # copy the cleaned result back over the original,
-                        # keeping a one-time backup of the original
-                        import shutil as _sh
-
-                        bak = Path(f).with_name(name + ".preclean.bak")
-                        if not bak.exists():
-                            _sh.copy2(f, bak)
-                        Path(f).write_bytes(after)
-                        ok += 1
-                        changed += 1
-                        print(
-                            f"  cleaned: {len(before)} -> {len(after)} bytes "
-                            f"(backup: {bak.name})"
-                        )
-                    except Exception as e:  # noqa: BLE001
-                        # per-file isolation: one unclean plugin must not abort the batch
-                        fail += 1
-                        print(f"  ERROR: {e}")
-            if cmd == "clean":
-                status = (
-                    f"tes3cmd clean: {changed} cleaned, {ok - changed} already clean, "
-                    f"{skipped} skipped (missing masters), {fail} failed."
-                )
-                if changed:
-                    status += "  Re-run '1. Sort' to refresh checks."
-            else:
-                status = f"tes3cmd {cmd}: {ok} ok, {fail} failed. See the log."
-        except Exception:  # noqa: BLE001
-            # worker top level: reports the traceback into the log panel
-            writer.write("\nERROR: tes3cmd run failed:\n" + traceback.format_exc())
-            status = "tes3cmd run failed -- see log."
-        finally:
-            self.root.after(0, self._t3_finished, status)
-
-    def _t3_sync_worker(self, files):
-        """In-app master-size resync (see core.sync_plugin_master_sizes)."""
-        writer = QueueWriter(self.log_queue)
-        ok = fixed = fail = 0
-        try:
-            with redirect_stdout(writer), redirect_stderr(writer):
-                print("\n" + "=" * 70)
-                print(_(" MASTER-SIZE RESYNC (in-app, VFS-aware)"))
-                print("=" * 70)
-                dirs = self._plan_scan_dirs()
-                extra = [str(Path(f).parent) for f in files]
-                index = core.PluginFileIndex(list(dict.fromkeys(dirs + extra)))
-                for f in files:
-                    name = Path(f).name
-                    updated, unresolved, err = core.sync_plugin_master_sizes(f, index)
-                    if err:
-                        fail += 1
-                        print(f"  {name}: ERROR: {err}")
-                        continue
-                    ok += 1
-                    if updated:
-                        fixed += 1
-                        for m, old, new in updated:
-                            print(f"  {name}: '{m}' {old} -> {new}")
-                    else:
-                        print(f"  {name}: already in sync")
-                    for m in unresolved:
-                        print(
-                            f"  {name}: WARNING: master '{m}' not found in any data "
-                            f"folder -- its size field left untouched"
-                        )
-            status = (
-                f"Resync: {fixed} plugin(s) updated, {ok - fixed} already in sync, "
-                f"{fail} error(s)."
-            )
-            if fixed:
-                status += "  Re-run '1. Sort' to refresh the master check."
-        except Exception:  # noqa: BLE001
-            # worker top level: reports the traceback into the log panel
-            writer.write("\nERROR: resync failed:\n" + traceback.format_exc())
-            status = "Resync failed -- see log."
-        finally:
-            self.root.after(0, self._t3_finished, status)
-
-    def _t3_finished(self, status):
-        self.worker_running = False
-        self.sort_button.configure(state="normal")
-        try:
-            if self._t3_win and self._t3_win.winfo_exists():
-                self._t3_run_btn.configure(state="normal")
-        except tk.TclError:  # the tes3cmd window may already be gone
-            pass
-        self.status_var.set(status)
-
-    def _show_resource_window(self, conflicts, stats):
-        self._all_res = conflicts
-        win = getattr(self, "_res_win", None)
-        if win is not None and win.winfo_exists():
-            win.destroy()
-        win = tk.Toplevel(self.root)
-        self._res_win = win
-        win.title("Data-path Resource Conflicts")
-        win.configure(bg=DARK["bg"])
-        win.geometry("900x560")
-        top = ttk.Frame(win, padding=8)
-        top.pack(fill="x")
-        n_sub = sum(1 for c in conflicts if c.get("involves_subset"))
-        ttk.Label(
-            top,
-            text=(
-                f"{stats.get('conflicts', 0)} loose-file conflict(s) across "
-                f"{stats.get('dirs', 0)} folder(s), {stats.get('files', 0)} file(s) — "
-                f"{n_sub} involve your custom data paths (★). Later folder wins — reorder "
-                f"the data-path panel to change it."
-            ),
-        ).pack(side="left")
-        self._res_subset_only = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            top,
-            text=_("Only my paths"),
-            variable=self._res_subset_only,
-            command=self._refill_res_tree,
-        ).pack(side="right")
-        # tree (top) and the detail panel (bottom) live in a draggable vertical
-        # split, so the detail box can be resized -- grab the grip to grow it.
-        body = self._paned(win, "vertical")
-        body.pack(fill="both", expand=True, padx=8, pady=(0, 6))
-
-        mid = ttk.Frame(body)
-        cols = ("custom", "path", "count", "winner")
-        tree = ttk.Treeview(
-            mid, columns=cols, show="headings", selectmode="browse", style="Conf.Treeview"
-        )
-        for c, txt, w in (
-            ("custom", "★", 34),
-            ("path", "File", 520),
-            ("count", "#", 50),
-            ("winner", "Winner (loads last)", 280),
-        ):
-            tree.heading(c, text=txt)
-            tree.column(c, width=w, anchor="w", stretch=(c in ("path", "winner")))
-        vsb = ttk.Scrollbar(mid, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=vsb.set)
-        tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        mid.rowconfigure(0, weight=1)
-        mid.columnconfigure(0, weight=1)
-        tree.tag_configure("sub", foreground="#ff9b6b")
-        self._res_tree = tree
-        body.add(mid, minsize=120, stretch="always")
-
-        detbox = ttk.Frame(body)
-        detail = tk.Text(
-            detbox,
-            height=5,
-            wrap="word",
-            background=DARK["log_bg"],
-            foreground=DARK["fg"],
-            relief="flat",
-            highlightthickness=1,
-            highlightbackground=DARK["border"],
-        )
-        detail.pack(fill="both", expand=True)
-        detail.insert("1.0", "Select a file to see every folder that provides it, in load order.")
-        detail.configure(state="disabled")
-        body.add(detbox, minsize=70)
-        self._attach_hamburger_grip(body, "vertical")
-
-        def on_sel(_e=None):
-            sel = tree.selection()
-            if not sel:
-                return
-            c = self._res_shown[int(sel[0])]
-            txt = (
-                f"{c['path']}\n"
-                + "\n".join(f"  {i + 1}. {p}" for i, p in enumerate(c["providers"]))
-                + f"\nWins: {c['winner']}"
-            )
-            detail.configure(state="normal")
-            detail.delete("1.0", "end")
-            detail.insert("1.0", txt)
-            detail.configure(state="disabled")
-
-        tree.bind("<<TreeviewSelect>>", on_sel)
-        btns = ttk.Frame(win, padding=8)
-        btns.pack(fill="x")
-        ttk.Button(btns, text=_("Save report (CSV)..."), command=self._save_resource_csv).pack(
-            side="left"
-        )
-        ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
-        self._refill_res_tree()
-
-    def _refill_res_tree(self):
+    def _refill_res_tree(self) -> None:
         tree = getattr(self, "_res_tree", None)
         if tree is None or not tree.winfo_exists():
             return
@@ -5077,196 +3256,17 @@ class App:
                 values=(star, c["path"], len(c["providers"]), c["winner"]),
             )
 
-    def _save_resource_csv(self):
-        if not getattr(self, "_all_res", None):
-            return
-        path = filedialog.asksaveasfilename(
-            title=_("Save resource conflicts"),
-            defaultextension=".csv",
-            initialfile="resource_conflicts.csv",
-            filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
-        )
-        if not path:
-            return
-        try:
-            core.write_resource_csv(path, self._all_res)
-            self.status_var.set(f"Saved: {path}")
-        except OSError as e:
-            messagebox.showerror(_("Save failed"), str(e))
+    def _is_custom(self, plugin: str) -> bool:
+        """Report whether this plugin is one of the user's custom mods.
 
-    def _show_conflict_window(self, conflicts, stats):
-        self._all_conflicts = conflicts
-        win = getattr(self, "_conflict_win", None)
-        if win is not None and win.winfo_exists():
-            win.destroy()
-        win = tk.Toplevel(self.root)
-        self._conflict_win = win
-        win.title("TES3 Record Conflicts")
-        win.configure(bg=DARK["bg"])
-        win.geometry("980x680")
-
-        top = ttk.Frame(win, padding=8)
-        top.pack(fill="x")
-        n_sub = sum(1 for c in conflicts if c.get("involves_subset"))
-        ttk.Label(
-            top,
-            text=(
-                f"{stats.get('conflicts', 0)} conflicting record(s) across "
-                f"{stats.get('scanned', 0)} plugin(s) — {n_sub} involve your custom mods "
-                f"(★). Winner = last loaded."
-            ),
-        ).pack(side="left")
-        self._conf_subset_only = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            top,
-            text=_("Only my mods"),
-            variable=self._conf_subset_only,
-            command=self._refill_conflict_tree,
-        ).pack(side="right")
-
-        engine = (stats or {}).get("engine", "builtin")
-        bar = ttk.Frame(win, padding=(8, 0))
-        bar.pack(fill="x")
-        ttk.Label(
-            bar,
-            foreground=(DARK["fg_dim"] if engine == "tes3conv" else "#ffb454"),
-            text=(
-                "Field-level diffs: ON (tes3conv)."
-                if engine == "tes3conv"
-                else "Field-level diffs: OFF — record-level only. Set a tes3conv binary, then re-check."
-            ),
-        ).pack(side="left")
-        ttk.Button(bar, text=_("Set tes3conv..."), command=self._set_tes3conv).pack(
-            side="left", padx=(8, 0)
-        )
-
-        panes = tk.PanedWindow(
-            win,
-            orient="vertical",
-            bg=DARK["bg"],
-            bd=0,
-            sashwidth=6,
-            sashrelief="flat",
-            background=DARK["border"],
-        )
-        panes.pack(fill="both", expand=True, padx=8, pady=6)
-
-        # --- conflicts table ---
-        topf = ttk.Frame(panes)
-        cols = ("custom", "type", "id", "count", "winner")
-        tree = ttk.Treeview(
-            topf, columns=cols, show="headings", selectmode="browse", style="Conf.Treeview"
-        )
-        for c, txt, w in (
-            ("custom", "★", 34),
-            ("type", "Type", 90),
-            ("id", "Record", 380),
-            ("count", "#", 40),
-            ("winner", "Winner (loads last)", 280),
-        ):
-            tree.heading(c, text=txt)
-            tree.column(c, width=w, anchor="w", stretch=(c in ("id", "winner")))
-        vsb = ttk.Scrollbar(topf, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=vsb.set)
-        tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        topf.rowconfigure(0, weight=1)
-        topf.columnconfigure(0, weight=1)
-        tree.tag_configure("sub", foreground="#ff9b6b")
-        self._conf_tree = tree
-        panes.add(topf, minsize=150, stretch="always")
-
-        # --- field-level comparison (populated on record select) ---
-        botf = ttk.Frame(panes)
-        ttk.Label(
-            botf,
-            foreground=DARK["fg_dim"],
-            text="Field comparison for the selected record — differing fields in red · "
-            "★ = your custom mod · last column wins · double-click a field for the full "
-            "value:",
-        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(2, 2))
-        ftree = ttk.Treeview(botf, show="headings", selectmode="browse", style="Conf.Treeview")
-        fvsb = ttk.Scrollbar(botf, orient="vertical", command=ftree.yview)
-        fhsb = ttk.Scrollbar(botf, orient="horizontal", command=ftree.xview)
-        ftree.configure(yscrollcommand=fvsb.set, xscrollcommand=fhsb.set)
-        ftree.grid(row=1, column=0, sticky="nsew")
-        fvsb.grid(row=1, column=1, sticky="ns")
-        fhsb.grid(row=2, column=0, sticky="ew")
-        botf.rowconfigure(1, weight=1)
-        botf.columnconfigure(0, weight=1)
-        ftree.tag_configure("diff", foreground="#ff6b6b")
-        ftree.bind("<Double-Button-1>", lambda _e: self._show_field_detail())
-        add_tooltip(
-            ftree,
-            "Field-by-field diff of the selected record. Red = the plugins disagree; "
-            "the last one in the load order wins.\n\n"
-            "Double-click any row for the full value, one tab per plugin. Two fields "
-            "are decoded rather than shown raw:\n"
-            "  \u2022 bytecode -- disassembled to named script instructions, so a script "
-            "edit reads as a change instead of a wall of base64. Spans the disassembler "
-            "cannot decode are printed as offset/hex/ASCII rather than guessed at, and a "
-            "'decoded: N%' header says how much was understood.\n"
-            "  \u2022 variables -- the script's local variable names, in declaration order.",
-        )
-        self._conf_ftree = ftree
-        panes.add(botf, minsize=120, stretch="always")
-
-        tree.bind("<<TreeviewSelect>>", lambda _e: self._on_conflict_select())
-
-        btns = ttk.Frame(win, padding=8)
-        btns.pack(fill="x")
-        ttk.Button(btns, text=_("Save report (CSV)..."), command=self._save_conflicts_csv).pack(
-            side="left"
-        )
-        if self._conf_session is not None:
-            ttk.Button(
-                btns, text=_("Dump tes3conv JSON..."), command=self._dump_conflict_json
-            ).pack(side="left", padx=(8, 0))
-        ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
-
-        self._refill_conflict_tree()
-
-    def _dump_conflict_json(self):
-        """Write the (in-memory) tes3conv JSON for every scanned plugin to a
-        folder you pick."""
-        if self._conf_session is None or not self._conf_paths:
-            return
-        folder = filedialog.askdirectory(title=_("Dump tes3conv JSON to folder"))
-        if not folder:
-            return
-        try:
-            n = core.dump_tes3conv_json(
-                self._conf_session, list(self._conf_paths.keys()), self._conf_paths, folder
-            )
-            self.status_var.set(f"Wrote {n} JSON file(s) to {folder}")
-            if n:
-                messagebox.showinfo(
-                    _("JSON dumped"), f"Wrote {n} tes3conv JSON file(s) to:\n{folder}"
-                )
-            else:
-                messagebox.showwarning(
-                    _("Nothing written"),
-                    "No JSON was written. The tes3conv session may have been cleared — "
-                    "re-run Check Conflicts, then dump again.",
-                )
-        except Exception as e:  # noqa: BLE001
-            # user-facing dump; any failure becomes an error dialog
-            messagebox.showerror(_("Dump failed"), str(e))
-
-    def _on_conflict_select(self):
-        tree = getattr(self, "_conf_tree", None)
-        sel = tree.selection() if tree else None
-        if not sel:
-            return
-        self._populate_field_diff(self._shown_conflicts[int(sel[0])])
-
-    def _is_custom(self, plugin):
-        """True if this plugin is one of YOUR custom mods (in the scanned subset),
-        as opposed to a curated-list plugin."""
+        True when it is in the scanned subset,
+        as opposed to a curated-list plugin.
+        """
         return str(plugin).lower() in getattr(self, "_conf_subset_lower", set())
 
     @staticmethod
-    def _fmt_val(v):
+    # Any: formats an arbitrary decoded TES3 field value for display.
+    def _fmt_val(v: Any) -> str:  # noqa: ANN401
         if v is None:
             return "—"
         if isinstance(v, list):
@@ -5280,7 +3280,7 @@ class App:
         s = str(v)
         return s if len(s) <= 140 else s[:137] + "…  (double-click)"
 
-    def _populate_field_diff(self, conflict):
+    def _populate_field_diff(self, conflict: Mapping[str, Any]) -> None:
         ftree = getattr(self, "_conf_ftree", None)
         if ftree is None or not ftree.winfo_exists():
             return
@@ -5318,7 +3318,7 @@ class App:
             ftree.insert("", "end", values=["(no fields / identical)"] + [""] * len(plugins))
 
     @staticmethod
-    def _disassemble_bytecode_field(value, source_text=None):
+    def _disassemble_bytecode_field(value: str, source_text: str | None = None) -> str | None:
         """Disassembly text for a tes3conv 'bytecode' field, or None.
 
         Thin delegation: the logic lives in mlox_subset.mwscript so it can be
@@ -5329,208 +3329,30 @@ class App:
             return None
         return listing_for_bytecode_field(value, source_text)
 
-    def _show_field_detail(self):
-        """Popup with the full value of the selected field for each plugin --
-        one tab per plugin, pretty-printed with JSON syntax highlighting (and,
-        for text fields like book/dialogue content, the embedded HTML-ish
-        markup broken out too). Uses whatever theme is picked next to the Log
-        panel, so the two stay in sync. For long fields like 'references'
-        that get truncated in the table."""
-        ftree = getattr(self, "_conf_ftree", None)
-        fd = getattr(self, "_conf_fdiff", None)
-        if not ftree or not fd:
-            return
-        sel = ftree.selection()
-        if not sel:
-            return
-        key = sel[0]
-        plugins = fd["plugins"]
-        per = fd["per"]
-        theme = self._resolve_theme(self.log_theme_var.get()) or THEME_PRESETS["Dark (default)"]
-        json_colors = _json_syntax_colors(theme)
-        win = tk.Toplevel(self.root)
-        win.title(f"Field: {key}")
-        win.configure(bg=DARK["bg"])
-        win.geometry("820x520")
-        note = "last plugin wins · ★ orange = your custom mod"
-        if key == "bytecode" and listing_for_bytecode_field is not None:
-            note += " · shown disassembled; undecoded spans are printed as hex"
-        elif key == "variables" and variables_text_for_field is not None:
-            note += " · decoded to local variable names"
-        ttk.Label(win, text=f"{key}   ({note})", padding=8).pack(anchor="w")
-        bar = ttk.Frame(win, padding=(8, 0))
-        bar.pack(fill="x")
-        wrap_var = tk.BooleanVar(value=True)
-        texts = []
 
-        def _apply_wrap():
-            w = "word" if wrap_var.get() else "none"
-            for st in texts:
-                st.configure(state="normal")
-                st.configure(wrap=w)
-                st.configure(state="disabled")
+def _run_pywebview_window(path: str | Path) -> None:
+    """Open one cell-map file in an OS webview and block until closed.
 
-        ttk.Checkbutton(bar, text=_("Word wrap"), variable=wrap_var, command=_apply_wrap).pack(
-            side="left"
-        )
-        ttk.Label(
-            bar, text=f"Syntax highlighting: {self.log_theme_var.get()}", foreground=DARK["fg_dim"]
-        ).pack(side="right")
-        nb = ttk.Notebook(win)
-        nb.pack(fill="both", expand=True, padx=8, pady=(4, 8))
-        custom_fg = "#ff9b6b"
-        for i, p in enumerate(plugins):
-            cust = self._is_custom(p)
-            val = per[p].get(key, None)
-            # A plain string field (book/dialogue text, mesh/icon/script
-            # paths, ids, ...) is shown as its own raw content, not run
-            # through json.dumps -- dumping it would wrap it in quotes and
-            # JSON-escape every embedded " and \ (Morrowind book text is
-            # full of pseudo-HTML like <FONT COLOR="000000">, which
-            # json.dumps turns into <FONT COLOR=\"000000\">, all noise and
-            # no benefit since nothing here gets re-parsed as JSON). Only
-            # structured values (list/dict/number/etc.) still need JSON's
-            # own formatting, so those still go through json.dumps.
-            is_plain_string = isinstance(val, str)
-            # A compiled-script field is base64, so showing it verbatim makes
-            # every script edit look like a total rewrite. Disassemble instead.
-            is_listing = False
-            listing = None
-            if is_plain_string and key == "bytecode":
-                listing = self._disassemble_bytecode_field(val, per[p].get("text"))
-            elif is_plain_string and key == "variables" and variables_text_for_field:
-                # Same base64+zstd wrapping as bytecode; shown as names so the
-                # diff says WHICH locals changed, not just that the blob did.
-                listing = variables_text_for_field(val)
-            if listing is not None:
-                text, is_listing, is_plain_string = listing, True, False
-            elif is_plain_string:
-                text = val
-            else:
-                try:
-                    text = json.dumps(val, indent=2, ensure_ascii=False, default=str)
-                except (TypeError, ValueError):
-                    # default=str handles most; circular refs raise ValueError
-                    text = repr(val)
-            frame = ttk.Frame(nb)
-            # colored per-plugin header inside the tab: orange = your custom mod
-            ttk.Label(
-                frame,
-                text=(
-                    ("★ " if cust else "")
-                    + p
-                    + ("   — your custom mod" if cust else "   — curated list")
-                    + ("   ✓ wins" if i == len(plugins) - 1 else "")
-                ),
-                foreground=(custom_fg if cust else DARK["fg_dim"]),
-                padding=(4, 4),
-            ).pack(anchor="w")
-            st = scrolledtext.ScrolledText(
-                frame,
-                wrap="word",
-                font=("TkFixedFont", 10),
-                background=theme["background"],
-                foreground=theme["foreground"],
-                insertbackground=theme["foreground"],
-                selectbackground=theme["select"],
-                relief="flat",
-                highlightthickness=1,
-                highlightbackground=DARK["border"],
-            )
-            st.pack(fill="both", expand=True)
-            style_json_syntax_tags(st, json_colors)
-            shown = text if val is not None else "(field not present in this plugin)"
-            st.insert("1.0", shown)
-            if val is not None and not is_listing:
-                try:
-                    if is_plain_string:
-                        highlight_plain_text_with_html(st, text, json_colors)
-                    else:
-                        highlight_json_with_html(st, text, json_colors)
-                except Exception:  # noqa: BLE001
-                    # highlighting is cosmetic -- never let it block showing the value
-                    pass  # highlighting is cosmetic -- never let it block showing the value
-            st.configure(state="disabled")
-            texts.append(st)
-            label = (p[:22] + "…") if len(p) > 24 else p
-            tab = ("★ " if cust else "") + label + (" ✓" if i == len(plugins) - 1 else "")
-            nb.add(frame, text=tab)
-        ttk.Button(win, text=_("Close"), command=win.destroy).pack(pady=(0, 8))
-
-    def _set_tes3conv(self):
-        p = filedialog.askopenfilename(
-            title=_("Locate the tes3conv executable"), filetypes=(("All files", "*.*"),)
-        )
-        if not p:
-            return
-        self._tes3conv_override = p
-        self.status_var.set(
-            _("tes3conv set — click 'Check Conflicts' again to re-scan with field diffs.")
-        )
-        messagebox.showinfo(
-            _("tes3conv set"),
-            "tes3conv location saved.\n\nClick 'Check Conflicts' again to re-scan; the "
-            "field comparison will then populate when you select a record.",
-        )
-
-    def _refill_conflict_tree(self):
-        tree = getattr(self, "_conf_tree", None)
-        if tree is None or not tree.winfo_exists():
-            return
-        only = self._conf_subset_only.get()
-        self._shown_conflicts = [
-            c for c in self._all_conflicts if c.get("involves_subset") or not only
-        ]
-        tree.delete(*tree.get_children())
-        for i, c in enumerate(self._shown_conflicts):
-            star = "★" if c["involves_subset"] else ""
-            tags = ("sub",) if c["involves_subset"] else ()
-            tree.insert(
-                "",
-                "end",
-                iid=str(i),
-                tags=tags,
-                values=(star, c["type"], c["id"], len(c["plugins"]), c["winner"]),
-            )
-
-    def _save_conflicts_csv(self):
-        if not getattr(self, "_all_conflicts", None):
-            return
-        path = filedialog.asksaveasfilename(
-            title=_("Save conflict report"),
-            defaultextension=".csv",
-            initialfile="tes3_conflicts.csv",
-            filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
-        )
-        if not path:
-            return
-        try:
-            core.write_conflict_csv(path, self._all_conflicts)
-            self.status_var.set(f"Conflict report saved: {path}")
-        except OSError as e:
-            messagebox.showerror(_("Save failed"), str(e))
-
-
-def _run_pywebview_window(path):
-    """Open one cell-map file in an OS webview and block until closed. Invoked in a
-    child process (see _open_cell_map_pywebview) so webview.start() owns its own
-    main thread, cleanly, without disturbing the tkinter app. Always writes its
-    outcome to cell_map_viewer.log next to the app so a failed backend (e.g.
-    pywebview's WebView2/pythonnet backend on an unsupported Python) is visible
-    instead of silently falling back to the browser."""
+    Invoked in a child process (see _open_cell_map_pywebview) so webview.start() owns
+    its own main thread, cleanly, without disturbing the tkinter app. Always writes its
+    outcome to cell_map_viewer.log next to the app so a failed backend (e.g. pywebview's
+    WebView2/pythonnet backend on an unsupported Python) is visible instead of silently
+    falling back to the browser.
+    """
     try:
         logf = str(app_base_dir() / "cell_map_viewer.log")
     except (OSError, RuntimeError):  # app_base_dir may fall back to Path.home()
         logf = None
 
-    def _log(msg):
+    def _log(msg: str) -> None:
         if not logf:
             return
         try:
             from datetime import datetime as _dt
 
             with Path(logf).open("a", encoding="utf-8") as fh:
-                fh.write(f"{_dt.now():%Y-%m-%d %H:%M:%S}  {msg}\n")
+                # Local clock: read alongside the GUI's own log panel.
+                fh.write(f"{_dt.now():%Y-%m-%d %H:%M:%S}  {msg}\n")  # noqa: DTZ005
         except OSError:  # appending to the viewer log
             pass
 
@@ -5552,7 +3374,8 @@ def _run_pywebview_window(path):
             pass
 
 
-def main():
+def main() -> None:
+    """Parse arguments and start the GUI."""
     # Re-entry used by the pywebview viewer child process. Works whether we're run
     # from source (python gui.py --show-map X) or frozen (App.exe --show-map X),
     # because it never spawns "python -c" (a frozen exe is not a Python interpreter).

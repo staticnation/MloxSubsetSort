@@ -23,10 +23,13 @@ PEP 3131     ASCII identifiers                    this module
 PEP 328      Absolute imports                     this module
 PEP 440      Version identifier format            this module
 PEP 621      pyproject.toml project metadata      this module
+PEP 517/518  Build backend + requirements         this module (+ CI build)
+PEP 639      SPDX licence expression              this module
 PEP 561      ``py.typed`` marker                  this module
 PEP 594      No "dead battery" stdlib modules     this module
 PEP 632      No ``distutils``                     this module
 PEP 394      ``python3`` in shebangs              this module
+PEP 495      Naive datetimes are stated-local     ruff DTZ + this module
 ============ ==================================== =========================
 
 The ruff-enforced rows are covered by ``python -m ruff check .`` in CI rather
@@ -276,6 +279,93 @@ def test_pep621_metadata_present_and_consistent() -> None:
     assert project["version"] == mlox_subset.__version__
 
 
+def test_pep639_license_is_an_spdx_expression() -> None:
+    """PEP 639: ``license`` is an SPDX expression, and the text still ships.
+
+    The deprecated forms -- a ``{file = ...}``/``{text = ...}`` table, or a
+    ``License ::`` classifier -- carry the same information ambiguously; the
+    expression form is machine-readable. ``license-files`` keeps the actual
+    licence text in the distribution, which the expression alone does not.
+    """
+    project = _pyproject()["project"]
+    assert isinstance(
+        project.get("license"), str
+    ), "license should be a PEP 639 SPDX expression string, not the deprecated table form"
+    assert project["license"] == "MIT"
+    files = project.get("license-files")
+    assert files, "license-files is missing -- the licence text must still ship"
+    for name in files:
+        assert (PROJECT_ROOT / name).is_file(), f"license file {name} does not exist"
+    for classifier in project.get("classifiers", []):
+        assert not classifier.startswith(
+            "License ::"
+        ), "License classifiers are deprecated by PEP 639; the expression is the source of truth"
+
+
+def test_naive_datetimes_are_explicitly_local() -> None:
+    """Every naive ``datetime.now()`` states why the local clock is right.
+
+    ``DTZ`` is enabled for the same reason ``BLE`` is: not because the rule's
+    default answer (use UTC) is wanted, but because the opposite answer should
+    be *written down*. Every timestamp this tool produces -- ``.bak``
+    filenames, trace lines, the build stamp, the ``.pot`` header -- is read by
+    the user against their own wall clock, so UTC would be actively wrong.
+
+    This asserts the shape rather than re-running ruff: a naive ``now()``
+    without a ``# noqa: DTZ`` beside it is an undocumented decision.
+    """
+    offenders = []
+    for path in SOURCE_FILES:
+        if "tests" in path.parts:
+            continue  # tests may use whatever clock is convenient
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines, start=1):
+            if re.search(r"\b(datetime\.)?now\(\)|fromtimestamp\(", line) and "noqa: DTZ" not in (
+                line + (lines[number] if number < len(lines) else "")
+            ):
+                if "datetime" not in line and "_dt" not in line:
+                    continue
+                offenders.append(f"{path.name}:{number}")
+    assert not offenders, (
+        f"naive datetime without a stated reason at {offenders} -- "
+        f"add `# noqa: DTZ005` and say why local time is correct there"
+    )
+
+
+def test_public_api_all_names_resolve() -> None:
+    """PEP 8: every name a package advertises in ``__all__`` must exist.
+
+    ``__all__`` is the package's stated public surface, and it is written by
+    hand. A name removed or renamed without updating it produces an
+    ``AttributeError`` on ``from mlox_subset import *`` -- and, less
+    obviously, a silent hole in what the docs promise callers can import.
+    """
+    import mlox_subset
+
+    missing = [name for name in mlox_subset.__all__ if not hasattr(mlox_subset, name)]
+    assert not missing, f"__all__ advertises names the module does not define: {missing}"
+
+
+def test_pep517_build_metadata_is_resolvable() -> None:
+    """PEP 517/621: the declared build metadata actually resolves.
+
+    A ``[build-system]`` + ``[project]`` pair can be syntactically valid and
+    still unbuildable -- a package listed that does not exist, a py-module
+    that was renamed. Building a real wheel here would be slow and would need
+    the ``build`` package, so this asserts the cheap half: every declared
+    package and top-level module is present on disk. CI runs the actual
+    ``python -m build`` (see .github/workflows/ci.yml), which is where a
+    genuinely broken backend declaration surfaces.
+    """
+    config = _pyproject()
+    setuptools_cfg = config["tool"]["setuptools"]
+    for dotted in setuptools_cfg["packages"]:
+        directory = PROJECT_ROOT / Path(*dotted.split("."))
+        assert (directory / "__init__.py").is_file(), f"declared package {dotted} does not exist"
+    for module in setuptools_cfg["py-modules"]:
+        assert (PROJECT_ROOT / f"{module}.py").is_file(), f"declared py-module {module} is missing"
+
+
 def test_pep484_mypy_gate_is_configured() -> None:
     """PEP 484: type checking is enforced, not merely available.
 
@@ -297,9 +387,9 @@ def test_pep484_mypy_gate_is_configured() -> None:
     with (PROJECT_ROOT / "pyproject.toml").open("rb") as handle:
         mypy_config = tomllib.load(handle)["tool"]["mypy"]
 
-    assert mypy_config.get("files") == [
-        "mlox_subset"
-    ], "mypy must check the whole mlox_subset package"
+    files = mypy_config.get("files") or []
+    assert "mlox_subset" in files, "mypy must check the whole mlox_subset package"
+    assert "mlox_subset_sort.py" in files, "mypy must check the engine/CLI script"
     assert mypy_config.get("check_untyped_defs") is True
     assert mypy_config.get("warn_unused_ignores") is True
 

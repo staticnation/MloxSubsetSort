@@ -37,6 +37,8 @@ future Configurator rebuilds.
 - `CREDITS.md` — acknowledgements for the projects this tool ports, references,
   and depends on (mlox, plox, tes3conv, modmapper, OpenMW, MOMW, and more).
 - `CHANGELOG.md` — what changed between releases (current: **3.0**).
+- `REMAINING_WORK.md` — the honest list of what is still outstanding in the
+  codebase and against PEP standards, measured rather than recalled.
 
 ---
 
@@ -205,8 +207,12 @@ own syntax highlighting and the field-diff viewer. Switching re-themes
 everything immediately, including windows you already have open, and your
 choice is remembered between sessions.
 
-Five themes are built in (Dark, Dracula, Monokai, Atom One Dark, Gruvbox Dark).
-**Import Theme...** adds your own, in either of two formats:
+23 themes are built in: Dark (default), Dracula, Monokai, Atom One Dark,
+Gruvbox Dark, Monokai Pro, Tokyo Night, Night Owl, Nord, Shades of Purple,
+GitHub Dark, Catppuccin Mocha, Ayu Dark, Cobalt2, SynthWave '84, Winter is
+Coming, Material Dark, Bluloco Dark, Palenight, Poimandres, Noctis, Panda and
+City Lights. (Looking for One Dark Pro? That's the One Dark palette — use
+Atom One Dark.) **Import Theme...** adds your own, in either of two formats:
 
 - **Native JSON** — 9 required colours (`background`, `foreground`, `select`,
   `section`, `warn`, `error`, `ok`, `inserted`, `dim`), plus optional
@@ -611,14 +617,19 @@ Only the standard library is needed to *run* the tool. The checks below need
 `ruff`, `black`, `mypy` and `pytest`.
 
 ```bash
-python -m pytest                # 724 tests: no network, no Tk, no real mods needed
+python -m pytest                # 802 tests: no network, no Tk, no real mods needed
 python -m ruff check .          # PEP 8 style, naming, import order, security, perf
 python -m black --check .       # formatting
-python -m mypy                  # PEP 484 types; gates mlox_subset/
+python -m mypy                  # PEP 484 types; gates all 35 shipped files
+python tools/check_undefined.py mlox_subset_sort_gui.py
+python tools/check_placeholders.py   # i18n %(key)s placeholders vs their dicts
+python tools/make_pot.py --check     # the .pot template must be current
 ```
 
-All four are expected to pass with zero findings. A few things worth knowing
-before changing anything:
+All of these are expected to pass with zero findings (CI runs exactly this
+list, plus a `python -m build` that exercises the packaging metadata, and
+coverage against a `fail_under` floor). A few things worth knowing before
+changing anything:
 
 - **`tests/test_differential.py` is the safety net.** It pins 41 observations
   of the engine's behaviour — the sorted order of a real 687-plugin list, rule
@@ -631,14 +642,21 @@ before changing anything:
   python -m pytest tests/test_differential.py --update-baseline
   ```
 
-- **`tests/test_standards.py` checks PEP conformance mechanically** — 15 PEPs
-  that define a standard for this codebase, including the one line of PEP 20
-  that can be checked (`except: pass` must say why).
+- **`tests/test_standards.py` checks PEP conformance mechanically** — the
+  PEPs that define a standard for this codebase (including PEP 639 licence
+  metadata and the one line of PEP 20 that can be checked: `except: pass`
+  must say why).
 
 - **`tools/check_undefined.py`** reports every name a module uses but never
   imports. A test run tells you the first one; this tells you all of them.
   It complements the linter rather than replacing it — the two miss different
   things, so run both.
+
+- **Every shipped file meets one standard** — full annotations, PEP 257
+  docstrings, no undocumented silent excepts — enforced by ruff and mypy in
+  `pyproject.toml` rather than by convention. The only per-file exemptions left
+  are genuinely specific ones, each with a stated reason (Tk's per-widget
+  `try`/`except`, the re-export shim's deliberate "unused" imports).
 
 - **The GUI has no automated coverage** (no Tk in the test environment).
   `SMOKE_TEST.md` is a scripted manual pass with log markers, so a broken

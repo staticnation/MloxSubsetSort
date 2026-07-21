@@ -21,17 +21,22 @@ Run it after adding or changing any `_()` string.
 
 ## Coverage status
 
-Marking is **partial**. Plain string literals (buttons, labels, tooltips,
-dialogs, menu text) are marked. Messages built with f-strings are **not** yet:
-`_(f"Loaded {n} files")` would extract the *evaluated* text, which is useless
-to a translator, so each has to become a named-placeholder form first:
+Marking is **complete** as of 3.0: plain literals (buttons, labels, tooltips,
+dialogs, menu text) and the formerly-f-string report/status messages are all
+marked, in named-placeholder form:
 
 ```python
 print(_("Loaded %(count)d files") % {"count": n})
 ```
 
-Around 127 such sites remain, mostly report output in `mlox_subset_sort.py`.
-Convert them as you touch them, then re-run `tools/make_pot.py`.
+Deliberately *not* marked: pure data/decoration output -- `content=` echo
+lines, warning-text passthroughs, `=== section ===` headers -- because those
+contain no prose to translate. Counted messages use `ngettext`.
+
+Two checkers keep this state from regressing, both in CI and `pytest`:
+`tools/make_pot.py --check` fails if the template is stale, and
+`tools/check_placeholders.py` fails on a `%(key)s`/dict mismatch (a runtime
+`KeyError` otherwise) or a positional `%s` in a marked string.
 
 ## Adding a language
 

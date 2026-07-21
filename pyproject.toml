@@ -5,8 +5,8 @@
 # file pins tool behaviour and declares standards metadata. Run:
 #     python -m ruff check .          # PEP 8 style, naming, import order
 #     python -m black --check .       # formatting
-#     python -m mypy                  # PEP 484 types (gates mlox_subset/)
-#     python -m pytest                # 717 tests
+#     python -m mypy                  # PEP 484 types (gates every file)
+#     python -m pytest                # 800 tests
 
 # --- PEP 518 / 517 build system ----------------------------------------------
 # Required once [project] exists: PEP 518 makes this the declaration of what is
@@ -17,7 +17,8 @@
 # The tool normally ships as scripts and a PyInstaller binary, so this is here
 # for correctness and inspectability rather than because a wheel is published.
 [build-system]
-requires = ["setuptools>=61"]
+# >=77: first setuptools release supporting PEP 639 license expressions.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -26,6 +27,7 @@ build-backend = "setuptools.build_meta"
 packages = [
     "mlox_subset",
     "mlox_subset.configurator",
+    "mlox_subset.gui",
     "mlox_subset.mwscript",
     "mlox_subset.net",
     "mlox_subset.plugins",
@@ -49,11 +51,15 @@ version = "3.0.0"
 description = "Sort your own Morrowind mods into a frozen MOMW load order."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "License/LICENSE" }
+# PEP 639: an SPDX expression, not the deprecated table/classifier forms.
+# The licence *text* still ships, via license-files.
+license = "MIT"
+license-files = ["License/LICENSE"]
 keywords = ["morrowind", "openmw", "mlox", "momw", "load-order"]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Games/Entertainment",
     "Typing :: Typed",
 ]
@@ -105,9 +111,15 @@ select = [
     # carries a `# noqa: BLE001` stating why it cannot narrow, rather than
     # being an invisible blanket catch.
     "BLE",       # flake8-blind-except
-    # PEP 257 docstrings and PEP 484 annotations. Enforced on mlox_subset/
-    # only -- see per-file-ignores for the legacy scripts and for the modules
-    # still awaiting their typing pass after being relocated verbatim.
+    # Naive datetimes. Every timestamp in this tool is deliberately on the
+    # LOCAL clock -- .bak filenames, trace lines, the build stamp and the
+    # .pot header are all read by the user against their own clock, and UTC
+    # would be actively wrong. The rule is on for the same reason BLE is:
+    # so each of the 9 sites is a stated decision rather than an oversight.
+    "DTZ",       # flake8-datetimez
+    # PEP 257 docstrings and PEP 484 annotations. Enforced everywhere as of
+    # 3.0 -- the legacy scripts' exemptions were paid off, not carried
+    # forward (CODE_REVIEW.md §20).
     "D",         # pydocstyle (PEP 257)
     "ANN",       # flake8-annotations (PEP 484)
     "N",         # pep8-naming (PEP 8 naming conventions)
@@ -156,10 +168,10 @@ ignore = [
 # scripts: full typing, PEP 257 docstrings with Args/Returns/Raises, and no
 # silent excepts. New code goes here; see CODE_REVIEW.md for the migration plan.
 "mlox_subset/*" = []
-# D/ANN apply to mlox_subset/ only. The legacy scripts and the tests predate
-# the convention; enforcing it there would bury real findings in noise.
+# The tests keep their D/ANN exemption: assert is the point there, and
+# docstrings on parametrised cases would be noise. Both shipped scripts now
+# meet the full standard, so only their genuinely-specific exemptions remain.
 "mlox_subset_sort.py" = [
-    "D", "ANN",
     # This module is the project's compatibility surface: the implementation
     # lives in mlox_subset/, and everything imported here is re-exported so
     # `core.<name>` keeps resolving for the GUI, the CLI and the tests.
@@ -169,7 +181,6 @@ ignore = [
     "F401", "E402",
 ]
 "mlox_subset_sort_gui.py" = [
-    "D", "ANN",
     # PERF203: per-widget try/except is idiomatic and necessary in Tk -- a
     # TclError on one widget (destroyed, or not supporting an option on this
     # platform) must not abort styling or populating all the others. Hoisting
@@ -193,6 +204,19 @@ ignore = [
 # annotated -- the list is meant to shrink to nothing.
 # Generated from upstream opcode tables -- style is the generator's business.
 "mlox_subset/mwscript/opcodes.py" = ["ALL"]
+# The GUI split (3.0, CODE_REVIEW.md §16/§9.2): these bodies moved VERBATIM
+# out of mlox_subset_sort_gui.py. The D/ANN debt they arrived with was paid
+# off in the same release (§17): all four now meet the package's strict
+# standard -- full annotations and PEP 257 docstrings -- so only the two
+# genuinely Tk/subprocess-specific exemptions remain.
+# PERF203: per-widget try/except is idiomatic and necessary in Tk -- a
+# TclError on one widget must not abort styling all the others.
+# S603: subprocess argv built from sys.executable and paths this code
+# constructed; no shell, no user string interpolation.
+"mlox_subset/gui/theme.py" = ["PERF203"]
+"mlox_subset/gui/widgets.py" = ["PERF203"]
+"mlox_subset/gui/t3.py" = ["PERF203", "S603"]
+"mlox_subset/gui/conflicts.py" = ["PERF203", "S603"]
 
 [tool.ruff.lint.isort]
 # Keep `from x import (a as b, c as d)` in ONE block. Without this, isort
@@ -238,15 +262,55 @@ ignore_missing_imports = true
 # annotations that had been written by hand and never verified, including a
 # `Sequence` that the body concatenated and an int-typed dict holding floats.
 # A wrong type hint is worse than none, because it gets believed.
-files = ["mlox_subset"]
+files = ["mlox_subset", "mlox_subset_sort.py", "mlox_subset_sort_gui.py"]
 check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 
-# The two legacy scripts are the compatibility shim and the Tk GUI. Neither is
-# annotated yet; including them would bury real findings under hundreds of
-# missing-hint notes. They are excluded explicitly rather than by silence, so
-# the gap is visible in the config that defines the gate.
-[[tool.mypy.overrides]]
-module = ["mlox_subset_sort", "mlox_subset_sort_gui"]
-ignore_errors = true
+# No ignore_errors overrides remain: both legacy scripts were annotated in the
+# typing pass (CODE_REVIEW.md §20) and are gated alongside the package. An
+# entry here would now be a silent exemption rather than a documented gap.
+
+# mlox_subset.gui had an ignore_errors override while the relocated-verbatim
+# GUI bodies were unannotated. The typing pass (§17) cleared it: the package
+# is annotated and mypy-clean, so it is now gated like the rest of
+# mlox_subset/ -- the override is deliberately gone rather than left as a
+# silent exemption. It needs Tk to import, which mypy does not require.
+
+# --- coverage (CODE_REVIEW.md §8.5) ---------------------------------------
+# Deliberately NOT wired into `addopts`. Plain `pytest` must keep working with
+# nothing but pytest installed; coverage is opt-in via `pytest --cov`, which is
+# what CI does. Putting `--cov` in addopts would make pytest-cov a hard
+# requirement for every contributor to run the suite at all.
+[tool.coverage.run]
+source = ["mlox_subset", "mlox_subset_sort"]
+branch = true
+omit = [
+    # The GUI cannot be imported without Tk, which the hermetic suite does not
+    # have. Including it would report a meaningless ~0% and bury the number
+    # that matters. Its coverage is the manual SMOKE_TEST.md run, and that is
+    # stated rather than papered over. mlox_subset/gui/ is the part of it that
+    # moved into the package during the 3.0 split -- same Tk dependency, same
+    # reasoning.
+    "mlox_subset_sort_gui.py",
+    "mlox_subset/gui/*",
+    # Generated; style and coverage are the generator's problem.
+    "*/opcodes.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    # Type-checking-only imports never execute at runtime (PEP 563 + 484).
+    "if TYPE_CHECKING:",
+    # Defensive re-raises and unreachable guards.
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+# The floor §8.5 asked for. Measured at 54% (branch coverage, full suite,
+# zstandard installed) when first taken -- 3.0, during the §16 reconciliation
+# pass -- and set slightly below so it ratchets upward instead of blocking the
+# next PR. Raise it as the number climbs; never lower it to make a PR pass.
+fail_under = 52

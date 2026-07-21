@@ -11,6 +11,9 @@ MLOXSubsetSort/
 ├── mlox_subset/               Shared foundation package.
 │   ├── i18n.py                gettext translation, the _() marker.
 │   ├── logging_setup.py       Levelled logging (stderr) + trace file.
+│   ├── gui/                   GUI support (needs Tk): theming, widgets,
+│   │                          tes3cmd + conflict-window mixins, app dir.
+│   │                          Fully typed and mypy-gated, like the rest.
 │   ├── mwscript/              Compiled-script (SCDT) reading + disassembly.
 │   │                          Makes the diff window's bytecode legible.
 │   ├── rules/                 mlox rule handling: patterns, parser,
@@ -23,10 +26,11 @@ MLOXSubsetSort/
 │   ├── tracing.py             Crash-survival trace logs (main + sort).
 │   └── versions.py            Version regex + mlox's canonical form.
 ├── tools/                     Developer scripts (not shipped).
+│   ├── check_placeholders.py  Verifies %(key)s placeholders match their dicts.
 │   ├── check_undefined.py     Finds names a module uses but never imports.
 │   ├── gen_opcodes.py         Regenerates the opcode table from MWEdit.
 │   └── make_pot.py            Extracts _() strings into the .pot template.
-├── tests/                     pytest suite (724 tests, no network, headless).
+├── tests/                     pytest suite (802 tests, no network, headless).
 ├── testdata/                  Copies of a real setup, used by the tests.
 ├── locale/                    mlox_subset_sort.pot (English template),
 │                               translator guide, .mo catalogues.
@@ -36,10 +40,12 @@ MLOXSubsetSort/
 ├── pyproject.toml             ruff / black / pytest / mypy configuration.
 ├── theme_template.json        Commented starting point for a custom GUI theme.
 └── *.md                       README, QUICKSTART, CHANGELOG, CREDITS,
-                               SMOKE_TEST; CODE_REVIEW (a running log,
-                               appended per work-block, oldest first);
-                               *_BRIEF.md hand-off notes (each states
-                               whether it is outstanding or completed).
+                               SMOKE_TEST; REMAINING_WORK (what a reviewer
+                               would still flag, measured); CODE_REVIEW (a
+                               running log, appended per work-block, oldest
+                               first); *_BRIEF.md retired stubs (work done;
+                               each points at its CODE_REVIEW section and
+                               can be deleted).
 ```
 
 ## Running
@@ -56,11 +62,18 @@ feature and degrade gracefully when missing.
 ## Testing
 
 ```bash
-python -m pytest                # whole suite (724 tests)
+python -m pytest                # whole suite (802 tests)
 python -m ruff check .          # lint (PEP 8 incl. naming + import order)
-python -m mypy                  # types (PEP 484) -- gates mlox_subset/
+python -m mypy                  # types (PEP 484) -- gates every shipped file
 python -m black --check .       # formatting
+python tools/check_undefined.py mlox_subset_sort_gui.py
+python tools/check_placeholders.py   # i18n %(key)s vs dict keys
+python tools/make_pot.py --check     # .pot template must be current
 ```
+
+CI runs exactly this list on Python 3.10 and 3.13, plus `python -m build`
+(which exercises the packaging metadata) and coverage against a `fail_under`
+floor. Every shipped file is mypy-gated.
 
 The suite is hermetic: no network (a local HTTP server stands in for
 upstream), no Tkinter, no reliance on anything outside this folder. The
@@ -69,14 +82,28 @@ integration tests use `testdata/`; point them elsewhere with
 
 ## Building a binary
 
-`build/build subset sort.json` is an auto-py-to-exe configuration. Paths in it
-are absolute and will need updating for your checkout. The essentials:
+`build/auto-py-to-exe_build.json` is an auto-py-to-exe configuration. Paths in
+it are absolute and will need updating for your checkout — load it via
+*Settings -> Import Config From JSON File* rather than retyping them. The
+essentials:
 
 * entry point: `mlox_subset_sort_gui.py`
 * one-file, windowed (no console)
-* icon: `art/mlox_subset_sort_icon.ico`
-* include `mlox_subset/` as a package, and `locale/` as data if you ship
-  translations
+* icon: `mlox_subset_sort_icon.ico` (the copy in the project root; `art/` holds
+  an identical one for reference)
+* `--clean` on, so PyInstaller does not reuse a cached analysis
+
+**You do not need to add `mlox_subset/` or `locale/` by hand.** PyInstaller
+follows the import graph, so the package is collected automatically; the only
+`--add-data` entry is `mlox_subset_sort.py`. `locale/` is a *developer*
+directory — the `.pot` template is not a runtime file, and no `.mo` catalogues
+ship yet. If you ever do ship translations, add `locale/` as data then; until
+that day the app finds no catalogue directory, handles it, and runs in English.
+
+**Verifying the build.** The Log panel's first line is a build stamp:
+`MLOX Subset Sort <version> -- frozen=True built=<timestamp>`. Check it before
+believing any exe-only symptom — a stale build looks exactly like a code bug,
+which has cost two debugging rounds. See `SMOKE_TEST.md` §5a.
 
 ## What was left outside this folder
 

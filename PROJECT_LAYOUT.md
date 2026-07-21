@@ -13,8 +13,8 @@ MLOXSubsetSort/
 │   ├── logging_setup.py       Levelled logging (stderr) + trace file.
 │   ├── mwscript/              Compiled-script (SCDT) reading + disassembly.
 │   │                          Makes the diff window's bytecode legible.
-│   ├── rules/                 mlox rule handling (split in progress):
-│   │                          patterns, parser, expression front-end.
+│   ├── rules/                 mlox rule handling: patterns, parser,
+│   │                          expression front-end.
 │   ├── configurator/          openmw.cfg: read, simulate, emit TOML.
 │   ├── momw.py                MOMW plugin-order.yml (curated lists).
 │   ├── net/                   Downloads: rule files, curated order.
@@ -24,17 +24,22 @@ MLOXSubsetSort/
 │   └── versions.py            Version regex + mlox's canonical form.
 ├── tools/                     Developer scripts (not shipped).
 │   ├── check_undefined.py     Finds names a module uses but never imports.
-│   └── gen_opcodes.py         Regenerates the opcode table from MWEdit.
-├── tests/                     pytest suite (717 tests, no network, headless).
+│   ├── gen_opcodes.py         Regenerates the opcode table from MWEdit.
+│   └── make_pot.py            Extracts _() strings into the .pot template.
+├── tests/                     pytest suite (724 tests, no network, headless).
 ├── testdata/                  Copies of a real setup, used by the tests.
-├── locale/                    Translation catalogues + translator guide.
+├── locale/                    mlox_subset_sort.pot (English template),
+│                               translator guide, .mo catalogues.
 ├── art/                       Icons, banner, Nexus description.
 ├── build/                     PyInstaller / auto-py-to-exe configuration.
 ├── License/                   Licences of the projects this tool ports from.
 ├── pyproject.toml             ruff / black / pytest / mypy configuration.
 ├── theme_template.json        Commented starting point for a custom GUI theme.
 └── *.md                       README, QUICKSTART, CHANGELOG, CREDITS,
-                               CODE_REVIEW, SMOKE_TEST.
+                               SMOKE_TEST; CODE_REVIEW (a running log,
+                               appended per work-block, oldest first);
+                               *_BRIEF.md hand-off notes (each states
+                               whether it is outstanding or completed).
 ```
 
 ## Running
@@ -51,7 +56,7 @@ feature and degrade gracefully when missing.
 ## Testing
 
 ```bash
-python -m pytest                # whole suite (717 tests)
+python -m pytest                # whole suite (724 tests)
 python -m ruff check .          # lint (PEP 8 incl. naming + import order)
 python -m mypy                  # types (PEP 484) -- gates mlox_subset/
 python -m black --check .       # formatting

@@ -1,4 +1,33 @@
-# Code review — MLOX Subset Sort
+# Code review — MLOX Subset Sort (running log)
+
+> **This is a running log, not a single review.** Sections are appended as work
+> happens and are ordered **oldest first**, so §1 is the original review and the
+> highest-numbered section is the most recent. Nothing here is rewritten when
+> later work supersedes it — the point is to keep the reasoning that was
+> actually used at the time, including the decisions that were later revised.
+>
+> **Read every figure as "true when written," not as current.** The clearest
+> example is the test suite, which appears at four different sizes as it grew:
+>
+> | Section | Test count at the time |
+> |---|---|
+> | §4 (test suite, original review) | 129 |
+> | §10 (licence audit) | 305 |
+> | §13 (legacy scripts) | 374 |
+> | current (3.0) | **724** |
+>
+> The same applies to tooling versions, file layouts and line counts. For the
+> current state of anything, check the code, `CHANGELOG.md`, or run the gates.
+>
+> Where a section records a decision that was *deliberately refused* (a linter
+> rule, a "fix" that would have been wrong), that reasoning is usually still
+> live and is cross-referenced from `pyproject.toml`. Those are the parts most
+> worth reading before changing something.
+
+---
+
+**The first entry — the original review.** Everything from §1 onward was
+written against the state of the code described here.
 
 Senior-developer review of `mlox_subset_sort.py` (engine) and
 `mlox_subset_sort_gui.py` (Tkinter front-end), covering correctness,
@@ -10,8 +39,8 @@ is rare and valuable. Review found **four real defects** (one security-
 relevant, one resource leak, one crash, one dead conditional), all fixed, and
 added a **129-test pytest suite** that previously did not exist.
 
-Tooling: `ruff` 0.15, `black` 26.5, `pytest` 9.1, `mypy` 2.3, configured in
-`pyproject.toml`.
+Tooling at the time: `ruff` 0.15, `black` 26.5, `pytest` 9.1, `mypy` 2.3,
+configured in `pyproject.toml`.
 
 ---
 
@@ -103,7 +132,7 @@ rejected with a reason, recorded in `pyproject.toml` so the decision survives:
 
 | Rule | Why it is wrong here |
 | --- | --- |
-| `B905` (`zip(strict=)`) | **Would break the documented Python 3.8+ target** (`strict=` is 3.10+). Every call site is either an intentional offset pairing `zip(xs, xs[1:])` — where `strict=True` would raise *always* — or a comparison that already reports length mismatch with a better message than an exception. |
+| `B905` (`zip(strict=)`) | Every call site is either an intentional offset pairing `zip(xs, xs[1:])` — where `strict=True` would raise on *every* call — or a comparison that already reports length mismatch with a better message than an exception. (This exemption originally also cited the Python 3.8 target, since `strict=` is 3.10+. That half is obsolete as of 3.0, which requires 3.10+; the reasoning above stands on its own.) |
 | `SIM115` (context manager) | The trace-log handles are deliberately long-lived; reopening per line made the sort crawl when logging thousands of steps. They flush per write and are closed explicitly. One flagged site already *does* use `with fh:`. |
 | `PLC0415` (import outside top level) | Optional dependencies (`tomli`, `yaml`, viewer backends) are imported lazily so a missing optional dep degrades one feature instead of preventing startup. |
 | `S110`/`S112`/`SIM105` (silent except) | Confined to cosmetic paths (a tooltip that cannot render, a trace line that cannot be written). Failing loudly there would take down a sort for a decorative reason. |
@@ -783,7 +812,7 @@ third-party widgets were all left broad, precisely because there no such
 guarantee exists and there is no Tk in the test environment to catch a wrong
 guess. A bad narrowing there would convert a currently-survivable failure into
 a crash that nothing in CI would ever see. The engine's 7 narrowings are the
-cheap ones to trust: the 717-test suite and the differential baseline re-ran
+cheap ones to trust: the full test suite and the differential baseline re-ran
 green after each.
 
 ### The GUI has no automated coverage, and that is stated rather than glossed
@@ -998,3 +1027,75 @@ the code: "Explicit is better than implicit" is why the disassembler emits raw
 hex spans instead of guessing instructions; "In the face of ambiguity, refuse
 the temptation to guess" is why `PluginFileIndex` returns `None` rather than
 inventing a warning it cannot substantiate.
+
+---
+
+## 16. Outstanding-work reconciliation, at 3.0
+
+This log is never rewritten, so §8 ("roadmap"), §9 ("recommendations") and §15
+("where this codebase does not satisfy the Zen") still read as open even where
+the work has since landed. This section reconciles all three against the code
+as it actually is at 3.0, so the next person does not have to re-derive it.
+
+Every figure below was measured, not recalled.
+
+### Closed since it was written
+
+| Item | Where | Evidence now |
+|---|---|---|
+| `RUF012` — 8 mutable class attributes in the GUI | §9.1 | `ruff check --select RUF012` is clean; the rule is enabled repo-wide |
+| `mypy` advisory / crashing | §9.4 | already struck through in §9; it gates, and is clean on 28 files |
+| Module split | §8.1 | §8 carries its own COMPLETE note; 6 subpackages, 28 modules |
+| i18n string extraction | §8.4 | **partially** — plumbing, 141 marked strings, `.pot`, and `tools/make_pot.py` shipped in 3.0. The remaining 127 f-string sites are specified in `I18N_BRIEF.md` |
+
+### Still outstanding
+
+| Item | Where | Measured at 3.0 |
+|---|---|---|
+| **CI** | §9.3 | No `.github/`. `ruff check .` + `pytest` in an Action is the cheapest guard on everything 3.0 stabilised, and the only item here with no downside |
+| **Coverage floor** | §8.5 | `pytest-cov` still unconfigured. §8 deferred this until "the split settles" — it has, so this is now unblocked |
+| **`print` → logging** | §8.3 | 75 `print()` in the engine vs 8 `get_logger` uses |
+| **Typing + PEP 257 on the legacy scripts** | §8.2 | `mlox_subset_sort.py` and the GUI still carry `"D", "ANN"` per-file exemptions; only `mlox_subset/` meets the strict standard |
+| **Split the GUI module** | §9.2 | Flagged at ~4,100 lines; now **5,586** |
+| **Oversized functions** | §15 | See below |
+| **Delete the re-export shim** | §15 | 58 names re-exported via 10 `from mlox_subset` imports |
+
+### Three of those need a correction or a caveat
+
+**The oversized functions moved, and a bigger one is now unlisted.** §15 named
+`build_and_sort` (456 lines, depth 5) and `generate_customizations_toml` (311,
+depth 6). Both relocated during the split and are essentially unchanged — 457
+and 312 lines, same depths, now in `mlox_subset/sort/engine.py` and
+`mlox_subset/configurator/emit.py`. But the largest function in the codebase is
+**`compute_plan` at 545 lines, depth 5**, which §15 never named. It is also
+where the `_`-shadowing `NameError` hid until the gettext marker exposed it
+(see 3.0's changelog), which is weak but real evidence that its size costs
+something. `_build_controls` in the GUI is 378 lines but only depth 1 — long
+rather than tangled, and correspondingly lower priority.
+
+**Deleting the shim is now a breaking change.** §15 is right that
+`core.build_and_sort` and `mlox_subset.sort.build_and_sort` are two obvious
+ways to reach one function. But 3.0's changelog states publicly that
+`mlox_subset_sort.py` keeps every existing `core.<name>` call site working.
+Removing it is therefore a 4.0-scoped change with a deprecation period, not
+tidy-up. Recorded so the next reader does not treat §15 as licence to delete it.
+
+**`print` → logging and the i18n f-strings touch the same lines.** The 127
+sites in `I18N_BRIEF.md` are mostly `print(f"...")` in report output; §8.3 wants
+those same calls demoted or routed through a logger. Doing them as one pass is
+substantially cheaper than two, and avoids re-litigating which output is a
+user-facing report and which is a diagnostic — a question both jobs must answer
+identically.
+
+### Suggested order, if someone picks this up
+
+1. **CI** — smallest, protects everything else.
+2. **Coverage floor** — needs CI to be useful, and tells you where the GUI
+   split is riskiest before you attempt it.
+3. **i18n f-strings + `print` → logging together**, per `I18N_BRIEF.md`, whose
+   first step (a static placeholder checker) is the safety net for both.
+4. **GUI split** — the largest and most disruptive; worth having 1–3 first.
+5. `compute_plan` / `build_and_sort` decomposition and the shim deletion are
+   behaviour-risk work pinned by the differential baseline. They are not
+   blocked, but neither should be attempted casually, and the shim wants a
+   major version.

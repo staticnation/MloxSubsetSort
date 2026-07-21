@@ -611,7 +611,7 @@ Only the standard library is needed to *run* the tool. The checks below need
 `ruff`, `black`, `mypy` and `pytest`.
 
 ```bash
-python -m pytest                # 717 tests: no network, no Tk, no real mods needed
+python -m pytest                # 724 tests: no network, no Tk, no real mods needed
 python -m ruff check .          # PEP 8 style, naming, import order, security, perf
 python -m black --check .       # formatting
 python -m mypy                  # PEP 484 types; gates mlox_subset/

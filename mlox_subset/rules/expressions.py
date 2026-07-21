@@ -22,10 +22,15 @@ brackets, so they are matched more simply.
 from __future__ import annotations
 
 import re
-import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
+
+from mlox_subset.i18n import gettext as _
+from mlox_subset.logging_setup import get_logger
+
+#: Diagnostics about the run (not the user's report) go through here.
+_LOG = get_logger(__name__)
 
 #: The atomic function forms, captured whole so each becomes a single leaf node
 #: the evaluator can dispatch on rather than being split into ``[`` + junk.
@@ -146,9 +151,8 @@ def load_rules_raw_text(rule_paths: Sequence[str | Path]) -> str:
                 # files are untrusted downloads, and isolating each file is the
                 # point -- hoisting the try out would let one bad file discard
                 # every file after it.
-                print(
-                    f"WARNING: could not read rule file {rule_file} for predicate "
-                    f"checks: {exc}",
-                    file=sys.stderr,
+                _LOG.warning(
+                    _("could not read rule file %(file)s for predicate checks: %(error)s"),
+                    {"file": rule_file, "error": exc},
                 )
     return "\n".join(chunks)

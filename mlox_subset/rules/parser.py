@@ -22,10 +22,15 @@ rules:
 from __future__ import annotations
 
 import re
-import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
+
+from mlox_subset.i18n import gettext as _, ngettext
+from mlox_subset.logging_setup import get_logger
+
+#: Diagnostics about the run (not the user's report) go through here.
+_LOG = get_logger(__name__)
 
 #: Rule headers recognised in a rule file.
 TOP_KEYWORDS: Final[tuple[str, ...]] = (
@@ -135,9 +140,16 @@ def parse_mlox_file(path: Path) -> list[tuple[str, list[str]]]:
             blocks.append((keyword.lower(), names))
     if skipped:
         print(
-            f"NOTE: {path.name}: {skipped} conditional/unrecognized line(s) inside "
-            f"ordering rules treated as not-installed and bridged over "
-            f"(mlox does the same)."
+            ngettext(
+                "NOTE: %(name)s: %(count)d conditional/unrecognized line inside "
+                "ordering rules treated as not-installed and bridged over "
+                "(mlox does the same).",
+                "NOTE: %(name)s: %(count)d conditional/unrecognized lines inside "
+                "ordering rules treated as not-installed and bridged over "
+                "(mlox does the same).",
+                skipped,
+            )
+            % {"name": path.name, "count": skipped}
         )
     return blocks
 
@@ -173,9 +185,9 @@ def load_rule_blocks(
                 # abort a sort that the other files can still complete.
                 # Narrowing this to OSError would let a decode or regex failure
                 # propagate and take out the whole run.
-                print(
-                    f"WARNING: could not parse rule file {rule_file}: {exc}",
-                    file=sys.stderr,
+                _LOG.warning(
+                    _("could not parse rule file %(file)s: %(error)s"),
+                    {"file": rule_file, "error": exc},
                 )
                 continue
             for keyword, names in blocks:
@@ -186,5 +198,10 @@ def load_rule_blocks(
                 elif keyword == "nearend":
                     nearend.extend(names)
             total = sum(len(names) for _keyword, names in blocks)
-            print(f"Loaded {total} plugin refs from {rule_file.name}")
+            # A milestone about the run, not part of the report the user asked
+            # for -- INFO per logging_setup's level table ("parsed N rules").
+            _LOG.info(
+                _("Loaded %(count)d plugin refs from %(file)s"),
+                {"count": total, "file": rule_file.name},
+            )
     return blocks_out, nearstart, nearend

@@ -18,6 +18,7 @@ from mlox_subset.configurator.cfglines import (
     format_data_line,
     normalize_data_path,
 )
+from mlox_subset.i18n import gettext as _
 from mlox_subset.plugins import list_plugins_in_dir
 
 #: One pending ``data=`` insertion: its value plus optional anchors.
@@ -112,8 +113,8 @@ def infer_data_path_anchors(
             item[mode] = anchor_value
             via = sorted(own_plugins & order_index.keys())[0]
             print(
-                f"  Inferred anchor for '{item['value']}': {mode} '{anchor_value}' "
-                f"(via plugin {via})"
+                _("  Inferred anchor for '%(value)s': %(mode)s '%(anchor)s' (via plugin %(via)s)")
+                % {"value": item["value"], "mode": mode, "anchor": anchor_value, "via": via}
             )
 
 
@@ -159,7 +160,8 @@ def insert_data_paths(
         norm_val = normalize_data_path(item["value"])
         if norm_val and norm_val in existing_normalized:
             print(
-                f"NOTE: '{item['value']}' already present in data= list -- skipping duplicate insert."
+                _("NOTE: '%(value)s' already present in data= list -- skipping duplicate insert.")
+                % {"value": item["value"]}
             )
             continue
         if norm_val:
@@ -172,15 +174,19 @@ def insert_data_paths(
         mode = "after" if item.get("after") else ("before" if item.get("before") else None)
         if not anchor:
             print(
-                f"NOTE: '{item['value']}' has no after/before anchor -- appending at end of data= list."
+                _("NOTE: '%(value)s' has no after/before anchor -- appending at end of data= list.")
+                % {"value": item["value"]}
             )
             leftover.append((new_line, item["value"]))
             continue
         idx = find_anchor_index(data_lines, anchor)
         if idx is None:
             print(
-                f"WARNING: anchor '{anchor}' not found among existing data= paths for "
-                f"'{item['value']}' -- appending at end instead."
+                _(
+                    "WARNING: anchor '%(anchor)s' not found among existing data= paths for "
+                    "'%(value)s' -- appending at end instead."
+                )
+                % {"anchor": anchor, "value": item["value"]}
             )
             leftover.append((new_line, item["value"]))
             continue

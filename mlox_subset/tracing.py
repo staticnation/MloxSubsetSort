@@ -86,7 +86,10 @@ def trace(message: str) -> None:
     try:
         if _trace_handle is None:
             _trace_handle = Path(_trace_path).open("a", encoding="utf-8")
-        _trace_handle.write(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  {message}\n")
+        # Local clock: these lines are read next to the user's own log/GUI.
+        _trace_handle.write(
+            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  {message}\n"  # noqa: DTZ005
+        )
         _trace_handle.flush()
     except OSError:
         pass  # tracing must never be the thing that breaks a run
@@ -122,7 +125,9 @@ def trace_sort(message: str) -> None:
     if not _trace_path or _sort_trace_handle is None:
         return
     try:
-        _sort_trace_handle.write(f"{datetime.now().strftime('%H:%M:%S')}  {message}\n")
+        _sort_trace_handle.write(
+            f"{datetime.now().strftime('%H:%M:%S')}  {message}\n"  # noqa: DTZ005
+        )
         _sort_trace_handle.flush()
     except OSError:
         # Same rule as trace(): the diagnostic log must never be the thing that

@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import Mapping, MutableMapping, Sequence
 from itertools import pairwise
 
+from mlox_subset.i18n import gettext as _, ngettext
 from mlox_subset.sort.graph import expand_pattern, is_master_file, would_create_cycle
 from mlox_subset.tracing import trace_sort
 
@@ -31,94 +32,28 @@ _POSITION_EPSILON = 1e-6
 _is_master_file = is_master_file
 
 
-def build_and_sort(
+def _build_edges(
     base_order_names: list[str],
     subset_names: Sequence[str],
     rule_blocks: Sequence[tuple[list[str], int]],
-    masters: Mapping[str, Sequence[str]] | None = None,
-    nearstart: Sequence[str] | None = None,
-    nearend: Sequence[str] | None = None,
-    anchor_out: MutableMapping[str, tuple[str, str | None]] | None = None,
-) -> list[str]:
-    """Place the user's custom plugins into the frozen curated order.
+    masters: Mapping[str, Sequence[str]] | None,
+    nodes: set[str],
+    node_pool: list[str],
+    node_lower: Mapping[str, str],
+    subset_set: set[str],
+    in_cfg: Sequence[str],
+) -> tuple[dict[str, set[str]], dict[str, int], list[tuple[str, str]]]:
+    """Build the ordering graph: steps 1 (frozen chain), 1b (masters), 2 (rules).
 
-    The curated portion is never reordered. That is the tool's entire purpose:
-    a MOMW list is a tested artefact, and an order its authors did not validate
-    is a broken one even if some rule says it is "better". Custom plugins are
-    positioned around that fixed spine using the mlox ordering rules, with
-    master files kept ahead of ordinary plugins.
-
-    Sorting with no custom plugins returns ``base_order_names`` unchanged, and
-    repeated sorts of the same input agree. Both properties are pinned against
-    a real 687-plugin order by ``tests/test_differential.py``.
-
-    Args:
-        base_order_names: The curated ``content=`` order, treated as frozen.
-            A ``list`` specifically: it is concatenated to build the node pool.
-        subset_names: The user's own plugins to place. Entries matching a base
-            plugin under different casing are canonicalised onto the base
-            spelling and de-duplicated -- OpenMW's VFS is case-insensitive, so
-            ``NewMod.esp`` and ``newmod.esp`` are one file, and treating them
-            as two graph nodes would insert the plugin twice.
-        rule_blocks: ``(names, priority)`` ordering chains from ``[Order]``
-            blocks. Chains are kept whole so an uninstalled middle plugin acts
-            as a bridge rather than dropping the constraint.
-        masters: ``{plugin: required masters}``, used to keep a plugin after
-            everything it depends on.
-        nearstart: Plugins to pull toward the start, as far as constraints
-            allow. Position hints, not an ordering chain.
-        nearend: Plugins to pull toward the end, likewise.
-        anchor_out: If given, receives ``{plugin: (how, anchor)}`` -- ``anchor``
-            is ``None`` when the plugin had no positioning signal -- describing
-            why each custom plugin landed where it did -- used to annotate the
-            emitted TOML. **Mutated in place.**
+    Extracted verbatim from build_and_sort during the §16 decomposition; the
+    trace and report output are unchanged. Cycle-closing edges are refused and
+    reported, keeping the frozen cfg order authoritative.
 
     Returns:
-        The full plugin order: every base plugin in its original relative
-        position, with the custom plugins placed among them.
+        ``(adj, indeg, conflicts)`` -- adjacency sets, in-degrees, and the
+        rule edges that were rejected because applying them would reorder the
+        frozen curated sequence.
     """
-    # Guard against the same plugin becoming two different graph nodes just
-    # because of a casing difference (OpenMW's VFS is case-insensitive, so
-    # 'NewMod.esp' and 'newmod.esp' are the same file) -- canonicalize any
-    # subset entry that matches an existing base entry onto that entry's
-    # exact spelling, and drop the resulting case-duplicates. Without this,
-    # a subset plugin already in the cfg under different casing would get
-    # inserted a second time instead of being repositioned.
-    trace_sort(
-        f"[sort] === build_and_sort: {len(base_order_names)} base plugin(s), "
-        f"{len(subset_names)} subset (custom) plugin(s), {len(rule_blocks)} mlox rule block(s), "
-        f"masters for {len(masters or {})} plugin(s) ==="
-    )
-    base_lower_map = {n.lower(): n for n in base_order_names}
-    canonical_subset_names = []
-    seen_lower = set()
-    for n in subset_names:
-        canon = base_lower_map.get(n.lower(), n)
-        if canon.lower() != n.lower():
-            trace_sort(f"[sort] canonicalize subset '{n}' -> cfg spelling '{canon}'")
-        if canon.lower() not in seen_lower:
-            seen_lower.add(canon.lower())
-            canonical_subset_names.append(canon)
-        else:
-            trace_sort(f"[sort] drop duplicate subset entry '{n}' (already have '{canon}')")
-    subset_names = canonical_subset_names
-
-    base_index = {name: i for i, name in enumerate(base_order_names)}
-    nodes = set(base_order_names) | set(subset_names)
-    # Deterministic iteration pool: set order is randomized per process
-    # (PYTHONHASHSEED), and using `nodes` directly for rule expansion made
-    # edge insertion order -- and through it the final sort -- vary from
-    # run to run. Same membership, fixed order.
-    node_pool = base_order_names + [n for n in subset_names if n not in base_index]
-    subset_set = set(subset_names)
-    node_lower = {n.lower(): n for n in nodes}
-    in_cfg = [n for n in subset_names if n in base_index]
-    new_cust = [n for n in subset_names if n not in base_index]
-    trace_sort(
-        f"[sort] {len(in_cfg)} custom(s) already in cfg (will be repositioned), "
-        f"{len(new_cust)} brand-new custom(s) to insert"
-    )
-
     adj: dict[str, set[str]] = {n: set() for n in nodes}
     indeg = dict.fromkeys(nodes, 0)
     conflicts = []  # mlox rules we couldn't apply without reordering the frozen cfg
@@ -218,15 +153,62 @@ def build_and_sort(
                 seen.add(key)
                 unique.append((a, b))
         print(
-            f"\n  {len(unique)} mlox ordering rule(s) not applied -- your openmw.cfg already "
-            f"orders these the other way, so your (curated) cfg order is kept:"
+            "\n  "
+            + ngettext(
+                "%(count)d mlox ordering rule not applied -- your openmw.cfg already "
+                "orders these the other way, so your (curated) cfg order is kept:",
+                "%(count)d mlox ordering rules not applied -- your openmw.cfg already "
+                "orders these the other way, so your (curated) cfg order is kept:",
+                len(unique),
+            )
+            % {"count": len(unique)}
         )
         for a, b in unique:
             print(
-                f"    - mlox wanted '{a}' before '{b}', but your load order already has "
-                f"'{b}' before '{a}'"
+                _(
+                    "    - mlox wanted '%(first)s' before '%(second)s', but your load "
+                    "order already has '%(second)s' before '%(first)s'"
+                )
+                % {"first": a, "second": b}
             )
+    return adj, indeg, conflicts
 
+
+def _anchor_positions(
+    base_order_names: list[str],
+    subset_names: Sequence[str],
+    adj: Mapping[str, set[str]],
+    subset_set: set[str],
+    base_index: Mapping[str, int],
+    nearstart: Sequence[str] | None,
+    nearend: Sequence[str] | None,
+    node_pool: list[str],
+    anchor_out: MutableMapping[str, tuple[str, str | None]] | None,
+) -> dict[str, float]:
+    """Step 3: derive a float position for every plugin, customs anchored.
+
+    Each custom is placed from its graph neighbours (header-master edges and
+    applied mlox rule edges, resolved transitively through custom->custom
+    chains), with [NearStart]/[NearEnd] hints overriding the heuristic.
+    Extracted verbatim from build_and_sort during the §16 decomposition; the
+    trace output is unchanged.
+
+    Args:
+        base_order_names: The frozen curated order, positions 0..n-1.
+        subset_names: The customs to anchor, in canonical declared order.
+        adj: The ordering graph from :func:`_build_edges`.
+        subset_set: ``set(subset_names)``, for membership tests.
+        base_index: ``{base plugin: cfg position}``.
+        nearstart: ``[NearStart]`` patterns (hints, not chains).
+        nearend: ``[NearEnd]`` patterns, likewise.
+        node_pool: Deterministic iteration pool for pattern expansion.
+        anchor_out: If given, **mutated in place** with
+            ``{custom_lower: (how, anchor)}`` for the TOML emitter.
+
+    Returns:
+        ``{plugin: position}`` -- base plugins on integers, customs on
+        fractional positions between them.
+    """
     # 3) stable Kahn's topological sort. Tie-break among ready nodes:
     #    (a) masters (.esm/.omwgame) before ordinary plugins -- ESM-first, so a
     #        custom master with no rule still floats up into the master block;
@@ -235,8 +217,6 @@ def build_and_sort(
     #        the plugins they were declared after);
     #    (c) then name, for determinism.
     #    Edges always win over the tie-break, so real dependencies/rules dominate.
-    import heapq
-
     nb = len(base_order_names)
     # float-valued: base plugins land on integers, customs on fractional
     # positions between them (see _POSITION_EPSILON).
@@ -451,6 +431,30 @@ def build_and_sort(
                     f"[sort]  [{label}] hint: '{n}' -> {'front' if to_start else 'very end'} "
                     f"(pos {pos[n]:.6g})"
                 )
+    return pos
+
+
+def _kahn_place(
+    nodes: set[str],
+    adj: Mapping[str, set[str]],
+    indeg: dict[str, int],
+    pos: Mapping[str, float],
+    base_order_names: list[str],
+    subset_set: set[str],
+) -> list[str]:
+    """Step 4: stable Kahn's topological sort over the anchored positions.
+
+    Edges always win over the position tie-break; an unresolved cycle appends
+    its members at the end with a warning rather than dropping them.
+    Extracted verbatim from build_and_sort during the §16 decomposition; the
+    trace and report output are unchanged.
+
+    Returns:
+        Every node exactly once, in final load order.
+    """
+    import heapq
+
+    nb = len(base_order_names)
 
     def rank(n: str) -> tuple[int, float, str]:
         """Sort key: masters first, then resolved position, then name.
@@ -465,7 +469,10 @@ def build_and_sort(
     heapq.heapify(ready)
     result = []
     while ready:
-        _, n = heapq.heappop(ready)
+        # `_rank` not `_`: `_` is the gettext marker now, and binding it as a
+        # local would shadow the module-level import for the WHOLE function
+        # (the documented F823 trap -- see CODE_REVIEW.md §17).
+        _rank, n = heapq.heappop(ready)
         result.append(n)
         if n in subset_set:  # log only customs to keep the trace readable
             trace_sort(f"[sort]  place #{len(result)}: '{n}'  (CUSTOM, rank={rank(n)})")
@@ -478,10 +485,132 @@ def build_and_sort(
         remaining = nodes - set(result)
         trace_sort(f"[sort] UNPLACED (cycle): {sorted(remaining)}")
         print(
-            f"WARNING: {len(remaining)} plugin(s) could not be placed due to an "
-            f"unresolved cycle and were appended at the end: {sorted(remaining)}"
+            ngettext(
+                "WARNING: %(count)d plugin could not be placed due to an "
+                "unresolved cycle and was appended at the end: %(names)s",
+                "WARNING: %(count)d plugins could not be placed due to an "
+                "unresolved cycle and were appended at the end: %(names)s",
+                len(remaining),
+            )
+            % {"count": len(remaining), "names": sorted(remaining)}
         )
         result.extend(sorted(remaining, key=str.lower))
+    return result
+
+
+def build_and_sort(
+    base_order_names: list[str],
+    subset_names: Sequence[str],
+    rule_blocks: Sequence[tuple[list[str], int]],
+    masters: Mapping[str, Sequence[str]] | None = None,
+    nearstart: Sequence[str] | None = None,
+    nearend: Sequence[str] | None = None,
+    anchor_out: MutableMapping[str, tuple[str, str | None]] | None = None,
+) -> list[str]:
+    """Place the user's custom plugins into the frozen curated order.
+
+    The curated portion is never reordered. That is the tool's entire purpose:
+    a MOMW list is a tested artefact, and an order its authors did not validate
+    is a broken one even if some rule says it is "better". Custom plugins are
+    positioned around that fixed spine using the mlox ordering rules, with
+    master files kept ahead of ordinary plugins.
+
+    Sorting with no custom plugins returns ``base_order_names`` unchanged, and
+    repeated sorts of the same input agree. Both properties are pinned against
+    a real 687-plugin order by ``tests/test_differential.py``.
+
+    Args:
+        base_order_names: The curated ``content=`` order, treated as frozen.
+            A ``list`` specifically: it is concatenated to build the node pool.
+        subset_names: The user's own plugins to place. Entries matching a base
+            plugin under different casing are canonicalised onto the base
+            spelling and de-duplicated -- OpenMW's VFS is case-insensitive, so
+            ``NewMod.esp`` and ``newmod.esp`` are one file, and treating them
+            as two graph nodes would insert the plugin twice.
+        rule_blocks: ``(names, priority)`` ordering chains from ``[Order]``
+            blocks. Chains are kept whole so an uninstalled middle plugin acts
+            as a bridge rather than dropping the constraint.
+        masters: ``{plugin: required masters}``, used to keep a plugin after
+            everything it depends on.
+        nearstart: Plugins to pull toward the start, as far as constraints
+            allow. Position hints, not an ordering chain.
+        nearend: Plugins to pull toward the end, likewise.
+        anchor_out: If given, receives ``{plugin: (how, anchor)}`` -- ``anchor``
+            is ``None`` when the plugin had no positioning signal -- describing
+            why each custom plugin landed where it did -- used to annotate the
+            emitted TOML. **Mutated in place.**
+
+    Returns:
+        The full plugin order: every base plugin in its original relative
+        position, with the custom plugins placed among them.
+    """
+    # Guard against the same plugin becoming two different graph nodes just
+    # because of a casing difference (OpenMW's VFS is case-insensitive, so
+    # 'NewMod.esp' and 'newmod.esp' are the same file) -- canonicalize any
+    # subset entry that matches an existing base entry onto that entry's
+    # exact spelling, and drop the resulting case-duplicates. Without this,
+    # a subset plugin already in the cfg under different casing would get
+    # inserted a second time instead of being repositioned.
+    trace_sort(
+        f"[sort] === build_and_sort: {len(base_order_names)} base plugin(s), "
+        f"{len(subset_names)} subset (custom) plugin(s), {len(rule_blocks)} mlox rule block(s), "
+        f"masters for {len(masters or {})} plugin(s) ==="
+    )
+    base_lower_map = {n.lower(): n for n in base_order_names}
+    canonical_subset_names = []
+    seen_lower = set()
+    for n in subset_names:
+        canon = base_lower_map.get(n.lower(), n)
+        if canon.lower() != n.lower():
+            trace_sort(f"[sort] canonicalize subset '{n}' -> cfg spelling '{canon}'")
+        if canon.lower() not in seen_lower:
+            seen_lower.add(canon.lower())
+            canonical_subset_names.append(canon)
+        else:
+            trace_sort(f"[sort] drop duplicate subset entry '{n}' (already have '{canon}')")
+    subset_names = canonical_subset_names
+
+    base_index = {name: i for i, name in enumerate(base_order_names)}
+    nodes = set(base_order_names) | set(subset_names)
+    # Deterministic iteration pool: set order is randomized per process
+    # (PYTHONHASHSEED), and using `nodes` directly for rule expansion made
+    # edge insertion order -- and through it the final sort -- vary from
+    # run to run. Same membership, fixed order.
+    node_pool = base_order_names + [n for n in subset_names if n not in base_index]
+    subset_set = set(subset_names)
+    node_lower = {n.lower(): n for n in nodes}
+    in_cfg = [n for n in subset_names if n in base_index]
+    new_cust = [n for n in subset_names if n not in base_index]
+    trace_sort(
+        f"[sort] {len(in_cfg)} custom(s) already in cfg (will be repositioned), "
+        f"{len(new_cust)} brand-new custom(s) to insert"
+    )
+
+    adj, indeg, conflicts = _build_edges(
+        base_order_names,
+        subset_names,
+        rule_blocks,
+        masters,
+        nodes,
+        node_pool,
+        node_lower,
+        subset_set,
+        in_cfg,
+    )
+
+    pos = _anchor_positions(
+        base_order_names,
+        subset_names,
+        adj,
+        subset_set,
+        base_index,
+        nearstart,
+        nearend,
+        node_pool,
+        anchor_out,
+    )
+
+    result = _kahn_place(nodes, adj, indeg, pos, base_order_names, subset_set)
 
     trace_sort(
         f"[sort] === done: {len(result)} plugin(s) placed "

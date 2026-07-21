@@ -322,7 +322,9 @@ def check_predicates(
     rules_text: str,
     final_order: Sequence[str],
     subset_origins: Mapping[str, str] | None = None,
-    data_dirs: list[str | Path] | None = None,
+    # Sequence, not list: `list` is invariant, so the list[str] every caller
+    # builds is not a list[str | Path]. Same defect as PluginFileIndex had.
+    data_dirs: Sequence[str | Path] | None = None,
 ) -> list[str]:
     """Evaluate every predicate block against the sorted load order.
 

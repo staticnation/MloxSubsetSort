@@ -21,6 +21,7 @@ from mlox_subset.configurator.cfglines import (
     normalize_data_path,
     toml_value,
 )
+from mlox_subset.i18n import gettext as _
 
 
 def generate_customizations_toml(
@@ -320,18 +321,33 @@ def generate_customizations_toml(
         hits = [line for line in haystack if a in line]
         if len(hits) > 1:
             print(
-                f"WARNING: anchor '{a}' in the emitted TOML matches "
-                f"{len(hits)} openmw.cfg lines -- momw-configurator errors on "
-                f"ambiguous matches. Colliding lines: "
-                f"{'; '.join(hits[:4])}{' ...' if len(hits) > 4 else ''}"
+                _(
+                    "WARNING: anchor '%(anchor)s' in the emitted TOML matches "
+                    "%(count)d openmw.cfg lines -- momw-configurator errors on "
+                    "ambiguous matches. Colliding lines: %(lines)s%(more)s"
+                )
+                % {
+                    "anchor": a,
+                    "count": len(hits),
+                    "lines": "; ".join(hits[:4]),
+                    "more": " ..." if len(hits) > 4 else "",
+                }
             )
     for r in dict.fromkeys(_removes):
         hits = [line for line in haystack if _remove_matches(r, line)]
         if len(hits) > 1:
             print(
-                f"WARNING: remove entry '{r}' matches {len(hits)} openmw.cfg "
-                f"lines -- momw-configurator removes ALL of them, silently. "
-                f"Colliding lines: {'; '.join(hits[:4])}{' ...' if len(hits) > 4 else ''}"
+                _(
+                    "WARNING: remove entry '%(entry)s' matches %(count)d openmw.cfg "
+                    "lines -- momw-configurator removes ALL of them, silently. "
+                    "Colliding lines: %(lines)s%(more)s"
+                )
+                % {
+                    "entry": r,
+                    "count": len(hits),
+                    "lines": "; ".join(hits[:4]),
+                    "more": " ..." if len(hits) > 4 else "",
+                }
             )
 
     return "\n".join(out).rstrip() + "\n"

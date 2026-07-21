@@ -17,6 +17,7 @@ behaviour rather than guessing.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
@@ -51,7 +52,10 @@ class PluginFileIndex:
         usable: Whether any directory was readable -- see :attr:`usable`.
     """
 
-    def __init__(self, data_dirs: list[str | Path] | None = None) -> None:
+    # Sequence, not list: `list` is invariant, so a plain list[str] -- what
+    # every caller actually builds -- is NOT a list[str | Path] and was
+    # rejected. Found when the GUI package came under mypy (§17).
+    def __init__(self, data_dirs: Sequence[str | Path] | None = None) -> None:
         """Record the directories to index.
 
         Args:

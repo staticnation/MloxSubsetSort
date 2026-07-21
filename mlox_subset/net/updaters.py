@@ -162,7 +162,9 @@ def update_plugin_order_yml(
             report.append(f"{p.name}: already up to date ({len(entries)} entries).")
             return report
         if p.exists():
-            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            # Local clock deliberately: this stamp goes into a .bak filename
+            # the user reads, and a UTC name would not match their clock.
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")  # noqa: DTZ005
             p.with_name(p.name + f".bak-{stamp}").write_bytes(old)
         p.write_bytes(data)
         try:
@@ -245,7 +247,9 @@ def update_rule_files(
             report.append(f"{p.name}: already up to date ({len(data):,} bytes)")
             continue
         if p.exists():
-            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            # Local clock deliberately: this stamp goes into a .bak filename
+            # the user reads, and a UTC name would not match their clock.
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")  # noqa: DTZ005
             p.with_name(p.name + f".bak-{stamp}").write_bytes(old)
         p.write_bytes(data)
         report.append(
@@ -266,7 +270,9 @@ def rule_file_ages(rule_paths: Sequence[str | Path]) -> list[tuple[str, int | No
         modification time could not be read.
     """
     out: list[tuple[str, int | None]] = []
-    now = datetime.now().timestamp()
+    # Epoch seconds, compared against file mtimes -- tz-independent by
+    # construction, so a naive now() is correct here.
+    now = datetime.now().timestamp()  # noqa: DTZ005
     for raw_path in rule_paths:
         path = Path(raw_path)
         try:

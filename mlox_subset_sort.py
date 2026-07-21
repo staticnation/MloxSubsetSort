@@ -138,6 +138,7 @@ from pathlib import Path
 # Pattern translation now lives in mlox_subset/rules/patterns.py. It is
 # re-exported here so every existing caller (and the GUI) keeps working
 # unchanged; behaviour is pinned by tests/test_differential.py.
+from mlox_subset import _
 from mlox_subset.rules import (
     MLOX_VERSION_PATTERN as _MLOX_VER,
     mlox_pattern_to_regex,
@@ -1186,7 +1187,10 @@ def _no_window_kwargs():
         si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         si.wShowWindow = 0  # SW_HIDE
         kw["startupinfo"] = si
-    except Exception:
+    except AttributeError:
+        # STARTUPINFO/STARTF_USESHOWWINDOW are Windows-only attributes of
+        # subprocess; if a future//odd build lacks them we just skip the
+        # hide-the-console refinement. Nothing else in here can raise.
         pass
     return kw
 
@@ -1254,7 +1258,9 @@ class Tes3ConvSession:
             )
             self._json_paths[key] = str(out)
             return str(out)
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
+            # OSError: tes3conv missing/not executable. SubprocessError covers
+            # both CalledProcessError (check=True) and TimeoutExpired.
             return None
 
     def _records(self, path):
@@ -1267,7 +1273,9 @@ class Tes3ConvSession:
             with Path(jp).open(encoding="utf-8", errors="replace") as fh:
                 data = json.load(fh)
             return data if isinstance(data, list) else []
-        except Exception:
+        except (OSError, ValueError):
+            # OSError: unreadable/vanished file. ValueError: JSONDecodeError and
+            # UnicodeDecodeError both subclass it.
             return []
 
     def record_map(self, path):
@@ -1300,7 +1308,10 @@ class Tes3ConvSession:
                 if isinstance(obj, dict) and obj.get("v") == self._SIDECAR_VER:
                     return [tuple(x) for x in obj.get("d", [])]
                 # older/mismatched cache format -> rebuild
-            except Exception:
+            except (OSError, ValueError, TypeError):
+                # OSError: unreadable sidecar. ValueError: JSON/decode errors.
+                # TypeError: a corrupt cache whose "d" entries aren't iterable,
+                # which tuple() would reject. Any of them just means "rebuild".
                 pass
         return None
 
@@ -2088,7 +2099,7 @@ def write_cfg(path: Path, lines, segments, dry_run, no_backup):
     new_lines_out.extend(trailing_extra)
 
     if dry_run:
-        print("\n--- DRY RUN: no files written ---")
+        print(_("\n--- DRY RUN: no files written ---"))
         return
 
     backup_file(path, no_backup)
@@ -3063,7 +3074,10 @@ def compute_plan(args) -> dict:
         try:
             yml_entries = parse_plugin_order_yml(Path(plugin_order_yml))
             print(f"  Loaded {len(yml_entries)} plugin entries from {Path(plugin_order_yml).name}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- untrusted YAML, advisory only
+            # parse_plugin_order_yml runs PyYAML (or our fallback parser) over a
+            # community-maintained file. These are optional cross-checks; any
+            # parser failure must downgrade to a warning, never abort the sort.
             print(f"  WARNING: could not read plugin-order.yml ({e}) -- skipping yml checks.")
             yml_entries = []
         if yml_entries and not list_name:
@@ -3154,7 +3168,11 @@ def compute_plan(args) -> dict:
                     "  (No header masters read -- mod files not reachable from the cfg's data= "
                     "folders, so ordering uses mlox rules + ESM-first only.)"
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001 -- binary plugin headers, advisory only
+            # Reads TES3 headers straight out of arbitrary .esp/.esm files, so a
+            # truncated or non-standard record can surface almost any error.
+            # Falling back to "no masters known" degrades the ordering hints;
+            # failing here would take out an otherwise fine sort.
             masters = {}
 
         final_order = build_and_sort(
@@ -3203,7 +3221,7 @@ def compute_plan(args) -> dict:
                 for w in predicate_warnings:
                     print(f"\n{w}")
             else:
-                print("\n  No [Conflict]/[Requires]/[Note] warnings triggered.")
+                print(_("\n  No [Conflict]/[Requires]/[Note] warnings triggered."))
 
     # --- plugin-order.yml: post-sort sanity warnings (read-only) ------------
     if yml_entries:
@@ -3229,7 +3247,7 @@ def compute_plan(args) -> dict:
             for w in yml_warnings:
                 print(f"\n{w}")
         else:
-            print("\n  No plugin-order.yml warnings.")
+            print(_("\n  No plugin-order.yml warnings."))
 
     # --- missing / out-of-order master check (always on, read-only) ---------
     # Every active plugin's TES3 header masters must be present and load
@@ -3248,7 +3266,7 @@ def compute_plan(args) -> dict:
         master_problem_plugins = sorted(_problem_names, key=str.lower)
         if _checked == 0:
             _section("MASTER CHECK -- skipped")
-            print("  (plugin files not reachable from the data folders; can't read headers)")
+            print(_("  (plugin files not reachable from the data folders; can't read headers)"))
         else:
             master_warnings = _missing + _order_problems
             n_issues = len(_missing) + len(_order_problems)
@@ -3265,8 +3283,11 @@ def compute_plan(args) -> dict:
                 for w in _size_notes:
                     print(f"{w}")
             if not n_issues and not _size_notes:
-                print("  All masters present and correctly ordered.")
-    except Exception as e:
+                print(_("  All masters present and correctly ordered."))
+    except Exception as e:  # noqa: BLE001 -- advisory whole-section guard
+        # Wraps the entire master-consistency report, which walks plugin headers
+        # from disk. It is diagnostic output: if any part of it fails the user
+        # should still get their sort, with a note that this check didn't run.
         print(f"  WARNING: master check failed: {e}", file=sys.stderr)
 
     # --- merged-artifact staleness watchdog (read-only) ---------------------
@@ -3301,7 +3322,10 @@ def compute_plan(args) -> dict:
                     f"(e.g. {', '.join(_newer[:3])}{', ...' if len(_newer) > 3 else ''}) -- "
                     f"re-run momw-configurator so it gets rebuilt against the current load order."
                 )
-    except Exception:
+    except Exception:  # noqa: BLE001 -- purely cosmetic staleness hint
+        # This block only prints an optional "[STALE]" advisory about generated
+        # artifacts. It touches mtimes on paths that may not exist; there is no
+        # failure here worth showing the user, let alone aborting for.
         pass
 
     # --- TES3 record-level conflict scan (opt-in, read-only) ----------------
@@ -3388,7 +3412,7 @@ def compute_plan(args) -> dict:
         for _w in _lw:
             print(f"\n{_w}")
         if not _lw:
-            print("\n  No lint findings.")
+            print(_("\n  No lint findings."))
 
     if want_resources:
         _section("DATA-PATH RESOURCE (VFS) CONFLICTS (read-only)")
@@ -3405,7 +3429,7 @@ def compute_plan(args) -> dict:
 
     if data_inserts and not args.sort_data_paths:
         _section(f"{len(data_inserts)} DATA PATH(S) FOUND BUT NOT SORTED")
-        print("  Pass --sort-data-paths to enable:")
+        print(_("  Pass --sort-data-paths to enable:"))
         for d in data_inserts:
             print(f"  {d['value']}")
 
@@ -3421,7 +3445,10 @@ def compute_plan(args) -> dict:
             print(f"  {d['value']}  ({anchor})")
         data_result = insert_data_paths(data_order, data_inserts)
         _subsection("final data= order")
-        for line, is_new, _ in data_result:
+        # NB: not `_` for the unused anchor -- `_` is the gettext marker, and
+        # binding it here would make it a function-local and turn every _()
+        # call earlier in this function into a NameError (ruff F823).
+        for line, is_new, _anchor in data_result:
             print(f"  {line}{'  <-- inserted' if is_new else ''}")
 
     return {
@@ -3530,7 +3557,7 @@ def write_plan(
         line for line, _, _ in (plan["data_result"] or [])
     ]:
         _subsection("data= order being exported (manually adjusted)")
-        for line, _, _ in data_result:
+        for line, _is_new, _anchor in data_result:
             print(f"  {line}")
 
     _section("WRITING OUTPUT")
@@ -3539,7 +3566,7 @@ def write_plan(
         write_cfg(args.cfg, plan["lines"], segments, args.dry_run, args.no_backup)
         wrote_cfg = not args.dry_run
     else:
-        print("  openmw.cfg left untouched (pass --write-cfg to patch it directly)")
+        print(_("  openmw.cfg left untouched (pass --write-cfg to patch it directly)"))
 
     wrote_toml = False
     if args.emit_toml:
@@ -3576,7 +3603,10 @@ def write_plan(
             )
             for _l in _rep:
                 print(_l)
-        except Exception as _e:
+        except Exception as _e:  # noqa: BLE001 -- preview must never block export
+            # A read-only preview of what the configurator would emit. It parses
+            # TOML and cfg text that the user may have hand-edited; if the
+            # preview can't be produced, the actual export still must proceed.
             print(f"  WARNING: configurator preview failed: {_e}")
         if args.dry_run:
             print(f"\n  DRY RUN: would write {args.emit_toml}\n{toml_text}")

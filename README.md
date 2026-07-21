@@ -20,7 +20,11 @@ future Configurator rebuilds.
 
 ## Contents
 
-- `mlox_subset_sort.py` — the engine + command-line tool.
+- `mlox_subset_sort.py` — the command-line tool, and the stable import surface
+  for the engine (it re-exports `mlox_subset/`, so `core.<name>` keeps working).
+- `mlox_subset/` — the engine itself, split by concern: rule handling, the
+  load-order sort, `openmw.cfg` reading/emitting, plugin metadata, downloads,
+  and compiled-script decoding.
 - `mlox_subset_sort_gui.py` — a drag-and-drop GUI front-end (imports the engine
   directly; it reimplements no logic).
 - `mlox_base.txt`, `mlox_user.txt` — mlox rule databases (download/update with
@@ -28,9 +32,11 @@ future Configurator rebuilds.
 - `plugin-order.yml` — MOMW's source of truth for which plugins belong to which
   curated list (optional but recommended). From the
   [modding-openmw.com repo](https://gitlab.com/modding-openmw/modding-openmw.com/-/blob/master/momw/momw/data_seeds/data/plugin-order.yml).
+- `theme_template.json` — a commented starting point for making your own GUI
+  theme (see [Theming the app](#theming-the-app)).
 - `CREDITS.md` — acknowledgements for the projects this tool ports, references,
   and depends on (mlox, plox, tes3conv, modmapper, OpenMW, MOMW, and more).
-- `CHANGELOG.md` — what changed between releases (current: **2.3**).
+- `CHANGELOG.md` — what changed between releases (current: **3.0**).
 
 ---
 
@@ -38,8 +44,7 @@ future Configurator rebuilds.
 
 Pure Python + tkinter, so it runs on all three platforms.
 
-- **Python 3.8+** (3.11+ gets `tomllib` for free; on older versions install
-  `tomli`).
+- **Python 3.10+** (3.11+ gets `tomllib` for free; on 3.10 install `tomli`).
 - **tkinter** — bundled with the python.org installers on Windows and macOS. On
   Linux, install it from your package manager, e.g. Debian/Ubuntu:
   `sudo apt install python3-tk`.
@@ -191,6 +196,32 @@ The log colour-codes each line so you can scan it quickly:
   mlox disagreed with your cfg — you decide whether to nudge it in the panel.
 - **blue** — a section header; **red** — an error worth checking.
 - **plain** — a frozen base row left untouched.
+
+### Theming the app
+
+The **Theme:** dropdown next to the log panel sets the colours for the *whole
+app* — window, buttons, frames, tabs, lists and entries, as well as the log's
+own syntax highlighting and the field-diff viewer. Switching re-themes
+everything immediately, including windows you already have open, and your
+choice is remembered between sessions.
+
+Five themes are built in (Dark, Dracula, Monokai, Atom One Dark, Gruvbox Dark).
+**Import Theme...** adds your own, in either of two formats:
+
+- **Native JSON** — 9 required colours (`background`, `foreground`, `select`,
+  `section`, `warn`, `error`, `ok`, `inserted`, `dim`), plus optional
+  syntax-token colours and an optional `"chrome"` object if you want to set the
+  window colours explicitly. Start from **`theme_template.json`** next to the
+  app: it is commented, imports as-is, and reproduces the default palette.
+- **base16 schemes** — any `.yaml`/`.yml`/`.json` with `base00`..`base0F`, e.g.
+  from the [base16](https://github.com/chriskempson/base16) or
+  [atelierbram](https://github.com/atelierbram/syntax-highlighting) scheme
+  repos. No PyYAML needed; a small built-in parser reads them.
+
+Any window colour you don't specify is derived from the theme's `background` —
+lightened for dark themes, darkened for light ones — so a plain 9-colour theme
+or a bare base16 scheme still themes the entire app coherently. Imported themes
+are saved to `log_themes.json` and appear in the dropdown from then on.
 
 ### Opting rows out (disable / enable)
 

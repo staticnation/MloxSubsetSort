@@ -32,8 +32,9 @@ MLOXSubsetSort/
 ├── build/                     PyInstaller / auto-py-to-exe configuration.
 ├── License/                   Licences of the projects this tool ports from.
 ├── pyproject.toml             ruff / black / pytest / mypy configuration.
+├── theme_template.json        Commented starting point for a custom GUI theme.
 └── *.md                       README, QUICKSTART, CHANGELOG, CREDITS,
-                               CODE_REVIEW.
+                               CODE_REVIEW, SMOKE_TEST.
 ```
 
 ## Running

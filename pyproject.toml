@@ -98,6 +98,13 @@ select = [
     "PERF",      # performance
     "RUF",       # ruff-specific
     "PIE", "ISC", "ICN", "INT", "TID", "A", "PL",
+    # Blind `except Exception`. This tool has a lot of genuinely defensive
+    # catches -- optional imports, Tk quirks, untrusted downloaded rule files,
+    # settings/trace persistence -- and they must stay broad. The rule is on
+    # anyway so each one is a *documented* decision: every remaining site
+    # carries a `# noqa: BLE001` stating why it cannot narrow, rather than
+    # being an invisible blanket catch.
+    "BLE",       # flake8-blind-except
     # PEP 257 docstrings and PEP 484 annotations. Enforced on mlox_subset/
     # only -- see per-file-ignores for the legacy scripts and for the modules
     # still awaiting their typing pass after being relocated verbatim.

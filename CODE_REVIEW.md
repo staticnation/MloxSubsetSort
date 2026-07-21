@@ -735,6 +735,57 @@ destroyed widget must not blank the whole panel -- and every `subprocess` call
 builds its own argument list from `sys.executable` and paths this code
 constructed.
 
+### `BLE001`: enabled precisely because most of its findings are refusals
+
+Turning on `flake8-blind-except` flagged 68 `except Exception` sites. The easy
+readings are both wrong: they are not 68 bugs, and they are not 68 false
+positives. Each was read individually and landed in one of two buckets.
+
+**28 were narrowed**, because the raise-set was provable rather than guessed:
+
+| Was | Now | Why it's provable |
+|---|---|---|
+| `_toml.loads` | `ValueError` | `TOMLDecodeError` subclasses it in *both* `tomllib` and `tomli`, so this catches either without importing whichever one won |
+| `fetch_url_bytes` | `(OSError, ValueError)` | its own docstring's documented contract; `URLError`, socket timeouts and `ssl` errors all subclass `OSError` |
+| `json.load` + `open` | `(OSError, ValueError)` | `JSONDecodeError` and `UnicodeDecodeError` are both `ValueError` |
+| `subprocess.run(check=True)` | `(OSError, SubprocessError)` | covers `CalledProcessError` *and* `TimeoutExpired` |
+| `after_cancel`, `listbox.insert` | `tk.TclError` | the only thing Tk raises for a stale id or a destroyed widget |
+
+**40 stayed broad**, each with `# noqa: BLE001` and a one-line reason. They fall
+into four honest patterns, none of which narrowing would improve:
+
+- **Untrusted input.** Rule files and `plugin-order.yml` are community
+  downloads. Narrowing to `OSError` would let a decode or regex failure
+  propagate and take out a sort the other files could still complete.
+- **Worker-thread top levels.** These exist to catch the unexpected and write
+  `traceback.format_exc()` into the log panel. A narrowed one would let a
+  background thread die silently -- the exact failure mode the log exists to
+  make visible.
+- **Optional third-party imports.** `tkinterweb`/`tkhtmlview`/`webview` can
+  fail at import for reasons beyond `ImportError` (broken installs, missing
+  native libs). The app must degrade to the browser, not refuse to start.
+- **Deliberate backstops.** Sites that already catch the specific error above
+  and whose `except Exception` arm *is* the "unexpected" case by construction.
+
+The point of enabling the rule was never to reach zero findings. It was to make
+each blind catch a decision someone signed for, rather than an invisible
+default -- and to make the next one someone adds argue for itself.
+
+The split is not where you would guess: 21 of the 28 narrowings are in the GUI,
+which has no test coverage at all. That is defensible only because of *which*
+sites they are. Every GUI narrowing rests on a guarantee from Tk or the standard
+library -- `after_cancel` on a stale id raises `TclError`, `json.load` raises
+`ValueError`, a failed `write_text` raises `OSError` -- so the raise-set is a
+documented property of the callee, not an inference about this program's state.
+
+The GUI catches that wrap *our own* engine calls, worker-thread bodies, or
+third-party widgets were all left broad, precisely because there no such
+guarantee exists and there is no Tk in the test environment to catch a wrong
+guess. A bad narrowing there would convert a currently-survivable failure into
+a crash that nothing in CI would ever see. The engine's 7 narrowings are the
+cheap ones to trust: the 717-test suite and the differential baseline re-ran
+green after each.
+
 ### The GUI has no automated coverage, and that is stated rather than glossed
 
 There is no Tk in the test environment, so GUI changes were verified by what

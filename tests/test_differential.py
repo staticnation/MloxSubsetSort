@@ -251,7 +251,10 @@ def observations(core, data_dir) -> dict[str, str]:
             core.fetch_url_bytes(url, timeout=1)
         except ValueError as exc:  # noqa: PERF203 - per-URL isolation is the point
             rejections.append((url, type(exc).__name__, str(exc)[:60]))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 -- the observation IS the type
+            # This arm exists to *record* that a hostile URL raised something
+            # other than ValueError, so the baseline notices if the guard's
+            # failure mode ever changes. Narrowing would defeat the test.
             rejections.append((url, type(exc).__name__, "non-ValueError"))
         else:  # pragma: no cover - would mean the guard let it through
             rejections.append((url, "ALLOWED", ""))

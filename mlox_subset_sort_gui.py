@@ -96,10 +96,12 @@ except ImportError:
 HTMLViewer = None
 try:
     from tkinterweb import HtmlFrame as HTMLViewer  # supports load_file + SVG
-except Exception:
+except Exception:  # noqa: BLE001
+    # optional 3rd-party import; a broken install must not kill startup
     try:
         from tkhtmlview import HTMLScrolledText as HTMLViewer
-    except Exception:
+    except Exception:  # noqa: BLE001
+        # optional 3rd-party import; a broken install must not kill startup
         HTMLViewer = None
 
 # pywebview is the BEST in-app option: it hosts the OS webview (Edge WebView2 /
@@ -111,7 +113,8 @@ try:
 
     HAVE_PYWEBVIEW = True
     del _webview_probe
-except Exception:
+except Exception:  # noqa: BLE001
+    # optional 3rd-party import; a broken install must not kill startup
     HAVE_PYWEBVIEW = False
 
 
@@ -137,7 +140,7 @@ def app_base_dir():
         probe = base / ".mlox_write_test"
         probe.write_text("x", encoding="utf-8")
         probe.unlink()
-    except Exception:
+    except OSError:  # the probe is just write_text/unlink
         if os.name == "nt":
             root = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
         elif sys.platform == "darwin":
@@ -147,7 +150,7 @@ def app_base_dir():
         base = root / "MloxSubsetSort"
         try:
             base.mkdir(parents=True, exist_ok=True)
-        except Exception:
+        except OSError:  # mkdir on the per-user data dir
             base = Path.home()
     _APP_DIR = base
     return base
@@ -171,6 +174,11 @@ try:
 except ImportError as e:
     sys.exit(f"Couldn't import mlox_subset_sort.py -- make sure it's in the same folder.\n({e})")
 
+# The gettext marker. Imported after the sys.path fix-up above, which is what
+# makes the package findable; hence the E402. Every user-facing literal in this
+# file is wrapped in _() so `tools/make_pot.py` can extract it -- with no
+# catalogue installed this returns the English string unchanged.
+from mlox_subset import _  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # chrome palette -- the app-wide window/widget colours (as opposed to the
@@ -198,13 +206,55 @@ DARK = {
 }
 
 
+# ttk base themes that actually honour style.configure(background=...). The
+# Windows-native themes (vista/xpnative/winnative) and aqua draw widgets with
+# the OS renderer and silently ignore our colour options, so a chrome/theme
+# change would appear not to take -- notably in a PyInstaller *onefile* build,
+# where clam's Tcl file can fail to extract, theme_use("clam") then raises, and
+# without this we'd silently stay on vista. These four are defined in ttk's
+# Tcl library; we pick the first that's actually registered.
+_COLOR_CAPABLE_TTK_THEMES = ("clam", "alt", "default", "classic")
+
+
+def _select_color_capable_theme(style):
+    """Switch ``style`` to a theme that respects our colour options.
+
+    Returns the theme name now in use. Traced (not swallowed) so a frozen
+    build that lands on a native, colour-ignoring theme is diagnosable from
+    the log rather than presenting as "the colours just don't change".
+    """
+    try:
+        available = set(style.theme_names())
+    except tk.TclError:
+        available = set()
+    for name in _COLOR_CAPABLE_TTK_THEMES:
+        if name in available:
+            try:
+                style.theme_use(name)
+                core.trace(f"[theme] ttk base theme: using {name!r}")
+                return name
+            except tk.TclError:
+                continue
+    # nothing colour-capable is registered -- almost always a frozen build that
+    # didn't bundle ttk's Tcl theme files. Report loudly; colours on ttk
+    # widgets (buttons/frames/tabs) will not apply until the build includes them.
+    try:
+        active = style.theme_use()
+    except tk.TclError:
+        active = "?"
+    core.trace(
+        f"[theme] WARNING: no colour-capable ttk theme available "
+        f"(have {sorted(available)}); staying on {active!r} -- ttk widget "
+        f"colours will NOT apply. If this is a frozen .exe, the Tcl/tk ttk "
+        f"theme files were not bundled."
+    )
+    return active
+
+
 def apply_dark_theme(root):
     root.configure(bg=DARK["bg"])
     style = ttk.Style(root)
-    try:
-        style.theme_use("clam")
-    except Exception:
-        pass
+    _select_color_capable_theme(style)
 
     style.configure(
         ".",
@@ -695,7 +745,7 @@ def _theme_from_native(data):
             if alias in data:
                 try:
                     out[field] = _normalize_hex(data[alias])
-                except Exception:
+                except ValueError:  # _normalize_hex's only raise
                     pass
                 break
     # optional explicit chrome (window/button) colours -- any subset of the
@@ -707,7 +757,7 @@ def _theme_from_native(data):
             if key in raw_chrome:
                 try:
                     chrome[key] = _normalize_hex(raw_chrome[key])
-                except Exception:
+                except ValueError:  # _normalize_hex's only raise
                     pass
         if chrome:
             out["chrome"] = chrome
@@ -731,7 +781,7 @@ def parse_theme_file(path):
         parsed = _json.loads(text)
         if isinstance(parsed, dict):
             data = parsed
-    except Exception:
+    except ValueError:  # JSONDecodeError subclasses ValueError
         data = None
     if data is None:
         data = _parse_flat_kv_text(text)
@@ -863,15 +913,41 @@ def chrome_from_theme(theme: dict) -> dict[str, str]:
     return chrome
 
 
+# the syntax theme the chrome palette was last derived from. The runtime
+# re-apply walk needs the *theme* (not just the derived chrome) to recolour
+# the syntax-highlight tags in any open field-diff viewer.
+_ACTIVE_THEME: dict = THEME_PRESETS["Dark (default)"]
+
+
 def set_active_chrome(theme: dict) -> None:
     """Point the active chrome palette (``DARK``) at ``theme``, in place.
 
     Mutating in place is deliberate: the ~106 ``DARK[...]`` read sites then
     see the new colours without touching any of them. Widgets built after
     this pick the palette up automatically; *live* widgets are recoloured by
-    ``restyle_widget_tree`` (called from ``App._reapply_chrome``).
+    ``restyle_widget_tree`` (called from ``App._reapply_chrome``), which also
+    reads the remembered ``_ACTIVE_THEME`` for syntax-tag colours.
     """
+    global _ACTIVE_THEME
+    _ACTIVE_THEME = theme
     DARK.update(chrome_from_theme(theme))
+
+
+def _restyle_syntax_tags(widget) -> None:
+    """Re-colour a Text widget's field-diff syntax tags, if it has any.
+
+    The diff viewer's token tags (json_key/json_string/html_tag/...) are
+    configured once when the window opens; without this, a theme switch
+    left an open viewer's tokens in the old theme's colours even though its
+    chrome and background followed the new one. ``style_json_syntax_tags``
+    is written as a (re-)configure, so calling it again is all it takes.
+    """
+    try:
+        if "json_string" not in widget.tag_names():
+            return  # not a syntax-highlighted pane (log/preview/detail)
+        style_json_syntax_tags(widget, _json_syntax_colors(_ACTIVE_THEME))
+    except tk.TclError:
+        pass
 
 
 def _restyle_combobox_popdown(widget) -> None:
@@ -930,6 +1006,7 @@ def _restyle_plain_live(w) -> bool:
         # value) by _apply_log_theme after the walk
         style_plain_widget(w)
         _configure_each(w, {"background": DARK["log_bg"]})
+        _restyle_syntax_tags(w)
     elif isinstance(w, tk.Listbox):
         style_plain_widget(w)
     elif isinstance(w, tk.Canvas):
@@ -1279,7 +1356,7 @@ class PathField:
             # span columns 0-2 below still line up -- no stray 4th column
             btnbar = ttk.Frame(parent)
             btnbar.grid(row=row, column=2, padx=(8, 0), pady=4, sticky="e")
-            browse_btn = ttk.Button(btnbar, text="Browse...", command=browse)
+            browse_btn = ttk.Button(btnbar, text=_("Browse..."), command=browse)
             browse_btn.pack(side="left")
             ex_text, ex_cmd = extra_button[0], extra_button[1]
             ex_tip = extra_button[2] if len(extra_button) > 2 else None
@@ -1288,7 +1365,7 @@ class PathField:
             if ex_tip:
                 add_tooltip(self.extra_btn, ex_tip)
         else:
-            browse_btn = ttk.Button(parent, text="Browse...", command=browse)
+            browse_btn = ttk.Button(parent, text=_("Browse..."), command=browse)
             browse_btn.grid(row=row, column=2, padx=(8, 0), pady=4)
         self.browse_btn = browse_btn
 
@@ -1388,6 +1465,35 @@ class DragReorderListbox(tk.Listbox):
         self._moved = False
 
 
+def _app_version() -> str:
+    """The running build's version string, or ``?`` if it can't be determined."""
+    try:
+        from mlox_subset import __version__
+
+        return str(__version__)
+    except Exception:  # noqa: BLE001
+        # a version stamp must never be the thing that stops the app starting
+        return "?"
+
+
+def _build_stamp() -> str:
+    """Identifies *which* build is running: frozen exe vs source, and its mtime.
+
+    Exists because a stale .exe presents exactly like a code bug -- new source
+    on disk, old behaviour on screen, and nothing in the log to tell them
+    apart. Comparing this timestamp against the source tree settles it.
+    """
+    from datetime import datetime as _dt
+
+    frozen = bool(getattr(sys, "frozen", False))
+    target = Path(sys.executable) if frozen else Path(__file__)
+    try:
+        mtime = _dt.fromtimestamp(target.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+    except OSError:
+        mtime = "?"
+    return f"frozen={frozen} built={mtime} path={target.name}"
+
+
 _FIRED_ONCE: set[str] = set()
 
 
@@ -1421,7 +1527,7 @@ class RuleFilesPanel:
         self._get_rules_url = get_rules_url
         frame = ttk.LabelFrame(
             parent,
-            text="Rule files (priority = order below, last = highest -- drag rows to reorder)",
+            text=_("Rule files (priority = order below, last = highest -- drag rows to reorder)"),
         )
         frame.grid(row=row, column=0, columnspan=3, sticky="nsew", pady=(8, 4))
         frame.columnconfigure(0, weight=1)
@@ -1457,26 +1563,26 @@ class RuleFilesPanel:
         # doesn't create a tall dead-space next to a small list.
         btns = ttk.Frame(frame)
         btns.grid(row=0, column=1, sticky="n", padx=(0, 8), pady=8)
-        add_btn = ttk.Button(btns, text="Add File(s)...", command=self.add_files)
+        add_btn = ttk.Button(btns, text=_("Add File(s)..."), command=self.add_files)
         add_btn.pack(fill="x", pady=2)
-        add_tooltip(add_btn, "Browse for one or more mlox rule .txt files to add to the list.")
-        remove_btn = ttk.Button(btns, text="Remove Selected", command=self.remove_selected)
+        add_tooltip(add_btn, _("Browse for one or more mlox rule .txt files to add to the list."))
+        remove_btn = ttk.Button(btns, text=_("Remove Selected"), command=self.remove_selected)
         remove_btn.pack(fill="x", pady=2)
         add_tooltip(
             remove_btn,
-            "Remove the selected rule file from the list (doesn't delete anything on disk).",
+            _("Remove the selected rule file from the list (doesn't delete anything on disk)."),
         )
-        up_btn = ttk.Button(btns, text="Move Up", command=lambda: self.move(-1))
+        up_btn = ttk.Button(btns, text=_("Move Up"), command=lambda: self.move(-1))
         up_btn.pack(fill="x", pady=2)
-        add_tooltip(up_btn, "Move the selected rule file earlier (lower priority).")
-        down_btn = ttk.Button(btns, text="Move Down", command=lambda: self.move(1))
+        add_tooltip(up_btn, _("Move the selected rule file earlier (lower priority)."))
+        down_btn = ttk.Button(btns, text=_("Move Down"), command=lambda: self.move(1))
         down_btn.pack(fill="x", pady=2)
-        add_tooltip(down_btn, "Move the selected rule file later (higher priority).")
+        add_tooltip(down_btn, _("Move the selected rule file later (higher priority)."))
 
         actions = ttk.Frame(frame)
         actions.grid(row=1, column=0, columnspan=2, sticky="w", padx=8, pady=(3, 6))
         if on_new_rule is not None:
-            new_btn = ttk.Button(actions, text="New Rule...", command=on_new_rule)
+            new_btn = ttk.Button(actions, text=_("New Rule..."), command=on_new_rule)
             new_btn.pack(side="left", padx=(0, 6))
             add_tooltip(
                 new_btn,
@@ -1486,7 +1592,7 @@ class RuleFilesPanel:
                 "loads LAST so it wins conflicts. This is how rules for modern mods get "
                 "made -- consider contributing good ones upstream.",
             )
-        upd_btn = ttk.Button(actions, text="Update Rules...", command=self._update_rules)
+        upd_btn = ttk.Button(actions, text=_("Update Rules..."), command=self._update_rules)
         upd_btn.pack(side="left", padx=(0, 6))
         add_tooltip(
             upd_btn,
@@ -1498,7 +1604,7 @@ class RuleFilesPanel:
             "configurable via Sources...",
         )
         if on_sources is not None:
-            src_btn = ttk.Button(actions, text="Sources...", command=on_sources)
+            src_btn = ttk.Button(actions, text=_("Sources..."), command=on_sources)
             src_btn.pack(side="left", padx=(0, 6))
             add_tooltip(
                 src_btn,
@@ -1513,7 +1619,7 @@ class RuleFilesPanel:
         else:
             ttk.Label(
                 actions,
-                text="(install tkinterdnd2 to drag files in from your file manager)",
+                text=_("(install tkinterdnd2 to drag files in from your file manager)"),
                 foreground=DARK["fg_dim"],
             ).pack(side="left", padx=(12, 0))
 
@@ -1522,7 +1628,7 @@ class RuleFilesPanel:
         managed = [p for p in paths if Path(p).name.lower() in ("mlox_base.txt", "mlox_user.txt")]
         if not managed:
             messagebox.showinfo(
-                "Update rules", "Add mlox_base.txt and/or mlox_user.txt to the list first."
+                _("Update rules"), _("Add mlox_base.txt and/or mlox_user.txt to the list first.")
             )
             return
         ages = core.rule_file_ages(managed)
@@ -1530,7 +1636,7 @@ class RuleFilesPanel:
             f"  {n}: {'age unknown' if d is None else f'~{d} day(s) old'}" for n, d in ages
         )
         if not messagebox.askyesno(
-            "Update rules",
+            _("Update rules"),
             f"Download the current rules from github.com/{core.RULES_REPO} over these "
             f"files?\n\n{age_txt}\n\nTimestamped .bak copies of the old files are kept.",
         ):
@@ -1541,9 +1647,10 @@ class RuleFilesPanel:
         def work():
             try:
                 report = core.update_rule_files(managed, url_template=custom)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
+                # worker thread: must report into the dialog, never vanish silently
                 report = [f"FAILED: {e}"]
-            self.listbox.after(0, lambda: messagebox.showinfo("Update rules", "\n".join(report)))
+            self.listbox.after(0, lambda: messagebox.showinfo(_("Update rules"), "\n".join(report)))
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -1605,7 +1712,8 @@ def attach_typeahead(listbox, strip=None, feedback=None):
         if feedback:
             try:
                 feedback(st["buf"])
-            except Exception:
+            except Exception:  # noqa: BLE001
+                # caller-supplied feedback callback into Tk; purely cosmetic
                 pass
 
     def _clear(_e=None):
@@ -1616,7 +1724,7 @@ def attach_typeahead(listbox, strip=None, feedback=None):
         if st["after"] is not None:
             try:
                 listbox.after_cancel(st["after"])
-            except Exception:
+            except tk.TclError:  # after_cancel on a stale/expired id
                 pass
         st["after"] = listbox.after(1200, _clear)
 
@@ -1750,21 +1858,21 @@ class ReorderPanel:
 
         btns = ttk.Frame(frame)
         btns.grid(row=0, column=1, sticky="n", padx=(0, 8), pady=8)
-        up_btn = ttk.Button(btns, text="Move Up", command=lambda: self.move(-1))
+        up_btn = ttk.Button(btns, text=_("Move Up"), command=lambda: self.move(-1))
         up_btn.pack(fill="x", pady=2)
         add_tooltip(
             up_btn,
             "Move the selected row(s) one position earlier. Works with a multi-"
             "selection; you can also drag a contiguous block up with the mouse.",
         )
-        down_btn = ttk.Button(btns, text="Move Down", command=lambda: self.move(1))
+        down_btn = ttk.Button(btns, text=_("Move Down"), command=lambda: self.move(1))
         down_btn.pack(fill="x", pady=2)
         add_tooltip(
             down_btn,
             "Move the selected row(s) one position later. Works with a multi-"
             "selection; you can also drag a contiguous block down with the mouse.",
         )
-        toggle_btn = ttk.Button(btns, text="Disable / Enable", command=self.toggle_selected)
+        toggle_btn = ttk.Button(btns, text=_("Disable / Enable"), command=self.toggle_selected)
         toggle_btn.pack(fill="x", pady=(10, 2))
         add_tooltip(
             toggle_btn,
@@ -1933,7 +2041,7 @@ class DataPathOrderPanel(ReorderPanel):
     def __init__(self, parent):
         super().__init__(
             parent,
-            title="Data path order -- drag to adjust (highlighted = your custom paths)",
+            title=_("Data path order -- drag to adjust (highlighted = your custom paths)"),
             reset_label="Reset to Computed Order",
             listbox_tooltip="The data= folder order, populated after '1. Sort' if 'Sort data= paths "
             "too' is checked. Drag rows to manually adjust before Exporting -- "
@@ -1988,6 +2096,53 @@ class App:
         self._session = None  # reused disk-backed Tes3ConvSession
         self._keep_json = False
 
+        # Announce the running build in the Log panel on EVERY start, with no
+        # flag required. "Am I actually running the build I just made?" should
+        # be answerable by looking at the window, not by finding a trace file
+        # -- which for a frozen .exe lives next to the .exe, not next to the
+        # source, and is therefore easy to collect a stale copy of.
+        self.log_queue.put(f"MLOX Subset Sort {_app_version()} -- {_build_stamp()}\n")
+
+        # Trace is OFF by default. It's turned on by the --trace flag (set by main()
+        # into _TRACE_REQUEST) or the MLOX_SUBSET_TRACE env var -- either can name a
+        # log file; otherwise mlox_subset_sort_trace.log is written next to the app.
+        # Enabled BEFORE theming and widget construction, deliberately: the theme
+        # startup path calls trace_first_fire(), whose once-per-session labels
+        # would otherwise be consumed while tracing was still off -- and then a
+        # later theme switch would emit no [smoke] line at all, which reads as
+        # exactly the dead-callback failure the markers exist to expose.
+        try:
+            req = (
+                _TRACE_REQUEST
+                if _TRACE_REQUEST is not None
+                else os.environ.get("MLOX_SUBSET_TRACE")
+            )
+            if req:
+                if isinstance(req, str) and req.lower() not in ("1", "true", "yes", "on", ""):
+                    path = req
+                else:
+                    path = app_base_dir() / "mlox_subset_sort_trace.log"
+                core.set_trace_file(path)
+                core.trace("GUI started")
+                # Build stamp, first thing after the header. A frozen .exe is
+                # easy to rebuild-and-forget, and a stale one is otherwise
+                # indistinguishable from a code bug: you get the old behaviour
+                # with the new source sitting right there. Version + the source
+                # file's mtime pin exactly which build is running.
+                core.trace(f"build: version={_app_version()} {_build_stamp()}")
+                core.trace(
+                    f"viewers: frozen={bool(getattr(sys, 'frozen', False))} "
+                    f"pywebview={HAVE_PYWEBVIEW} "
+                    f"HTMLViewer={HTMLViewer.__module__ + '.' + HTMLViewer.__name__ if HTMLViewer else None} "
+                    f"load_file={HTMLViewer is not None and hasattr(HTMLViewer, 'load_file')}"
+                )
+                # absolute path: for a frozen .exe this is next to the .exe,
+                # which is NOT where the source tree's copy lives
+                self.log_queue.put(f"[trace] writing debug trace to: {Path(path).resolve()}\n")
+        except Exception:  # noqa: BLE001
+            # enabling tracing must never be the thing that breaks startup
+            pass
+
         self._custom_log_themes = {}  # name -> theme dict, imported by the user
         self._load_custom_log_themes()
         self.log_theme_var = tk.StringVar(value="Dark (default)")
@@ -2008,31 +2163,6 @@ class App:
         self._build_widgets()
         self._load_settings()
         self._apply_log_theme(self.log_theme_var.get(), announce=False)
-        # Trace is OFF by default. It's turned on by the --trace flag (set by main()
-        # into _TRACE_REQUEST) or the MLOX_SUBSET_TRACE env var -- either can name a
-        # log file; otherwise mlox_subset_sort_trace.log is written next to the app.
-        try:
-            req = (
-                _TRACE_REQUEST
-                if _TRACE_REQUEST is not None
-                else os.environ.get("MLOX_SUBSET_TRACE")
-            )
-            if req:
-                if isinstance(req, str) and req.lower() not in ("1", "true", "yes", "on", ""):
-                    path = req
-                else:
-                    path = app_base_dir() / "mlox_subset_sort_trace.log"
-                core.set_trace_file(path)
-                core.trace("GUI started")
-                core.trace(
-                    f"viewers: frozen={bool(getattr(sys, 'frozen', False))} "
-                    f"pywebview={HAVE_PYWEBVIEW} "
-                    f"HTMLViewer={HTMLViewer.__module__ + '.' + HTMLViewer.__name__ if HTMLViewer else None} "
-                    f"load_file={HTMLViewer is not None and hasattr(HTMLViewer, 'load_file')}"
-                )
-                self.log_queue.put(f"[trace] writing debug trace to: {path}\n")
-        except Exception:
-            pass
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(80, self._poll_log_queue)
 
@@ -2045,7 +2175,7 @@ class App:
         """Just the saved theme name, readable before any widget exists."""
         try:
             d = json.loads(self._settings_file().read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, ValueError):  # unreadable file / bad JSON
             return None
         name = d.get("log_theme")
         return name if isinstance(name, str) else None
@@ -2080,7 +2210,7 @@ class App:
 
         try:
             d = json.loads(self._settings_file().read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, ValueError):  # unreadable file / bad JSON
             return
         setters = {
             "cfg": self.cfg_var,
@@ -2115,7 +2245,7 @@ class App:
         for p in d.get("rules") or []:
             try:
                 self.rules_panel.listbox.insert("end", p)
-            except Exception:
+            except tk.TclError:  # insert into a destroyed listbox
                 pass
         if isinstance(d.get("log_theme"), str) and d["log_theme"] in self._theme_names():
             self.log_theme_var.set(d["log_theme"])
@@ -2128,7 +2258,7 @@ class App:
             self._settings_file().write_text(
                 json.dumps(self._gather_settings(), indent=2), encoding="utf-8"
             )
-        except Exception:
+        except (OSError, TypeError, ValueError):  # unwritable path / unserialisable value
             pass
 
     def _on_close(self):
@@ -2137,7 +2267,8 @@ class App:
         if s is not None:
             try:
                 s.cleanup()  # removes the temp JSON dump (no-op if 'keep' was set)
-            except Exception:
+            except Exception:  # noqa: BLE001
+                # close path: an escape here would stop the window being destroyed
                 pass
         self.root.destroy()
 
@@ -2281,7 +2412,9 @@ class App:
             note = ttk.Label(
                 top,
                 foreground=DARK["fg_dim"],
-                text="Drag & drop is disabled (tkinterdnd2 not installed) -- use the Browse buttons below.",
+                text=_(
+                    "Drag & drop is disabled (tkinterdnd2 not installed) -- use the Browse buttons below."
+                ),
             )
             note.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
             start_row = 1
@@ -2353,7 +2486,7 @@ class App:
         # the source customizations.toml's own listName is kept; when generating
         # from a subset file alone it would otherwise fall back to the useless
         # placeholder "generated", so setting this is recommended in that case.
-        list_name_label = ttk.Label(top, text="list name (optional):")
+        list_name_label = ttk.Label(top, text=_("list name (optional):"))
         list_name_label.grid(row=start_row + 4, column=0, sticky="w", padx=(0, 8), pady=4)
         list_name_entry = ttk.Entry(top, textvariable=self.list_name_var)
         list_name_entry.grid(row=start_row + 4, column=1, sticky="ew", pady=4)
@@ -2415,7 +2548,7 @@ class App:
         )
 
         # options
-        opts = ttk.LabelFrame(top, text="Options")
+        opts = ttk.LabelFrame(top, text=_("Options"))
         opts.grid(row=start_row + 8, column=0, columnspan=3, sticky="ew", pady=(8, 4))
         for i in range(3):
             opts.columnconfigure(i, weight=1)
@@ -2430,7 +2563,7 @@ class App:
         self.keep_json_var = tk.BooleanVar(value=False)
 
         dry_chk = ttk.Checkbutton(
-            opts, text="Dry run (preview only, don't write files)", variable=self.dry_run_var
+            opts, text=_("Dry run (preview only, don't write files)"), variable=self.dry_run_var
         )
         dry_chk.grid(row=0, column=0, sticky="w", padx=8, pady=4)
         add_tooltip(
@@ -2440,7 +2573,7 @@ class App:
         )
 
         write_cfg_chk = ttk.Checkbutton(
-            opts, text="Write openmw.cfg directly", variable=self.write_cfg_var
+            opts, text=_("Write openmw.cfg directly"), variable=self.write_cfg_var
         )
         write_cfg_chk.grid(row=0, column=1, sticky="w", padx=8, pady=4)
         add_tooltip(
@@ -2450,7 +2583,7 @@ class App:
         )
 
         sort_data_chk = ttk.Checkbutton(
-            opts, text="Sort data= paths too", variable=self.sort_data_paths_var
+            opts, text=_("Sort data= paths too"), variable=self.sort_data_paths_var
         )
         sort_data_chk.grid(row=0, column=2, sticky="w", padx=8, pady=4)
         add_tooltip(
@@ -2463,7 +2596,7 @@ class App:
         )
 
         no_backup_chk = ttk.Checkbutton(
-            opts, text="Skip .bak backup of openmw.cfg", variable=self.no_backup_var
+            opts, text=_("Skip .bak backup of openmw.cfg"), variable=self.no_backup_var
         )
         no_backup_chk.grid(row=1, column=0, sticky="w", padx=8, pady=4)
         add_tooltip(
@@ -2474,7 +2607,7 @@ class App:
 
         no_warn_chk = ttk.Checkbutton(
             opts,
-            text="Skip mlox Conflict/Requires/Note warnings",
+            text=_("Skip mlox Conflict/Requires/Note warnings"),
             variable=self.no_predicate_warnings_var,
         )
         no_warn_chk.grid(row=1, column=1, sticky="w", padx=8, pady=4)
@@ -2486,11 +2619,13 @@ class App:
         )
 
         create_doc_chk = ttk.Checkbutton(
-            opts, text="Create subset text document (on Scan)", variable=self.create_subset_doc_var
+            opts,
+            text=_("Create subset text document (on Scan)"),
+            variable=self.create_subset_doc_var,
         )
         create_doc_chk.grid(row=1, column=2, sticky="w", padx=8, pady=4)
 
-        excl_lbl = ttk.Label(opts, text="Exclude from conflict / cell scans:")
+        excl_lbl = ttk.Label(opts, text=_("Exclude from conflict / cell scans:"))
         excl_lbl.grid(row=2, column=0, sticky="w", padx=8, pady=4)
         excl_entry = ttk.Entry(opts, textvariable=self.exclude_var)
         excl_entry.grid(row=2, column=1, columnspan=2, sticky="ew", padx=8, pady=4)
@@ -2504,7 +2639,7 @@ class App:
         add_tooltip(excl_entry, excl_tip)
         keep_json_chk = ttk.Checkbutton(
             opts,
-            text="Keep tes3conv JSON dump",
+            text=_("Keep tes3conv JSON dump"),
             variable=self.keep_json_var,
             command=self._on_keep_json_toggle,
         )
@@ -2653,7 +2788,7 @@ class App:
         log_container.columnconfigure(0, weight=1)
         log_container.rowconfigure(0, weight=1)
 
-        log_frame = ttk.LabelFrame(log_container, text="Log")
+        log_frame = ttk.LabelFrame(log_container, text=_("Log"))
         log_frame.grid(row=0, column=0, sticky="nsew")
         log_frame.rowconfigure(0, weight=1)
         log_frame.columnconfigure(0, weight=1)
@@ -2689,14 +2824,16 @@ class App:
 
         log_btns = ttk.Frame(log_frame)
         log_btns.grid(row=1, column=0, sticky="ew", padx=6, pady=(0, 6))
-        clear_btn = ttk.Button(log_btns, text="Clear Log", command=self.clear_log)
+        clear_btn = ttk.Button(log_btns, text=_("Clear Log"), command=self.clear_log)
         clear_btn.pack(side="left")
-        add_tooltip(clear_btn, "Clear the log panel. Doesn't affect the order panels or any files.")
-        save_btn = ttk.Button(log_btns, text="Save Log As...", command=self.save_log)
+        add_tooltip(
+            clear_btn, _("Clear the log panel. Doesn't affect the order panels or any files.")
+        )
+        save_btn = ttk.Button(log_btns, text=_("Save Log As..."), command=self.save_log)
         save_btn.pack(side="left", padx=(8, 0))
-        add_tooltip(save_btn, "Save the current log contents to a text file.")
+        add_tooltip(save_btn, _("Save the current log contents to a text file."))
 
-        ttk.Label(log_btns, text="Theme:").pack(side="left", padx=(16, 4))
+        ttk.Label(log_btns, text=_("Theme:")).pack(side="left", padx=(16, 4))
         self.theme_combo = ttk.Combobox(
             log_btns,
             textvariable=self.log_theme_var,
@@ -2718,7 +2855,7 @@ class App:
             "imported.",
         )
         import_theme_btn = ttk.Button(
-            log_btns, text="Import Theme...", command=self._import_log_theme
+            log_btns, text=_("Import Theme..."), command=self._import_log_theme
         )
         import_theme_btn.pack(side="left", padx=(8, 0))
         add_tooltip(
@@ -2740,7 +2877,7 @@ class App:
     def _load_custom_log_themes(self):
         try:
             raw = json.loads(self._custom_themes_file().read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, ValueError):  # unreadable file / bad JSON
             return
         if not isinstance(raw, dict):
             return
@@ -2749,7 +2886,7 @@ class App:
                 for field in _THEME_REQUIRED:
                     theme[field] = _normalize_hex(theme[field])
                 self._custom_log_themes[str(name)] = theme
-            except Exception:
+            except (KeyError, TypeError, ValueError):  # missing key / non-dict entry / bad hex
                 continue  # skip a corrupted entry rather than lose the rest
 
     def _save_custom_log_themes(self):
@@ -2757,7 +2894,7 @@ class App:
             self._custom_themes_file().write_text(
                 json.dumps(self._custom_log_themes, indent=2), encoding="utf-8"
             )
-        except Exception:
+        except (OSError, TypeError, ValueError):  # unwritable path / unserialisable value
             pass
 
     def _theme_names(self):
@@ -2779,7 +2916,13 @@ class App:
         # per-switch (not just first-fire): theme changes are rare and
         # user-initiated, and the name identifies *which* palette is active
         core.trace(f"[theme] chrome palette now follows: {name}")
-        self._reapply_chrome()
+        # never let a re-apply problem (e.g. a platform/build-specific Tk quirk)
+        # stop the log theme itself from applying below
+        try:
+            self._reapply_chrome()
+        except Exception:  # noqa: BLE001
+            # diagnostic guard: must not raise onward
+            core.trace("[theme] re-apply pass failed:\n" + traceback.format_exc())
         log_text = getattr(self, "log_text", None)
         if log_text is None or not log_text.winfo_exists():
             return
@@ -2815,19 +2958,20 @@ class App:
                 except tk.TclError:
                     pass
         trace_first_fire("theme runtime re-apply walk (restyle_widget_tree)")
-        core.trace(f"[theme] re-applied chrome to {count} live widgets")
+        core.trace(f"[theme] re-applied chrome to {count} plain-tk widgets (ttk covered by Style)")
 
     def _import_log_theme(self):
         path = filedialog.askopenfilename(
-            title="Import syntax highlighting theme",
+            title=_("Import syntax highlighting theme"),
             filetypes=(("Theme files", "*.json *.yaml *.yml"), ("All files", "*.*")),
         )
         if not path:
             return
         try:
             name, theme = parse_theme_file(path)
-        except Exception as e:
-            messagebox.showerror("Import failed", f"Couldn't import that theme:\n\n{e}")
+        except (OSError, ValueError) as e:
+            # parse_theme_file's documented contract, plus read errors
+            messagebox.showerror(_("Import failed"), f"Couldn't import that theme:\n\n{e}")
             return
         base_name, existing = name, self._theme_names()
         n = 2
@@ -2841,7 +2985,7 @@ class App:
         self._apply_log_theme(name, announce=False)
         self.status_var.set(f"Imported and applied theme: {name}")
         messagebox.showinfo(
-            "Theme imported", f'Imported "{name}" and set it as the active log theme.'
+            _("Theme imported"), f'Imported "{name}" and set it as the active log theme.'
         )
 
     # -- log handling --------------------------------------------------------
@@ -2982,7 +3126,7 @@ class App:
             emit_toml = self.emit_toml_var.get().strip()
 
         if errors:
-            messagebox.showerror("Missing input", "\n".join(f"- {e}" for e in errors))
+            messagebox.showerror(_("Missing input"), "\n".join(f"- {e}" for e in errors))
             return None
 
         return types.SimpleNamespace(
@@ -3013,14 +3157,14 @@ class App:
         in a worker thread since a big tree can take a moment to walk."""
         if self.worker_running:
             return
-        folder = filedialog.askdirectory(title="Select the mods folder to scan")
+        folder = filedialog.askdirectory(title=_("Select the mods folder to scan"))
         if not folder:
             return
         make_doc = self.create_subset_doc_var.get()
         out = None
         if make_doc:
             out = filedialog.asksaveasfilename(
-                title="Save generated subset file as",
+                title=_("Save generated subset file as"),
                 defaultextension=".txt",
                 initialfile="mod_scan_results.txt",
                 filetypes=(("Text files", "*.txt"), ("All files", "*.*")),
@@ -3030,7 +3174,7 @@ class App:
         self.worker_running = True
         self.sort_button.configure(state="disabled")
         self.export_button.configure(state="disabled")
-        self.status_var.set("Scanning mods folder...")
+        self.status_var.set(_("Scanning mods folder..."))
         threading.Thread(target=self._scan_worker, args=(folder, out), daemon=True).start()
 
     def _scan_worker(self, folder, out):
@@ -3051,7 +3195,8 @@ class App:
                     f"Scan complete -- {n_folders} folder(s), {n_plugins} plugin(s). "
                     f"Held in memory (no file written)."
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: scan failed:\n" + traceback.format_exc())
             status = "Scan failed -- see log."
         finally:
@@ -3081,7 +3226,7 @@ class App:
         self._current_plan = None
         self.worker_running = True
         self.sort_button.configure(state="disabled")
-        self.status_var.set("Sorting...")
+        self.status_var.set(_("Sorting..."))
 
         thread = threading.Thread(target=self._sort_worker, args=(args,), daemon=True)
         thread.start()
@@ -3103,7 +3248,8 @@ class App:
         except SystemExit as e:
             writer.write(f"\nERROR: {e}\n")
             status = "Sort failed -- see log."
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: unexpected exception:\n" + traceback.format_exc())
             status = "Sort failed -- see log."
         finally:
@@ -3178,7 +3324,7 @@ class App:
             snap_then is not None
             and self._cfg_snapshot() != snap_then
             and not messagebox.askyesno(
-                "openmw.cfg changed",
+                _("openmw.cfg changed"),
                 "openmw.cfg has changed on disk since you ran '1. Sort' (did "
                 "momw-configurator re-run?).\n\nThe order on screen was computed "
                 "against the OLD contents. It's safer to re-Sort first.\n\n"
@@ -3192,7 +3338,7 @@ class App:
                 "" if self.no_backup_var.get() else " (a .bak-<timestamp> copy will be made first)"
             )
             if not messagebox.askyesno(
-                "Overwrite customizations.toml?",
+                _("Overwrite customizations.toml?"),
                 f"This will overwrite:\n{args.emit_toml}\n\nin place{backup_note}. Continue?",
             ):
                 return
@@ -3206,7 +3352,7 @@ class App:
         self.worker_running = True
         self.sort_button.configure(state="disabled")
         self.export_button.configure(state="disabled")
-        self.status_var.set("Exporting...")
+        self.status_var.set(_("Exporting..."))
 
         thread = threading.Thread(
             target=self._export_worker,
@@ -3234,7 +3380,8 @@ class App:
         except SystemExit as e:
             writer.write(f"\nERROR: {e}\n")
             status = "Export failed -- see log."
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: unexpected exception:\n" + traceback.format_exc())
             status = "Export failed -- see log."
         finally:
@@ -3304,7 +3451,8 @@ class App:
         if s is not None:  # engine path changed -> retire the old one
             try:
                 s.cleanup()
-            except Exception:
+            except Exception:  # noqa: BLE001
+                # retiring a replaced engine session; failure must not block the new one
                 pass
         s = core.Tes3ConvSession(conv, dump_dir=str(self._tes3conv_json_dir()), keep=keep)
         self._session = s
@@ -3326,7 +3474,7 @@ class App:
         self.sort_button.configure(state="disabled")
         self.export_button.configure(state="disabled")
         self.conflicts_button.configure(state="disabled")
-        self.status_var.set("Scanning for conflicts...")
+        self.status_var.set(_("Scanning for conflicts..."))
         threading.Thread(
             target=self._conflicts_worker, args=(order, dirs, subset), daemon=True
         ).start()
@@ -3361,7 +3509,7 @@ class App:
                 conv = core.find_tes3conv(explicit=self._tes3conv_override, extra_dirs=[cfg_dir])
                 session = self._get_session(conv)
                 print("\n" + "=" * 70)
-                print(" TES3 RECORD CONFLICTS (read-only)")
+                print(_(" TES3 RECORD CONFLICTS (read-only)"))
                 print("=" * 70)
                 if session:
                     print(f"  Engine: tes3conv ({conv}) -- field-level diffs available.")
@@ -3379,7 +3527,8 @@ class App:
                 f"Conflicts: {stats.get('conflicts', 0)} record(s), "
                 f"{n_sub} involving your mods. See the Conflicts window."
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: conflict scan failed:\n" + traceback.format_exc())
             status = "Conflict scan failed -- see log."
         finally:
@@ -3418,7 +3567,7 @@ class App:
             self.resource_button,
         ):
             b.configure(state="disabled")
-        self.status_var.set("Building cell map...")
+        self.status_var.set(_("Building cell map..."))
         threading.Thread(
             target=self._cellmap_worker, args=(order, dirs, subset), daemon=True
         ).start()
@@ -3442,7 +3591,7 @@ class App:
                 conv = core.find_tes3conv(explicit=self._tes3conv_override, extra_dirs=[cfg_dir])
                 session = self._get_session(conv)
                 print("\n" + "=" * 70)
-                print(" CELL MAP")
+                print(_(" CELL MAP"))
                 print("=" * 70)
                 print(f"  Engine: {'tes3conv' if conv else 'built-in parser'}")
                 cov = core.build_cell_coverage(order, index, subset_names=subset, session=session)
@@ -3472,7 +3621,8 @@ class App:
                 )
                 print(f"  Map written to: {path}")
             status = f"Cell map ready ({len(cov['exterior'])} exterior, {len(cov['interior'])} interior)."
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: cell map failed:\n" + traceback.format_exc())
             status = "Cell map failed -- see log."
         finally:
@@ -3543,7 +3693,7 @@ class App:
                 cmd = [sys.executable, os.path.abspath(__file__), "--show-map", ap]  # noqa: PTH100
             core.trace(f"cell map: launching pywebview child: {cmd}")
             subprocess.Popen(cmd, **nw)
-        except Exception:
+        except (OSError, ValueError):  # Popen: missing exe or bad argv
             core.trace("cell map: pywebview child launch FAILED:\n" + traceback.format_exc())
             self._open_cell_map_browser()
 
@@ -3558,21 +3708,24 @@ class App:
         win.geometry("1000x720")
         bar = ttk.Frame(win, padding=6)
         bar.pack(fill="x")
-        ttk.Button(bar, text="Save HTML...", command=self._save_cell_map).pack(side="left")
-        ttk.Button(bar, text="Open in browser", command=self._open_cell_map_browser).pack(
+        ttk.Button(bar, text=_("Save HTML..."), command=self._save_cell_map).pack(side="left")
+        ttk.Button(bar, text=_("Open in browser"), command=self._open_cell_map_browser).pack(
             side="left", padx=(8, 0)
         )
-        ttk.Button(bar, text="Close", command=win.destroy).pack(side="right")
+        ttk.Button(bar, text=_("Close"), command=win.destroy).pack(side="right")
         try:
             viewer = HTMLViewer(win)
             viewer.pack(fill="both", expand=True)
             viewer.load_file(path)  # reads from disk, not an in-memory string
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # third-party HTML widget; falls back to the browser
             ttk.Label(
                 win,
                 foreground="#ffb454",
                 padding=8,
-                text="(inline render failed — use 'Open in browser' for the full map)",
+                text=_(
+                    "(inline render failed — use 'Open in browser' for the full map)",
+                ),
             ).pack(anchor="w")
 
     def _open_cell_map_browser(self):
@@ -3581,7 +3734,7 @@ class App:
             return
         try:
             webbrowser.open(Path(p).resolve().as_uri())  # correct file URI on Win/Linux/macOS
-        except Exception:
+        except (OSError, ValueError, webbrowser.Error):  # as_uri on a relative path / no browser
             pass
 
     def _save_cell_map(self):
@@ -3589,7 +3742,7 @@ class App:
         if not src or not Path(src).exists():
             return
         out = filedialog.asksaveasfilename(
-            title="Save cell map",
+            title=_("Save cell map"),
             defaultextension=".html",
             initialfile="cell_map.html",
             filetypes=(("HTML files", "*.html"), ("All files", "*.*")),
@@ -3603,7 +3756,7 @@ class App:
                 shutil.copyfile(src, out)
             self.status_var.set(f"Cell map saved: {out}")
         except OSError as e:
-            messagebox.showerror("Save failed", str(e))
+            messagebox.showerror(_("Save failed"), str(e))
 
     # -- resource (VFS) conflicts --------------------------------------------
 
@@ -3612,7 +3765,7 @@ class App:
             return
         dirs = self._plan_scan_dirs()
         if not dirs:
-            self.status_var.set("No data= folders to scan.")
+            self.status_var.set(_("No data= folders to scan."))
             return
         subset_dirs = self._current_plan.get("custom_data_dirs") or core.pending_custom_dirs(
             self._current_plan.get("raw_toml_data_inserts"), self._current_plan.get("data_inserts")
@@ -3626,7 +3779,7 @@ class App:
             self.resource_button,
         ):
             b.configure(state="disabled")
-        self.status_var.set("Scanning data folders for file conflicts...")
+        self.status_var.set(_("Scanning data folders for file conflicts..."))
         threading.Thread(
             target=self._resource_worker, args=(dirs, subset_dirs), daemon=True
         ).start()
@@ -3637,12 +3790,13 @@ class App:
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
                 print("\n" + "=" * 70)
-                print(" DATA-PATH RESOURCE (VFS) CONFLICTS")
+                print(_(" DATA-PATH RESOURCE (VFS) CONFLICTS"))
                 print("=" * 70)
                 conflicts, stats = core.detect_resource_conflicts(dirs, subset_dirs=subset_dirs)
                 print(core.format_resource_report(conflicts, stats, limit=200))
             status = f"Resource conflicts: {stats.get('conflicts', 0)} file(s). See the window."
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: resource scan failed:\n" + traceback.format_exc())
             status = "Resource scan failed -- see log."
         finally:
@@ -3688,7 +3842,7 @@ class App:
             justify="left",
         ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
-        ttk.Label(top, text="mlox rules URL template:").grid(row=1, column=0, sticky="w")
+        ttk.Label(top, text=_("mlox rules URL template:")).grid(row=1, column=0, sticky="w")
         rent = ttk.Entry(top, textvariable=self.rules_url_var)
         rent.grid(row=1, column=1, sticky="ew", padx=6, pady=2)
         add_tooltip(
@@ -3701,7 +3855,9 @@ class App:
             row=2, column=1, sticky="w", padx=6
         )
 
-        ttk.Label(top, text="plugin-order.yml URL:").grid(row=3, column=0, sticky="w", pady=(10, 0))
+        ttk.Label(top, text=_("plugin-order.yml URL:")).grid(
+            row=3, column=0, sticky="w", pady=(10, 0)
+        )
         pent = ttk.Entry(top, textvariable=self.plugin_order_url_var)
         pent.grid(row=3, column=1, sticky="ew", padx=6, pady=(10, 2))
         add_tooltip(
@@ -3725,7 +3881,7 @@ class App:
             t = self.rules_url_var.get().strip()
             if t and "{name}" not in t:
                 messagebox.showerror(
-                    "Download sources",
+                    _("Download sources"),
                     "The rules URL template must contain {name} (it's replaced "
                     "with the rule filename).",
                     parent=win,
@@ -3734,8 +3890,8 @@ class App:
             self._save_settings()
             win.destroy()
 
-        ttk.Button(row, text="Reset to defaults", command=_reset).pack(side="left")
-        ttk.Button(row, text="Save & Close", command=_close).pack(side="right")
+        ttk.Button(row, text=_("Reset to defaults"), command=_reset).pack(side="left")
+        ttk.Button(row, text=_("Save & Close"), command=_close).pack(side="right")
 
     # -- mlox user-rules maker -----------------------------------------------
 
@@ -3764,7 +3920,7 @@ class App:
         top.pack(fill="both", expand=True)
         top.columnconfigure(1, weight=1)
 
-        ttk.Label(top, text="rules file:").grid(row=0, column=0, sticky="w")
+        ttk.Label(top, text=_("rules file:")).grid(row=0, column=0, sticky="w")
         self._rm_file_var = tk.StringVar(value=self._default_rules_file())
         fent = ttk.Entry(top, textvariable=self._rm_file_var)
         fent.grid(row=0, column=1, sticky="ew", padx=6)
@@ -3775,9 +3931,9 @@ class App:
             "overwritten by 'Update Rules...'. It's auto-added to the rule-files "
             "list LAST, so your rules win conflicts.",
         )
-        ttk.Button(top, text="Browse...", command=self._rm_browse_file).grid(row=0, column=2)
+        ttk.Button(top, text=_("Browse..."), command=self._rm_browse_file).grid(row=0, column=2)
 
-        tf = ttk.LabelFrame(top, text="Rule type")
+        tf = ttk.LabelFrame(top, text=_("Rule type"))
         tf.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(8, 4))
         self._rm_kind = tk.StringVar(value="order")
         for i, (v, lbl) in enumerate(
@@ -3791,7 +3947,7 @@ class App:
                 tf, text=lbl, value=v, variable=self._rm_kind, command=self._rm_refresh
             ).grid(row=i, column=0, sticky="w", padx=8, pady=1)
 
-        pf = ttk.LabelFrame(top, text="Plugins (drag order matters for [Order])")
+        pf = ttk.LabelFrame(top, text=_("Plugins (drag order matters for [Order])"))
         pf.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=4)
         top.rowconfigure(2, weight=1)
         pf.columnconfigure(0, weight=1)
@@ -3813,17 +3969,17 @@ class App:
 
         rbtns = ttk.Frame(pf)
         rbtns.grid(row=0, column=2, sticky="n", padx=8, pady=8)
-        b = ttk.Button(rbtns, text="From plugin panel", command=self._rm_add_from_panel)
+        b = ttk.Button(rbtns, text=_("From plugin panel"), command=self._rm_add_from_panel)
         b.pack(fill="x", pady=2)
         add_tooltip(
             b,
             "Add the rows currently SELECTED in the main plugin-order panel, in "
             "their displayed order (Ctrl/Shift-click there to multi-select first).",
         )
-        ttk.Button(rbtns, text="Remove", command=self._rm_remove).pack(fill="x", pady=2)
+        ttk.Button(rbtns, text=_("Remove"), command=self._rm_remove).pack(fill="x", pady=2)
         ttk.Button(
             rbtns,
-            text="Clear",
+            text=_("Clear"),
             command=lambda: (self._rm_list.delete(0, "end"), self._rm_refresh()),
         ).pack(fill="x", pady=2)
         af = ttk.Frame(pf)
@@ -3838,9 +3994,9 @@ class App:
             "must end in a plugin extension) and press Enter or Add.",
         )
         aent.bind("<Return>", lambda e: self._rm_add_typed())
-        ttk.Button(af, text="Add", command=self._rm_add_typed).grid(row=0, column=1, padx=(6, 0))
+        ttk.Button(af, text=_("Add"), command=self._rm_add_typed).grid(row=0, column=1, padx=(6, 0))
 
-        ttk.Label(top, text="comment (optional):").grid(row=3, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(top, text=_("comment (optional):")).grid(row=3, column=0, sticky="w", pady=(4, 0))
         self._rm_comment = tk.StringVar()
         cent = ttk.Entry(top, textvariable=self._rm_comment)
         cent.grid(row=3, column=1, columnspan=2, sticky="ew", padx=6, pady=(4, 0))
@@ -3853,7 +4009,7 @@ class App:
             "later contribute the rule upstream.",
         )
 
-        vf = ttk.LabelFrame(top, text="Preview")
+        vf = ttk.LabelFrame(top, text=_("Preview"))
         vf.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(8, 4))
         self._rm_preview = tk.Text(
             vf,
@@ -3871,8 +4027,8 @@ class App:
 
         row = ttk.Frame(top)
         row.grid(row=5, column=0, columnspan=3, sticky="ew")
-        ttk.Button(row, text="Append Rule", command=self._rm_append).pack(side="left")
-        ttk.Button(row, text="Close", command=win.destroy).pack(side="right")
+        ttk.Button(row, text=_("Append Rule"), command=self._rm_append).pack(side="left")
+        ttk.Button(row, text=_("Close"), command=win.destroy).pack(side="right")
         self._rm_refresh()
 
     def _rm_names(self):
@@ -3881,7 +4037,7 @@ class App:
     def _rm_add_from_panel(self):
         sel = sorted(self.order_panel.listbox.curselection())
         if not sel:
-            self.status_var.set("Select row(s) in the plugin-order panel first.")
+            self.status_var.set(_("Select row(s) in the plugin-order panel first."))
             return
         have = {n.lower() for n in self._rm_names()}
         for i in sel:
@@ -3923,7 +4079,8 @@ class App:
             parts.append(f"[{titles[kw]}]")
             parts += names
             return "\n".join(parts)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+            # live rule preview; any failure becomes preview text
             return f"error: {e}"
 
     def _rm_browse_file(self):
@@ -3933,7 +4090,7 @@ class App:
         current value alone rather than blanking it.
         """
         chosen = filedialog.asksaveasfilename(
-            title="Personal rules file",
+            title=_("Personal rules file"),
             initialfile="mlox_my_rules.txt",
             defaultextension=".txt",
             filetypes=(("Rules", "*.txt"),),
@@ -3954,11 +4111,11 @@ class App:
     def _rm_append(self):
         path = self._rm_file_var.get().strip()
         if not path:
-            messagebox.showerror("New rule", "Set a rules file first.", parent=self._rm_win)
+            messagebox.showerror(_("New rule"), _("Set a rules file first."), parent=self._rm_win)
             return
         if Path(path).name.lower() in ("mlox_base.txt", "mlox_user.txt"):
             messagebox.showerror(
-                "New rule",
+                _("New rule"),
                 "Don't append personal rules to mlox_base.txt / mlox_user.txt -- "
                 "'Update Rules...' overwrites those. Pick your own file "
                 "(e.g. mlox_my_rules.txt).",
@@ -3985,7 +4142,7 @@ class App:
                     f"  '{a}'  before  '{b}'  (your cfg has them the other way)" for a, b in bad
                 )
                 if not messagebox.askyesno(
-                    "Rule conflicts with the curated order",
+                    _("Rule conflicts with the curated order"),
                     f"This [Order] rule contradicts the frozen curated (MOMW) order for:\n\n"
                     f"{pairs}\n\nmlox will DISCARD those orderings (it never reorders the "
                     f"curated list), so the rule won't take effect for them. Write it "
@@ -3996,7 +4153,7 @@ class App:
         try:
             core.append_user_rule(path, self._rm_kind.get(), names, comment=self._rm_comment.get())
         except (ValueError, OSError) as e:
-            messagebox.showerror("New rule", str(e), parent=self._rm_win)
+            messagebox.showerror(_("New rule"), str(e), parent=self._rm_win)
             return
         # make sure the file is in the rules list, LAST (= highest priority)
         if str(path).lower() not in {str(p).lower() for p in self.rules_panel.get_paths()}:
@@ -4012,8 +4169,11 @@ class App:
         p = self.plugin_order_yml_var.get().strip()
         if not p:
             messagebox.showinfo(
-                "Update plugin-order.yml",
-                "Set the plugin-order.yml path first (or Browse to where you " "want it created).",
+                _("Update plugin-order.yml"),
+                _(
+                    "Set the plugin-order.yml path first (or Browse to where you "
+                    "want it created)."
+                ),
             )
             return
         ages = core.rule_file_ages([p])
@@ -4024,7 +4184,7 @@ class App:
             else f"your copy is ~{age} day(s) old"
         )
         if not messagebox.askyesno(
-            "Update plugin-order.yml",
+            _("Update plugin-order.yml"),
             f"Download the current plugin-order.yml from MOMW?\n\n{age_txt}.\n\n"
             f"The download is validated before anything is written; a timestamped "
             f".bak of the old file is kept.",
@@ -4037,17 +4197,18 @@ class App:
         def work():
             try:
                 report = core.update_plugin_order_yml(p, urls=urls)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
+                # worker thread: must report into the dialog, never vanish silently
                 report = [f"FAILED: {e}"]
             self.root.after(
                 0,
                 lambda: (
-                    messagebox.showinfo("Update plugin-order.yml", "\n".join(report)),
+                    messagebox.showinfo(_("Update plugin-order.yml"), "\n".join(report)),
                     self.status_var.set(report[0] if report else ""),
                 ),
             )
 
-        self.status_var.set("Downloading plugin-order.yml...")
+        self.status_var.set(_("Downloading plugin-order.yml..."))
         threading.Thread(target=work, daemon=True).start()
 
     # -- savegame dependency check -------------------------------------------
@@ -4059,11 +4220,11 @@ class App:
             else list((self._current_plan or {}).get("base_order_names") or [])
         )
         if not order:
-            self.status_var.set("Run '1. Sort' first so there's a load order to check against.")
+            self.status_var.set(_("Run '1. Sort' first so there's a load order to check against."))
             return
         start = Path.home() / "Documents" / "My Games" / "OpenMW"
         p = filedialog.askopenfilename(
-            title="Choose an OpenMW save",
+            title=_("Choose an OpenMW save"),
             initialdir=str(start if start.is_dir() else (self._cfg_dir() or ".")),
             filetypes=(("OpenMW saves", "*.omwsave"), ("All files", "*.*")),
         )
@@ -4085,7 +4246,7 @@ class App:
                 )
             self.status_var.set(f"Save check: {len(missing)} missing dependencies! See the log.")
             messagebox.showwarning(
-                "Save Check",
+                _("Save Check"),
                 f"{Path(p).name} depends on {len(missing)} content file(s) that are NOT in "
                 f"the current load order:\n\n  "
                 + "\n  ".join(missing[:12])
@@ -4097,7 +4258,7 @@ class App:
             writer.write("  All dependencies present -- this save is safe with this order.\n")
             self.status_var.set(f"Save check: all {len(files)} dependencies present.")
             messagebox.showinfo(
-                "Save Check",
+                _("Save Check"),
                 f"{Path(p).name}: all {len(files)} content files it needs are in "
                 f"the current load order. Safe to export.",
             )
@@ -4110,17 +4271,18 @@ class App:
         dirs = self._plan_scan_dirs()
         cfg = self.cfg_var.get().strip() or None
         if not dirs and not cfg:
-            self.status_var.set("Set openmw.cfg (or run a Sort) so I know where to look.")
+            self.status_var.set(_("Set openmw.cfg (or run a Sort) so I know where to look."))
             return
         self.worker_running = True
-        self.status_var.set("Scanning for backups...")
+        self.status_var.set(_("Scanning for backups..."))
         threading.Thread(target=self._backups_worker, args=(dirs, cfg), daemon=True).start()
 
     def _backups_worker(self, dirs, cfg):
         try:
             found = core.scan_backups(dirs, cfg_path=cfg)
             status = f"Found {len(found)} backup file(s)."
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+            # worker top level: status line carries the failure
             found, status = [], f"Backup scan failed: {e}"
         finally:
             self.worker_running = False
@@ -4170,7 +4332,7 @@ class App:
             if not sel:
                 return
             if not messagebox.askyesno(
-                "Restore",
+                _("Restore"),
                 f"Copy {len(sel)} backup(s) over their " f"originals (overwriting them)?",
                 parent=win,
             ):
@@ -4194,7 +4356,7 @@ class App:
             if not sel:
                 return
             if not messagebox.askyesno(
-                "Delete", f"Permanently delete {len(sel)} backup " f"file(s)?", parent=win
+                _("Delete"), f"Permanently delete {len(sel)} backup " f"file(s)?", parent=win
             ):
                 return
             ok = 0
@@ -4208,12 +4370,14 @@ class App:
             win.destroy()
             self.on_backups()
 
-        ttk.Button(btns, text="Restore Selected", command=_restore).pack(side="left", padx=(0, 6))
-        ttk.Button(btns, text="Delete Selected", command=_delete).pack(side="left", padx=(0, 6))
-        ttk.Button(btns, text="Refresh", command=lambda: (win.destroy(), self.on_backups())).pack(
-            side="left"
+        ttk.Button(btns, text=_("Restore Selected"), command=_restore).pack(
+            side="left", padx=(0, 6)
         )
-        ttk.Button(btns, text="Close", command=win.destroy).pack(side="right")
+        ttk.Button(btns, text=_("Delete Selected"), command=_delete).pack(side="left", padx=(0, 6))
+        ttk.Button(
+            btns, text=_("Refresh"), command=lambda: (win.destroy(), self.on_backups())
+        ).pack(side="left")
+        ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
 
     # -- lint (tes3lint-style native checks) ---------------------------------
 
@@ -4235,7 +4399,7 @@ class App:
             self.lint_button,
         ):
             b.configure(state="disabled")
-        self.status_var.set("Linting plugins...")
+        self.status_var.set(_("Linting plugins..."))
         threading.Thread(target=self._lint_worker, args=(order, dirs, subset), daemon=True).start()
 
     def _lint_worker(self, order, dirs, subset):
@@ -4244,7 +4408,7 @@ class App:
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
                 print("\n" + "=" * 70)
-                print(" LINT (tes3lint-style checks, native)")
+                print(_(" LINT (tes3lint-style checks, native)"))
                 print("=" * 70)
                 index = core.PluginFileIndex(dirs)
                 subset_origins = {str(s).lower(): "your mod" for s in subset}
@@ -4260,10 +4424,11 @@ class App:
                     for w in warnings:
                         print(f"\n{w}")
                 else:
-                    print("\n  No lint findings. Clean bill of health.")
+                    print(_("\n  No lint findings. Clean bill of health."))
             n = stats.get("warnings", 0)
             status = f"Lint: {n} finding(s). See the log." if n else "Lint: no findings."
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: lint failed:\n" + traceback.format_exc())
             status = "Lint failed -- see log."
         finally:
@@ -4322,7 +4487,7 @@ class App:
         top.columnconfigure(1, weight=1)
 
         # tes3cmd binary path (auto-detected; MOMW Tools Pack ships tes3cmd.exe)
-        ttk.Label(top, text="tes3cmd:").grid(row=0, column=0, sticky="w")
+        ttk.Label(top, text=_("tes3cmd:")).grid(row=0, column=0, sticky="w")
         self._t3_path_var = tk.StringVar(value=self._tes3cmd_override or "")
         ent = ttk.Entry(top, textvariable=self._t3_path_var)
         ent.grid(row=0, column=1, sticky="ew", padx=6)
@@ -4336,13 +4501,13 @@ class App:
 
         def _browse():
             p = filedialog.askopenfilename(
-                title="Locate tes3cmd",
+                title=_("Locate tes3cmd"),
                 filetypes=(("tes3cmd", "tes3cmd*"), ("Executables", "*.exe"), ("All files", "*.*")),
             )
             if p:
                 self._t3_path_var.set(p)
 
-        ttk.Button(top, text="Browse...", command=_browse).grid(row=0, column=2, padx=(0, 0))
+        ttk.Button(top, text=_("Browse..."), command=_browse).grid(row=0, column=2, padx=(0, 0))
 
         detected = core.find_tes3cmd(explicit=None, extra_dirs=[self._cfg_dir()])
         note = (
@@ -4355,7 +4520,7 @@ class App:
         )
 
         # plugin list
-        lf = ttk.LabelFrame(top, text="Plugins to run on")
+        lf = ttk.LabelFrame(top, text=_("Plugins to run on"))
         lf.grid(row=2, column=0, columnspan=3, sticky="nsew", pady=(4, 6))
         top.rowconfigure(2, weight=1)
         lf.columnconfigure(0, weight=1)
@@ -4373,14 +4538,14 @@ class App:
 
         btns = ttk.Frame(lf)
         btns.grid(row=0, column=2, sticky="n", padx=8, pady=8)
-        b1 = ttk.Button(btns, text="My mods (last sort)", command=self._t3_add_from_plan)
+        b1 = ttk.Button(btns, text=_("My mods (last sort)"), command=self._t3_add_from_plan)
         b1.pack(fill="x", pady=2)
         add_tooltip(
             b1,
             "Add every custom mod from the last Sort whose file could be located "
             "(curated plugins are the list's job, not yours).",
         )
-        b1b = ttk.Button(btns, text="MOMW needs-cleaning", command=self._t3_add_needs_cleaning)
+        b1b = ttk.Button(btns, text=_("MOMW needs-cleaning"), command=self._t3_add_needs_cleaning)
         b1b.pack(fill="x", pady=2)
         add_tooltip(
             b1b,
@@ -4388,15 +4553,15 @@ class App:
             "needs_cleaning (MOMW's own 'clean this one' list), resolved across "
             "the data folders. Requires the plugin-order.yml path on the main tab.",
         )
-        b2 = ttk.Button(btns, text="Add file(s)...", command=self._t3_add_files)
+        b2 = ttk.Button(btns, text=_("Add file(s)..."), command=self._t3_add_files)
         b2.pack(fill="x", pady=2)
-        b3 = ttk.Button(btns, text="Remove selected", command=self._t3_remove_selected)
+        b3 = ttk.Button(btns, text=_("Remove selected"), command=self._t3_remove_selected)
         b3.pack(fill="x", pady=2)
-        b4 = ttk.Button(btns, text="Clear", command=lambda: self._t3_set_files([]))
+        b4 = ttk.Button(btns, text=_("Clear"), command=lambda: self._t3_set_files([]))
         b4.pack(fill="x", pady=2)
 
         # command choice
-        cf = ttk.LabelFrame(top, text="Command")
+        cf = ttk.LabelFrame(top, text=_("Command"))
         cf.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(0, 6))
         self._t3_cmd_var = tk.StringVar(value="sync")
         for i, (val, label) in enumerate(self.T3_COMMANDS):
@@ -4405,7 +4570,7 @@ class App:
             )
         xf = ttk.Frame(cf)
         xf.grid(row=len(self.T3_COMMANDS), column=0, sticky="ew", padx=8, pady=(4, 6))
-        ttk.Label(xf, text="extra arguments:").pack(side="left")
+        ttk.Label(xf, text=_("extra arguments:")).pack(side="left")
         self._t3_extra_var = tk.StringVar()
         xent = ttk.Entry(xf, textvariable=self._t3_extra_var, width=48)
         xent.pack(side="left", padx=6, fill="x", expand=True)
@@ -4417,14 +4582,14 @@ class App:
 
         row = ttk.Frame(top)
         row.grid(row=4, column=0, columnspan=3, sticky="ew")
-        self._t3_run_btn = ttk.Button(row, text="Run", command=self._t3_run)
+        self._t3_run_btn = ttk.Button(row, text=_("Run"), command=self._t3_run)
         self._t3_run_btn.pack(side="left")
         add_tooltip(
             self._t3_run_btn,
             "Output streams to the main Log. Modifying commands ask "
             "for confirmation first; tes3cmd makes its own backups.",
         )
-        ttk.Button(row, text="Close", command=win.destroy).pack(side="right")
+        ttk.Button(row, text=_("Close"), command=win.destroy).pack(side="right")
 
     def _cfg_dir(self):
         c = self.cfg_var.get().strip()
@@ -4449,7 +4614,7 @@ class App:
         plan = self._current_plan or {}
         subset = plan.get("subset") or []
         if not subset:
-            self.status_var.set("Run '1. Sort' first so I know which mods are yours.")
+            self.status_var.set(_("Run '1. Sort' first so I know which mods are yours."))
             return
         index = core.PluginFileIndex(self._plan_scan_dirs())
         found, missing = [], 0
@@ -4472,18 +4637,19 @@ class App:
         """Add active plugins that MOMW's plugin-order.yml flags needs_cleaning."""
         yml = self.plugin_order_yml_var.get().strip()
         if not yml:
-            self.status_var.set("Set the plugin-order.yml path on the main tab first.")
+            self.status_var.set(_("Set the plugin-order.yml path on the main tab first."))
             return
         try:
             entries = core.parse_plugin_order_yml(Path(yml))
             nc = core.needs_cleaning_set(entries)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+            # untrusted plugin-order.yml; status line carries the failure
             self.status_var.set(f"Couldn't read plugin-order.yml: {e}")
             return
         plan = self._current_plan or {}
         active = plan.get("final_order") or plan.get("base_order_names") or []
         if not active:
-            self.status_var.set("Run '1. Sort' first so I know the active load order.")
+            self.status_var.set(_("Run '1. Sort' first so I know the active load order."))
             return
         index = core.PluginFileIndex(self._plan_scan_dirs())
         have = {str(p).lower() for p in self._t3_files}
@@ -4504,7 +4670,7 @@ class App:
 
     def _t3_add_files(self):
         ps = filedialog.askopenfilenames(
-            title="Choose plugin file(s)",
+            title=_("Choose plugin file(s)"),
             filetypes=(("TES3 plugins", "*.esp *.esm *.omwaddon *.omwgame"), ("All files", "*.*")),
         )
         if ps:
@@ -4524,11 +4690,11 @@ class App:
         if cmd == "sync":
             if not files:
                 messagebox.showinfo(
-                    "tes3cmd", "Add at least one plugin file first.", parent=self._t3_win
+                    _("tes3cmd"), _("Add at least one plugin file first."), parent=self._t3_win
                 )
                 return
             if not messagebox.askyesno(
-                "Resync master sizes",
+                _("Resync master sizes"),
                 f"Rewrite the recorded master sizes in {len(files)} plugin file(s) to "
                 f"match the installed masters?\n\nOnly the 8-byte size fields change; a "
                 f"one-time .masterfix.bak copy of each file is kept.",
@@ -4538,7 +4704,7 @@ class App:
             self.worker_running = True
             self._t3_run_btn.configure(state="disabled")
             self.sort_button.configure(state="disabled")
-            self.status_var.set("Resyncing master sizes...")
+            self.status_var.set(_("Resyncing master sizes..."))
             threading.Thread(target=self._t3_sync_worker, args=(files,), daemon=True).start()
             return
 
@@ -4548,7 +4714,7 @@ class App:
         if explicit:
             if not Path(explicit).is_file():
                 messagebox.showerror(
-                    "tes3cmd",
+                    _("tes3cmd"),
                     f"'{explicit}' does not exist. Fix the path " f"or clear it to auto-detect.",
                     parent=self._t3_win,
                 )
@@ -4558,19 +4724,19 @@ class App:
             exe = core.find_tes3cmd(extra_dirs=[self._cfg_dir()])
         if not exe:
             messagebox.showerror(
-                "tes3cmd",
-                "tes3cmd not found. Browse to the compiled " "tes3cmd.exe (MOMW Tools Pack).",
+                _("tes3cmd"),
+                _("tes3cmd not found. Browse to the compiled " "tes3cmd.exe (MOMW Tools Pack)."),
                 parent=self._t3_win,
             )
             return
         argv, err = core.tes3cmd_invocation(exe)
         if err:
-            messagebox.showerror("tes3cmd", err, parent=self._t3_win)
+            messagebox.showerror(_("tes3cmd"), err, parent=self._t3_win)
             return
         self._tes3cmd_override = explicit  # persist a manual path in settings
         if not files:
             messagebox.showinfo(
-                "tes3cmd", "Add at least one plugin file first.", parent=self._t3_win
+                _("tes3cmd"), _("Add at least one plugin file first."), parent=self._t3_win
             )
             return
         if cmd == "clean":
@@ -4578,7 +4744,7 @@ class App:
             if guarded:
                 files = [f for f in files if Path(f).name.lower() not in self.T3_NEVER_CLEAN]
                 messagebox.showwarning(
-                    "tes3cmd",
+                    _("tes3cmd"),
                     "Skipping the vanilla master(s):\n\n  "
                     + "\n  ".join(Path(f).name for f in guarded)
                     + "\n\nMorrowind.esm, Tribunal.esm and Bloodmoon.esm are never cleaned -- "
@@ -4603,7 +4769,7 @@ class App:
                 )
             )
             if not messagebox.askyesno(
-                "tes3cmd clean",
+                _("tes3cmd clean"),
                 f"Clean {len(files)} plugin file(s)?\n\nEach is staged into a private "
                 f"'Data Files' with its masters so tes3cmd sees the full VFS; plugins "
                 f"whose masters can't be found are skipped. A one-time .preclean.bak "
@@ -4705,7 +4871,7 @@ class App:
                         after = staged.read_bytes()
                         if after == before:
                             ok += 1
-                            print("  no changes -- already clean")
+                            print(_("  no changes -- already clean"))
                             continue
                         # copy the cleaned result back over the original,
                         # keeping a one-time backup of the original
@@ -4721,7 +4887,8 @@ class App:
                             f"  cleaned: {len(before)} -> {len(after)} bytes "
                             f"(backup: {bak.name})"
                         )
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
+                        # per-file isolation: one unclean plugin must not abort the batch
                         fail += 1
                         print(f"  ERROR: {e}")
             if cmd == "clean":
@@ -4733,7 +4900,8 @@ class App:
                     status += "  Re-run '1. Sort' to refresh checks."
             else:
                 status = f"tes3cmd {cmd}: {ok} ok, {fail} failed. See the log."
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: tes3cmd run failed:\n" + traceback.format_exc())
             status = "tes3cmd run failed -- see log."
         finally:
@@ -4746,7 +4914,7 @@ class App:
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
                 print("\n" + "=" * 70)
-                print(" MASTER-SIZE RESYNC (in-app, VFS-aware)")
+                print(_(" MASTER-SIZE RESYNC (in-app, VFS-aware)"))
                 print("=" * 70)
                 dirs = self._plan_scan_dirs()
                 extra = [str(Path(f).parent) for f in files]
@@ -4776,7 +4944,8 @@ class App:
             )
             if fixed:
                 status += "  Re-run '1. Sort' to refresh the master check."
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # worker top level: reports the traceback into the log panel
             writer.write("\nERROR: resync failed:\n" + traceback.format_exc())
             status = "Resync failed -- see log."
         finally:
@@ -4788,7 +4957,7 @@ class App:
         try:
             if self._t3_win and self._t3_win.winfo_exists():
                 self._t3_run_btn.configure(state="normal")
-        except Exception:
+        except tk.TclError:  # the tes3cmd window may already be gone
             pass
         self.status_var.set(status)
 
@@ -4816,7 +4985,10 @@ class App:
         ).pack(side="left")
         self._res_subset_only = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            top, text="Only my paths", variable=self._res_subset_only, command=self._refill_res_tree
+            top,
+            text=_("Only my paths"),
+            variable=self._res_subset_only,
+            command=self._refill_res_tree,
         ).pack(side="right")
         # tree (top) and the detail panel (bottom) live in a draggable vertical
         # split, so the detail box can be resized -- grab the grip to grow it.
@@ -4881,10 +5053,10 @@ class App:
         tree.bind("<<TreeviewSelect>>", on_sel)
         btns = ttk.Frame(win, padding=8)
         btns.pack(fill="x")
-        ttk.Button(btns, text="Save report (CSV)...", command=self._save_resource_csv).pack(
+        ttk.Button(btns, text=_("Save report (CSV)..."), command=self._save_resource_csv).pack(
             side="left"
         )
-        ttk.Button(btns, text="Close", command=win.destroy).pack(side="right")
+        ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
         self._refill_res_tree()
 
     def _refill_res_tree(self):
@@ -4909,7 +5081,7 @@ class App:
         if not getattr(self, "_all_res", None):
             return
         path = filedialog.asksaveasfilename(
-            title="Save resource conflicts",
+            title=_("Save resource conflicts"),
             defaultextension=".csv",
             initialfile="resource_conflicts.csv",
             filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
@@ -4920,7 +5092,7 @@ class App:
             core.write_resource_csv(path, self._all_res)
             self.status_var.set(f"Saved: {path}")
         except OSError as e:
-            messagebox.showerror("Save failed", str(e))
+            messagebox.showerror(_("Save failed"), str(e))
 
     def _show_conflict_window(self, conflicts, stats):
         self._all_conflicts = conflicts
@@ -4947,7 +5119,7 @@ class App:
         self._conf_subset_only = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             top,
-            text="Only my mods",
+            text=_("Only my mods"),
             variable=self._conf_subset_only,
             command=self._refill_conflict_tree,
         ).pack(side="right")
@@ -4964,7 +5136,7 @@ class App:
                 else "Field-level diffs: OFF — record-level only. Set a tes3conv binary, then re-check."
             ),
         ).pack(side="left")
-        ttk.Button(bar, text="Set tes3conv...", command=self._set_tes3conv).pack(
+        ttk.Button(bar, text=_("Set tes3conv..."), command=self._set_tes3conv).pack(
             side="left", padx=(8, 0)
         )
 
@@ -5043,14 +5215,14 @@ class App:
 
         btns = ttk.Frame(win, padding=8)
         btns.pack(fill="x")
-        ttk.Button(btns, text="Save report (CSV)...", command=self._save_conflicts_csv).pack(
+        ttk.Button(btns, text=_("Save report (CSV)..."), command=self._save_conflicts_csv).pack(
             side="left"
         )
         if self._conf_session is not None:
-            ttk.Button(btns, text="Dump tes3conv JSON...", command=self._dump_conflict_json).pack(
-                side="left", padx=(8, 0)
-            )
-        ttk.Button(btns, text="Close", command=win.destroy).pack(side="right")
+            ttk.Button(
+                btns, text=_("Dump tes3conv JSON..."), command=self._dump_conflict_json
+            ).pack(side="left", padx=(8, 0))
+        ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
 
         self._refill_conflict_tree()
 
@@ -5059,7 +5231,7 @@ class App:
         folder you pick."""
         if self._conf_session is None or not self._conf_paths:
             return
-        folder = filedialog.askdirectory(title="Dump tes3conv JSON to folder")
+        folder = filedialog.askdirectory(title=_("Dump tes3conv JSON to folder"))
         if not folder:
             return
         try:
@@ -5068,15 +5240,18 @@ class App:
             )
             self.status_var.set(f"Wrote {n} JSON file(s) to {folder}")
             if n:
-                messagebox.showinfo("JSON dumped", f"Wrote {n} tes3conv JSON file(s) to:\n{folder}")
+                messagebox.showinfo(
+                    _("JSON dumped"), f"Wrote {n} tes3conv JSON file(s) to:\n{folder}"
+                )
             else:
                 messagebox.showwarning(
-                    "Nothing written",
+                    _("Nothing written"),
                     "No JSON was written. The tes3conv session may have been cleared — "
                     "re-run Check Conflicts, then dump again.",
                 )
-        except Exception as e:
-            messagebox.showerror("Dump failed", str(e))
+        except Exception as e:  # noqa: BLE001
+            # user-facing dump; any failure becomes an error dialog
+            messagebox.showerror(_("Dump failed"), str(e))
 
     def _on_conflict_select(self):
         tree = getattr(self, "_conf_tree", None)
@@ -5131,7 +5306,8 @@ class App:
             keys, per, diff = core.diff_record_fields(
                 self._conf_session, conflict, self._conf_paths
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # field diff is best-effort; degrades to '(field diff unavailable)'
             ftree.insert("", "end", values=["(field diff unavailable)"] + [""] * len(plugins))
             return
         self._conf_fdiff = {"plugins": plugins, "per": per}  # for the expand popup
@@ -5194,7 +5370,7 @@ class App:
                 st.configure(wrap=w)
                 st.configure(state="disabled")
 
-        ttk.Checkbutton(bar, text="Word wrap", variable=wrap_var, command=_apply_wrap).pack(
+        ttk.Checkbutton(bar, text=_("Word wrap"), variable=wrap_var, command=_apply_wrap).pack(
             side="left"
         )
         ttk.Label(
@@ -5233,7 +5409,8 @@ class App:
             else:
                 try:
                     text = json.dumps(val, indent=2, ensure_ascii=False, default=str)
-                except Exception:
+                except (TypeError, ValueError):
+                    # default=str handles most; circular refs raise ValueError
                     text = repr(val)
             frame = ttk.Frame(nb)
             # colored per-plugin header inside the tab: orange = your custom mod
@@ -5270,27 +5447,28 @@ class App:
                         highlight_plain_text_with_html(st, text, json_colors)
                     else:
                         highlight_json_with_html(st, text, json_colors)
-                except Exception:
+                except Exception:  # noqa: BLE001
+                    # highlighting is cosmetic -- never let it block showing the value
                     pass  # highlighting is cosmetic -- never let it block showing the value
             st.configure(state="disabled")
             texts.append(st)
             label = (p[:22] + "…") if len(p) > 24 else p
             tab = ("★ " if cust else "") + label + (" ✓" if i == len(plugins) - 1 else "")
             nb.add(frame, text=tab)
-        ttk.Button(win, text="Close", command=win.destroy).pack(pady=(0, 8))
+        ttk.Button(win, text=_("Close"), command=win.destroy).pack(pady=(0, 8))
 
     def _set_tes3conv(self):
         p = filedialog.askopenfilename(
-            title="Locate the tes3conv executable", filetypes=(("All files", "*.*"),)
+            title=_("Locate the tes3conv executable"), filetypes=(("All files", "*.*"),)
         )
         if not p:
             return
         self._tes3conv_override = p
         self.status_var.set(
-            "tes3conv set — click 'Check Conflicts' again to re-scan with field diffs."
+            _("tes3conv set — click 'Check Conflicts' again to re-scan with field diffs.")
         )
         messagebox.showinfo(
-            "tes3conv set",
+            _("tes3conv set"),
             "tes3conv location saved.\n\nClick 'Check Conflicts' again to re-scan; the "
             "field comparison will then populate when you select a record.",
         )
@@ -5319,7 +5497,7 @@ class App:
         if not getattr(self, "_all_conflicts", None):
             return
         path = filedialog.asksaveasfilename(
-            title="Save conflict report",
+            title=_("Save conflict report"),
             defaultextension=".csv",
             initialfile="tes3_conflicts.csv",
             filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
@@ -5330,7 +5508,7 @@ class App:
             core.write_conflict_csv(path, self._all_conflicts)
             self.status_var.set(f"Conflict report saved: {path}")
         except OSError as e:
-            messagebox.showerror("Save failed", str(e))
+            messagebox.showerror(_("Save failed"), str(e))
 
 
 def _run_pywebview_window(path):
@@ -5342,7 +5520,7 @@ def _run_pywebview_window(path):
     instead of silently falling back to the browser."""
     try:
         logf = str(app_base_dir() / "cell_map_viewer.log")
-    except Exception:
+    except (OSError, RuntimeError):  # app_base_dir may fall back to Path.home()
         logf = None
 
     def _log(msg):
@@ -5353,7 +5531,7 @@ def _run_pywebview_window(path):
 
             with Path(logf).open("a", encoding="utf-8") as fh:
                 fh.write(f"{_dt.now():%Y-%m-%d %H:%M:%S}  {msg}\n")
-        except Exception:
+        except OSError:  # appending to the viewer log
             pass
 
     try:
@@ -5363,13 +5541,14 @@ def _run_pywebview_window(path):
         webview.create_window("Cell Map", Path(path).resolve().as_uri(), width=1050, height=760)
         webview.start()
         _log("pywebview: window closed cleanly")
-    except Exception:
+    except Exception:  # noqa: BLE001
+        # child-process main: logs the traceback, then falls back to the browser
         import traceback as _tb
 
         _log("pywebview FAILED -- falling back to browser:\n" + _tb.format_exc())
         try:
             webbrowser.open(Path(path).resolve().as_uri())
-        except Exception:
+        except (OSError, ValueError, webbrowser.Error):  # as_uri on a relative path / no browser
             pass
 
 

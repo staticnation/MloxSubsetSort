@@ -5,8 +5,10 @@ piece is moved with its behaviour pinned by ``tests/test_differential.py``, so
 a move that changes an answer fails loudly rather than shipping a different
 load order.
 
-The engine re-exports these names, so ``core.mlox_pattern_to_regex`` and the
-like keep working for existing callers and tests during the transition.
+This package is the one place these names live. The engine module used to
+re-export them so ``core.mlox_pattern_to_regex`` also resolved; that shim was
+removed in 3.0 and every caller -- engine, GUI and tests -- now imports from
+here (``CODE_REVIEW.md`` §23).
 """
 
 from __future__ import annotations

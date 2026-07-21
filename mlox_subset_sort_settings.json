@@ -1,0 +1,26 @@
+{
+  "cfg": "E:/OpenMW/config/openmw.cfg",
+  "customizations": "E:/OpenMW/config/momw-customizations.toml",
+  "subset_file": "",
+  "emit_toml": "",
+  "list_name": "total-overhaul",
+  "plugin_order_yml": "E:/OpenMW/config/plugin-order.yml",
+  "tes3conv": "",
+  "exclude": "",
+  "tes3cmd": "",
+  "plugin_order_url": "",
+  "rules_url_template": "",
+  "rules": [
+    "E:\\OpenMW\\mlox\\mlox_base.txt",
+    "E:\\OpenMW\\mlox\\mlox_user.txt"
+  ],
+  "write_toml_inplace": false,
+  "dry_run": true,
+  "write_cfg": false,
+  "sort_data_paths": true,
+  "no_backup": false,
+  "no_predicate_warnings": false,
+  "create_subset_doc": false,
+  "keep_json": true,
+  "log_theme": "Monokai Pro"
+}

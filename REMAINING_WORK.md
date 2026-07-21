@@ -7,13 +7,13 @@
 Re-run the gates before and after any change:
 
 ```bash
-python -m pytest                       # 802 tests: 801 passed, 1 skipped
+python -m pytest                       # 984 tests: 983 passed, 1 skipped
 python -m ruff check .                 # style, naming, imports, security, BLE, DTZ, D, ANN
 python -m black --check .              # formatting
-python -m mypy                         # PEP 484 -- gates all 35 shipped files
+python -m mypy                         # PEP 484 -- gates all 46 shipped files
 python tools/check_undefined.py mlox_subset_sort_gui.py
 python tools/check_placeholders.py     # i18n %(key)s vs dict keys
-python tools/make_pot.py --check       # .pot must be current (312 messages)
+python tools/make_pot.py --check       # .pot must be current (393 messages)
 ```
 
 The single skip is `test_differential.py`'s `--update-baseline` guard, and it
@@ -39,7 +39,7 @@ non-conformance but *documented deviation*, which is a different thing:
 | `PLR0911/0912/0913/0915` off | global | Complexity counters. The domain functions are long and sequential; splitting purely to satisfy a counter would hurt readability. See §3 for the ones genuinely worth splitting. |
 | `PLC0415` (imports in functions) off | global | Optional dependencies (`tomli`, `yaml`, Tk extras) are imported inside functions on purpose, so a missing extra degrades one feature instead of blocking startup. |
 | `S110`/`S112`/`SIM105` off | global | Cosmetic failures (a tooltip that cannot render, a trace line that cannot be written) are swallowed so they can never take down a sort. |
-| `F401`/`E402` | `mlox_subset_sort.py` | It is the compatibility shim: 62 names are re-exported deliberately, and the imports follow the section comments that explain them. |
+| `E402` | `mlox_subset_sort.py` | The imports follow the section comments that group and explain them. `F401` was **removed** from this exemption when the re-export shim went (§2) — it caught a genuinely unused `sys` import the moment it was switched on. |
 | `PERF203` | the four Tk modules | Per-widget `try`/`except` is mandatory in Tk — one destroyed widget must not abort styling all the others. |
 | `S603` | `gui/t3.py`, `gui/conflicts.py` | Subprocess argv is built from `sys.executable` and paths this code constructed. No shell, no user interpolation. |
 | `D`/`ANN` | `tests/*` | `assert` is the point there, and docstrings on parametrised cases would be noise. |
@@ -67,20 +67,37 @@ than implicit — enabling any of them is a legitimate next task.
 
 ---
 
-## 2. The one architectural item, and it is version-gated
+## 2. The one architectural item — DONE, before release
 
-**The re-export shim.** `mlox_subset_sort.py` re-exports **62 names** from
-`mlox_subset/`, so `core.build_and_sort` and `mlox_subset.sort.build_and_sort`
-both resolve. PEP 20 says there should be one obvious way, and there are two.
+**The re-export shim is gone.** It used to re-export 62 names from
+`mlox_subset/` so that `core.build_and_sort` and `mlox_subset.sort.build_and_sort`
+both resolved — two obvious ways, where PEP 20 asks for one.
 
-This is **deliberate and cannot be removed in a 3.x release**: 3.0's changelog
-publicly promises that every existing `core.<name>` call site keeps working.
-Deleting it is a **4.0** change with a deprecation period, not tidy-up. Recorded
-in `CODE_REVIEW.md` §16 so nobody treats §15 as licence to delete it.
+Earlier revisions of this document scoped the removal to **4.0** with a
+`DeprecationWarning` period, because 3.0's changelog promised `core.<name>`
+would keep working. That reasoning was sound but its premise was not: **3.0 had
+not shipped**, so there was no promise in the field to honour — only a sentence
+in an unreleased changelog. Deleting the shim before release cost one
+refactoring pass; deleting it after would have cost a major-version cycle.
 
-If and when it is done: move the GUI and tests to import from `mlox_subset/`
-directly, ship one minor release where `core.<name>` warns via
-`DeprecationWarning`, then delete.
+What was done (`CODE_REVIEW.md` §23):
+
+* The 62 imports split into **26 the engine actually calls** (kept — they were
+  never re-exports, just imports) and **36 pure re-exports** (deleted).
+* **42 names** reached via `core.<name>` across the GUI, `mlox_subset/gui/` and
+  the tests now come from the module they live in. 75 test functions that took
+  the `core` fixture only to reach a re-export no longer take it.
+* `core.<name>` is still used for **41 names — every one of them defined in
+  `mlox_subset_sort.py` itself**. That is not a leftover shim; that is the GUI
+  calling the engine, which is what the engine is for.
+* `F401` was removed from this file's per-file exemption in `pyproject.toml`.
+  That is the part that matters: the exemption existed *because* unused imports
+  were the house style here, and it had been hiding a real one (`sys`, unused
+  since the CLI moved to `raise SystemExit`), found the moment it came off.
+
+The differential baseline's 41 pinned observations reproduced byte-for-byte
+across the whole rewire, which is what made a change of this shape safe to make
+mechanically.
 
 ---
 
@@ -134,9 +151,16 @@ headlessly (`xvfb`), not more unit tests.
 * **`tools/` scripts are not shipped and not covered** beyond
   `test_standards.py`'s conformance sweep and `check_placeholders`' own tests.
   `gen_opcodes.py` in particular is only ever run by hand.
-* **No `.mo` catalogue ships.** The `.pot` has 312 messages and the pipeline is
+* **No `.mo` catalogue ships.** The `.pot` has 393 messages and the pipeline is
   proven end-to-end, but no language is translated. The first real translation
   will likely surface awkward source strings — that is normal and expected.
+* **The `tes3fields` tests use synthetic fixtures**, deliberately: their
+  answers are exact by construction, and no third-party mod data is committed
+  to this repository. The real-plugin and real-JSON validation that complements
+  them is recorded in `CODE_REVIEW.md` §22 rather than checked in — including
+  the byte-level comparison against a plugin's own subrecords, which is what
+  found the `connections` length-prefix bug. Re-running it needs a plugin with
+  LAND/PGRD records and a tes3conv dump of it.
 * **`requires-python = ">=3.10"`** while CI tests 3.10 and 3.13. 3.11 and 3.12
   are untested in between. Low risk (no version-conditional code), but it is an
   assumption rather than a measurement.

@@ -144,6 +144,10 @@ except ImportError as e:
 # file is wrapped in _() so `tools/make_pot.py` can extract it -- with no
 # catalogue installed this returns the English string unchanged.
 from mlox_subset import _, ngettext  # noqa: E402
+from mlox_subset.configurator import (  # noqa: E402
+    extract_data_path_value,
+    normalize_data_path,
+)
 
 # ---------------------------------------------------------------------------
 # GUI support package (split out per CODE_REVIEW.md §16/§9.2, 3.0). Bodies
@@ -179,6 +183,16 @@ from mlox_subset.gui.widgets import (  # noqa: E402
     add_tooltip,
     attach_typeahead,
 )
+from mlox_subset.net import (  # noqa: E402
+    PLUGIN_ORDER_URLS,
+    RULES_URL_TEMPLATE,
+    rule_file_ages,
+    update_plugin_order_yml,
+    update_rule_files,
+)
+from mlox_subset.plugins import PluginFileIndex  # noqa: E402
+from mlox_subset.rules import ORDER_NAME_RE  # noqa: E402
+from mlox_subset.tracing import set_trace_file, trace  # noqa: E402
 
 
 def _app_version() -> str:
@@ -350,7 +364,7 @@ class RuleFilesPanel:
                 _("Update rules"), _("Add mlox_base.txt and/or mlox_user.txt to the list first.")
             )
             return
-        ages = core.rule_file_ages(managed)
+        ages = rule_file_ages(managed)
         age_txt = "\n".join(
             f"  {n}: {'age unknown' if d is None else f'~{d} day(s) old'}" for n, d in ages
         )
@@ -368,7 +382,7 @@ class RuleFilesPanel:
 
         def work() -> None:
             try:
-                report = core.update_rule_files(managed, url_template=custom)
+                report = update_rule_files(managed, url_template=custom)
             except Exception as e:  # noqa: BLE001
                 # worker thread: must report into the dialog, never vanish silently
                 report = [f"FAILED: {e}"]
@@ -802,15 +816,15 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                     path: str | Path = req
                 else:
                     path = app_base_dir() / "mlox_subset_sort_trace.log"
-                core.set_trace_file(path)
-                core.trace("GUI started")
+                set_trace_file(path)
+                trace("GUI started")
                 # Build stamp, first thing after the header. A frozen .exe is
                 # easy to rebuild-and-forget, and a stale one is otherwise
                 # indistinguishable from a code bug: you get the old behaviour
                 # with the new source sitting right there. Version + the source
                 # file's mtime pin exactly which build is running.
-                core.trace(f"build: version={_app_version()} {_build_stamp()}")
-                core.trace(
+                trace(f"build: version={_app_version()} {_build_stamp()}")
+                trace(
                     f"viewers: frozen={bool(getattr(sys, 'frozen', False))} "
                     f"pywebview={HAVE_PYWEBVIEW} "
                     f"HTMLViewer={HTMLViewer.__module__ + '.' + HTMLViewer.__name__ if HTMLViewer else None} "
@@ -1646,14 +1660,14 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
         trace_first_fire("theme -> chrome palette update (set_active_chrome)")
         # per-switch (not just first-fire): theme changes are rare and
         # user-initiated, and the name identifies *which* palette is active
-        core.trace(f"[theme] chrome palette now follows: {name}")
+        trace(f"[theme] chrome palette now follows: {name}")
         # never let a re-apply problem (e.g. a platform/build-specific Tk quirk)
         # stop the log theme itself from applying below
         try:
             self._reapply_chrome()
         except Exception:  # noqa: BLE001
             # diagnostic guard: must not raise onward
-            core.trace("[theme] re-apply pass failed:\n" + traceback.format_exc())
+            trace("[theme] re-apply pass failed:\n" + traceback.format_exc())
         log_text = getattr(self, "log_text", None)
         if log_text is None or not log_text.winfo_exists():
             return
@@ -1689,7 +1703,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                 except tk.TclError:
                     pass
         trace_first_fire("theme runtime re-apply walk (restyle_widget_tree)")
-        core.trace(f"[theme] re-applied chrome to {count} plain-tk widgets (ttk covered by Style)")
+        trace(f"[theme] re-applied chrome to {count} plain-tk widgets (ttk covered by Style)")
 
     def _import_log_theme(self) -> None:
         path = filedialog.askopenfilename(
@@ -2031,14 +2045,14 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
         # manages; matching them against this run's data-path inputs mirrors how
         # the plugin panel highlights all subset plugins, not just brand-new ones.
         user_norms = {
-            core.normalize_data_path(d["value"]) for d in ((plan or {}).get("data_inserts") or [])
+            normalize_data_path(d["value"]) for d in ((plan or {}).get("data_inserts") or [])
         }
         user_norms.discard("")
 
         def _is_ours(line: str, is_new: bool) -> bool:
             if is_new:
                 return True
-            p = core.normalize_data_path(core.extract_data_path_value(line) or "")
+            p = normalize_data_path(extract_data_path_value(line) or "")
             return bool(p) and p in user_norms
 
         highlight_lines = [line for line, is_new, _ in data_result if _is_ours(line, is_new)]
@@ -2272,10 +2286,10 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
     def _cellmap_worker(self, order: list[str], dirs: list[str], subset: list[str]) -> None:
         writer = QueueWriter(self.log_queue)
         path = None
-        core.trace(f"cell map: start, {len(order)} plugin(s)")
+        trace(f"cell map: start, {len(order)} plugin(s)")
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
-                index = core.PluginFileIndex(dirs)
+                index = PluginFileIndex(dirs)
                 cfg_dir = (
                     str(Path(self.cfg_var.get().strip()).parent)
                     if self.cfg_var.get().strip()
@@ -2291,11 +2305,11 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                     % {"engine": "tes3conv" if conv else _("built-in parser")}
                 )
                 cov = core.build_cell_coverage(order, index, subset_names=subset, session=session)
-                core.trace(
+                trace(
                     f"cell map: coverage built, {len(cov['exterior'])} ext, {len(cov['interior'])} int"
                 )
                 html = core.generate_cell_map_html(cov)
-                core.trace(f"cell map: html built, {len(html)} bytes")
+                trace(f"cell map: html built, {len(html)} bytes")
                 # Write straight to disk and drop the string -- the map is viewed
                 # FROM the file (browser / tkinterweb load_file), never rendered
                 # from an in-memory 2MB+ string (that path OOM'd tkhtmlview).
@@ -2310,7 +2324,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                     os.close(fd)
                     Path(path).write_text(html, encoding="utf-8")
                 del html
-                core.trace(f"cell map: written to {path}")
+                trace(f"cell map: written to {path}")
                 print(
                     _(
                         "  %(exterior)d exterior + %(interior)d interior cell(s) "
@@ -2355,27 +2369,27 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
         force = (os.environ.get("MLOX_MAP_VIEWER") or "").strip().lower()
         can_tkweb = HTMLViewer is not None and hasattr(HTMLViewer, "load_file")
         if force == "browser":
-            core.trace("cell map: viewer = browser (forced)")
+            trace("cell map: viewer = browser (forced)")
             self._open_cell_map_browser()
             return
         if force == "tkinterweb" and can_tkweb:
-            core.trace("cell map: viewer = tkinterweb (forced)")
+            trace("cell map: viewer = tkinterweb (forced)")
             self._show_cell_map_window(path)
             return
         if force == "pywebview" and HAVE_PYWEBVIEW:
-            core.trace("cell map: viewer = pywebview (forced)")
+            trace("cell map: viewer = pywebview (forced)")
             self._open_cell_map_pywebview(path)
             return
         # Auto: prefer pywebview (real OS webview), then tkinterweb's load_file,
         # then the browser. tkhtmlview can't draw SVG, so it's never used here.
         if HAVE_PYWEBVIEW:
-            core.trace("cell map: viewer = pywebview (embedded)")
+            trace("cell map: viewer = pywebview (embedded)")
             self._open_cell_map_pywebview(path)
         elif can_tkweb:
-            core.trace("cell map: viewer = tkinterweb (in-app window)")
+            trace("cell map: viewer = tkinterweb (in-app window)")
             self._show_cell_map_window(path)
         else:
-            core.trace("cell map: viewer = browser (no pywebview/tkinterweb available)")
+            trace("cell map: viewer = browser (no pywebview/tkinterweb available)")
             self._open_cell_map_browser()
             self.status_var.set(
                 status + "  (opened in browser — pip install pywebview " "for an in-app window)"
@@ -2400,10 +2414,10 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                 cmd = [sys.executable, "--show-map", ap]
             else:
                 cmd = [sys.executable, os.path.abspath(__file__), "--show-map", ap]  # noqa: PTH100
-            core.trace(f"cell map: launching pywebview child: {cmd}")
+            trace(f"cell map: launching pywebview child: {cmd}")
             subprocess.Popen(cmd, **nw)  # type: ignore[call-overload]
         except (OSError, ValueError):  # Popen: missing exe or bad argv
-            core.trace("cell map: pywebview child launch FAILED:\n" + traceback.format_exc())
+            trace("cell map: pywebview child launch FAILED:\n" + traceback.format_exc())
             self._open_cell_map_browser()
 
     def _show_cell_map_window(self, path: str | Path) -> None:
@@ -2511,11 +2525,11 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                 "is replaced with mlox_base.txt / mlox_user.txt per file.\n"
                 "Default: %(url)s"
             )
-            % {"url": core.RULES_URL_TEMPLATE},
+            % {"url": RULES_URL_TEMPLATE},
         )
         ttk.Label(
             top,
-            text=_("default: %(url)s") % {"url": core.RULES_URL_TEMPLATE},
+            text=_("default: %(url)s") % {"url": RULES_URL_TEMPLATE},
             foreground=DARK["fg_dim"],
         ).grid(row=2, column=1, sticky="w", padx=6)
 
@@ -2531,11 +2545,11 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                 "Blank tries the built-in candidates in order.\n"
                 "Default: %(url)s"
             )
-            % {"url": core.PLUGIN_ORDER_URLS[0]},
+            % {"url": PLUGIN_ORDER_URLS[0]},
         )
         ttk.Label(
             top,
-            text=_("default: %(url)s...") % {"url": core.PLUGIN_ORDER_URLS[0][:96]},
+            text=_("default: %(url)s...") % {"url": PLUGIN_ORDER_URLS[0][:96]},
             foreground=DARK["fg_dim"],
         ).grid(row=4, column=1, sticky="w", padx=6)
 
@@ -2750,7 +2764,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
             kw = self._rm_kind.get()
             titles = {"order": "Order", "nearstart": "NearStart", "nearend": "NearEnd"}
             for n in names:
-                m = core._RE_ORDER_NAME.match(n)
+                m = ORDER_NAME_RE.match(n)
                 if any(c in n for c in "[];") or not m or m.group(0) != n:
                     return f"INVALID: {n!r} -- names must end in a plugin extension"
             if kw == "order" and len(names) < 2:
@@ -2779,7 +2793,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
             filetypes=(("Rules", "*.txt"),),
         )
         trace_first_fire("rules-maker Browse...")
-        core.trace(f"[smoke] rules-maker Browse: {'chose ' + chosen if chosen else 'cancelled'}")
+        trace(f"[smoke] rules-maker Browse: {'chose ' + chosen if chosen else 'cancelled'}")
         if chosen:
             self._rm_file_var.set(chosen)
 
@@ -2868,7 +2882,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                 ),
             )
             return
-        ages = core.rule_file_ages([p])
+        ages = rule_file_ages([p])
         age = ages[0][1]
         age_txt = (
             "file doesn't exist yet -- it will be created"
@@ -2891,7 +2905,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
 
         def work() -> None:
             try:
-                report = core.update_plugin_order_yml(p, urls=urls)
+                report = update_plugin_order_yml(p, urls=urls)
             except Exception as e:  # noqa: BLE001
                 # worker thread: must report into the dialog, never vanish silently
                 report = [f"FAILED: {e}"]
@@ -3157,7 +3171,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                 print("\n" + "=" * 70)
                 print(_(" LINT (tes3lint-style checks, native)"))
                 print("=" * 70)
-                index = core.PluginFileIndex(dirs)
+                index = PluginFileIndex(dirs)
                 subset_origins = {str(s).lower(): "your mod" for s in subset}
                 warnings, stats = core.lint_plugins(
                     order, index, subset_names=subset, origins=subset_origins
@@ -3311,6 +3325,10 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
             ftree.insert("", "end", values=["(field diff unavailable)"] + [""] * len(plugins))
             return
         self._conf_fdiff = {"plugins": plugins, "per": per}  # for the expand popup
+        # The record's own id doubles as its cell label for the visualisations
+        # ("(43, -45)" for landscape, "Balmora (-3, -2)" for a path grid), so
+        # the generated page can say which cell it is showing.
+        self._conf_record_label = str(conflict.get("id") or "")
         for k in keys:
             row = [k] + [self._fmt_val(per[p].get(k)) for p in plugins]
             ftree.insert("", "end", iid=k, values=row, tags=("diff",) if k in diff else ())

@@ -16,6 +16,12 @@ MLOXSubsetSort/
 │   │                          Fully typed and mypy-gated, like the rest.
 │   ├── mwscript/              Compiled-script (SCDT) reading + disassembly.
 │   │                          Makes the diff window's bytecode legible.
+│   ├── tes3fields/            Decodes binary LAND / PGRD fields for the diff
+│   │                          window (heights, normals, colours, textures,
+│   │                          world map, path-grid edges).
+│   ├── viz/                   Conflict visualisations as self-contained HTML:
+│   │                          world conflict map, terrain height deltas,
+│   │                          path-grid graphs, 3D surface. No Tk, no CDN.
 │   ├── rules/                 mlox rule handling: patterns, parser,
 │   │                          expression front-end.
 │   ├── configurator/          openmw.cfg: read, simulate, emit TOML.
@@ -30,7 +36,7 @@ MLOXSubsetSort/
 │   ├── check_undefined.py     Finds names a module uses but never imports.
 │   ├── gen_opcodes.py         Regenerates the opcode table from MWEdit.
 │   └── make_pot.py            Extracts _() strings into the .pot template.
-├── tests/                     pytest suite (802 tests, no network, headless).
+├── tests/                     pytest suite (984 tests, no network, headless).
 ├── testdata/                  Copies of a real setup, used by the tests.
 ├── locale/                    mlox_subset_sort.pot (English template),
 │                               translator guide, .mo catalogues.
@@ -62,7 +68,7 @@ feature and degrade gracefully when missing.
 ## Testing
 
 ```bash
-python -m pytest                # whole suite (802 tests)
+python -m pytest                # whole suite (984 tests)
 python -m ruff check .          # lint (PEP 8 incl. naming + import order)
 python -m mypy                  # types (PEP 484) -- gates every shipped file
 python -m black --check .       # formatting

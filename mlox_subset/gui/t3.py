@@ -24,6 +24,9 @@ from mlox_subset.gui import app_base_dir, trace_first_fire
 from mlox_subset.gui.theme import DARK, style_plain_widget
 from mlox_subset.gui.widgets import QueueWriter, add_tooltip, attach_typeahead
 from mlox_subset.i18n import gettext as _, ngettext
+from mlox_subset.momw import needs_cleaning_set, parse_plugin_order_yml
+from mlox_subset.plugins import PluginFileIndex
+from mlox_subset.tracing import trace
 
 
 class Tes3cmdMixin:
@@ -195,7 +198,7 @@ class Tes3cmdMixin:
         keep = [
             p for i, p in enumerate(self._t3_files) if i not in set(self._t3_list.curselection())
         ]
-        core.trace(f"[smoke] tes3cmd Remove selected: {before} -> {len(keep)} file(s)")
+        trace(f"[smoke] tes3cmd Remove selected: {before} -> {len(keep)} file(s)")
         self._t3_set_files(keep)
 
     def _t3_add_from_plan(self) -> None:
@@ -204,7 +207,7 @@ class Tes3cmdMixin:
         if not subset:
             self.status_var.set(_("Run '1. Sort' first so I know which mods are yours."))
             return
-        index = core.PluginFileIndex(self._plan_scan_dirs())
+        index = PluginFileIndex(self._plan_scan_dirs())
         found, missing = [], 0
         have = {str(p).lower() for p in self._t3_files}
         for n in subset:
@@ -232,8 +235,8 @@ class Tes3cmdMixin:
             self.status_var.set(_("Set the plugin-order.yml path on the main tab first."))
             return
         try:
-            entries = core.parse_plugin_order_yml(Path(yml))
-            nc = core.needs_cleaning_set(entries)
+            entries = parse_plugin_order_yml(Path(yml))
+            nc = needs_cleaning_set(entries)
         except Exception as e:  # noqa: BLE001
             # untrusted plugin-order.yml; status line carries the failure
             self.status_var.set(_("Couldn't read plugin-order.yml: %(error)s") % {"error": e})
@@ -243,7 +246,7 @@ class Tes3cmdMixin:
         if not active:
             self.status_var.set(_("Run '1. Sort' first so I know the active load order."))
             return
-        index = core.PluginFileIndex(self._plan_scan_dirs())
+        index = PluginFileIndex(self._plan_scan_dirs())
         have = {str(p).lower() for p in self._t3_files}
         found, unfound = [], 0
         for n in active:
@@ -446,7 +449,7 @@ class Tes3cmdMixin:
                 if cmd == "clean":
                     dirs = self._plan_scan_dirs()
                     dirs += [str(Path(f).parent) for f in files]
-                    index = core.PluginFileIndex(list(dict.fromkeys(dirs)))
+                    index = PluginFileIndex(list(dict.fromkeys(dirs)))
                     staging = self._t3_staging_dir()
                     print(_("  Staging dir: %(path)s") % {"path": staging})
                 for f in files:
@@ -552,7 +555,7 @@ class Tes3cmdMixin:
                 print("=" * 70)
                 dirs = self._plan_scan_dirs()
                 extra = [str(Path(f).parent) for f in files]
-                index = core.PluginFileIndex(list(dict.fromkeys(dirs + extra)))
+                index = PluginFileIndex(list(dict.fromkeys(dirs + extra)))
                 for f in files:
                     name = Path(f).name
                     updated, unresolved, err = core.sync_plugin_master_sizes(f, index)

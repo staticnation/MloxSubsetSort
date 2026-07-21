@@ -13,13 +13,15 @@ import queue
 import threading
 import tkinter as tk
 import traceback
-from collections.abc import Callable
+import webbrowser
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from typing import TYPE_CHECKING, Any, Literal
 
 import mlox_subset_sort as core
+from mlox_subset.gui import app_base_dir
 from mlox_subset.gui.theme import (
     DARK,
     THEME_PRESETS,
@@ -30,6 +32,7 @@ from mlox_subset.gui.theme import (
 )
 from mlox_subset.gui.widgets import QueueWriter, add_tooltip
 from mlox_subset.i18n import gettext as _, ngettext
+from mlox_subset.plugins import PluginFileIndex
 
 # Compiled-script disassembly for the field-diff window. Optional, exactly as
 # in the main module: without it the diff shows the raw base64 blob. Declared
@@ -44,6 +47,53 @@ try:
 except ImportError:  # pragma: no cover - only when mwscript/ is absent
     listing_for_bytecode_field = None
     variables_text_for_field = None
+
+# Landscape / path-grid field decoding. Optional on the same terms.
+text_for_field: Callable[..., str | None] | None
+describe_field: Callable[[str], str | None] | None
+try:
+    from mlox_subset.tes3fields import describe_field, text_for_field
+except ImportError:  # pragma: no cover - only when tes3fields/ is absent
+    text_for_field = None
+    describe_field = None
+
+# The HTML visualisations. Optional on the same terms again: without the
+# package the windows lose their "Visualise" buttons and nothing else changes.
+build_conflict_map: Callable[..., str] | None
+build_height_delta: Callable[..., str] | None
+build_pathgrid_graph: Callable[..., str] | None
+build_terrain_3d: Callable[..., str] | None
+try:
+    from mlox_subset.viz import (
+        build_conflict_map,
+        build_height_delta,
+        build_pathgrid_graph,
+        build_terrain_3d,
+    )
+except ImportError:  # pragma: no cover - only when viz/ is absent
+    build_conflict_map = None
+    build_height_delta = None
+    build_pathgrid_graph = None
+    build_terrain_3d = None
+
+
+def _as_float(value: object) -> float:
+    """Coerce a field value to a float, defaulting to zero.
+
+    Field values come from scanned third-party plugins, so a height offset can
+    legitimately be missing, null, or a string. None of those is worth an
+    exception when the consequence is a uniformly shifted surface.
+
+    Args:
+        value: The raw field value.
+
+    Returns:
+        The value as a float, or ``0.0`` if it cannot be read as one.
+    """
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
 
 
 class ConflictWindowsMixin:
@@ -114,7 +164,7 @@ class ConflictWindowsMixin:
         session = None
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
-                index = core.PluginFileIndex(dirs)
+                index = PluginFileIndex(dirs)
                 cfg_dir = (
                     str(Path(self.cfg_var.get().strip()).parent)
                     if self.cfg_var.get().strip()
@@ -465,13 +515,18 @@ class ConflictWindowsMixin:
             _(
                 "Field-by-field diff of the selected record. Red = the plugins disagree; "
                 "the last one in the load order wins.\n\n"
-                "Double-click any row for the full value, one tab per plugin. Two fields "
-                "are decoded rather than shown raw:\n"
-                "  \u2022 bytecode -- disassembled to named script instructions, so a script "
-                "edit reads as a change instead of a wall of base64. Spans the disassembler "
-                "cannot decode are printed as offset/hex/ASCII rather than guessed at, and a "
-                "'decoded: N%' header says how much was understood.\n"
-                "  \u2022 variables -- the script's local variable names, in declaration order."
+                "Double-click any row for the full value, one tab per plugin. Fields "
+                "stored as binary are decoded rather than shown raw, so an edit reads "
+                "as a change instead of a wall of base64:\n"
+                "  \u2022 bytecode -- disassembled to named script instructions. Spans the "
+                "disassembler cannot decode are printed as offset/hex/ASCII rather than "
+                "guessed at, and a 'decoded: N%' header says how much was understood.\n"
+                "  \u2022 variables -- the script's local variable names, in declaration order.\n"
+                "  \u2022 landscape (vertex heights, normals, colours, textures, world map) "
+                "-- decoded to one terrain row per line, so the diff shows which rows of "
+                "the cell moved. Heights are reconstructed to absolute world units.\n"
+                "  \u2022 path grid connections -- decoded to a per-point adjacency list "
+                "(point -> its neighbours), so you can see which nodes were rewired."
             ),
         )
         self._conf_ftree = ftree
@@ -488,9 +543,240 @@ class ConflictWindowsMixin:
             ttk.Button(
                 btns, text=_("Dump tes3conv JSON..."), command=self._dump_conflict_json
             ).pack(side="left", padx=(8, 0))
+        if build_conflict_map is not None:
+            map_button = ttk.Button(
+                btns, text=_("Conflict map..."), command=self._show_conflict_map
+            )
+            map_button.pack(side="left", padx=(8, 0))
+            add_tooltip(
+                map_button,
+                _(
+                    "Plot every conflicting record onto the world grid, so you can see "
+                    "WHERE your mods collide. Hotter cells have more conflicts; cells "
+                    "involving your own mods are outlined. Opens as an HTML page.\n\n"
+                    "This is not the cell map: that shows which mods TOUCH which cells, "
+                    "which is a different (and much larger) set."
+                ),
+            )
         ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
 
         self._refill_conflict_tree()
+
+    def _open_html_view(self, markup: str, stem: str) -> None:
+        """Write a generated page beside the app and open it in the browser.
+
+        The visualisations are deliberately plain files rather than embedded
+        widgets: they open in whatever the user already uses, they can be kept
+        and attached to a bug report, and the rendering code stays free of Tk
+        (which is what lets the hermetic suite test it at all).
+
+        Args:
+            markup: The complete HTML document.
+            stem: Filename stem; a timestamp is appended so successive views do
+                not overwrite each other mid-comparison.
+        """
+        from datetime import datetime
+
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005 - local clock is correct
+        path = app_base_dir() / f"{stem}_{stamp}.html"
+        try:
+            path.write_text(markup, encoding="utf-8")
+        except OSError as exc:
+            messagebox.showerror(
+                _("Could not write the page"),
+                _("Writing %(path)s failed: %(error)s") % {"path": path, "error": exc},
+            )
+            return
+        try:
+            webbrowser.open(path.as_uri())
+        except Exception as exc:  # noqa: BLE001 - any browser failure is non-fatal
+            # The file exists either way, so tell the user where it is rather
+            # than losing the work to a browser that would not launch.
+            messagebox.showinfo(
+                _("Saved, but could not open a browser"),
+                _("The page was written to %(path)s (%(error)s)") % {"path": path, "error": exc},
+            )
+
+    def _show_conflict_map(self) -> None:
+        """Render every conflict onto the world grid and open it."""
+        conflicts = getattr(self, "_all_conflicts", None)
+        if not conflicts or build_conflict_map is None:
+            return
+        try:
+            markup = build_conflict_map(conflicts)
+        except Exception as exc:  # noqa: BLE001 - a view must never kill the scan
+            messagebox.showerror(
+                _("Could not build the conflict map"), _("%(error)s") % {"error": exc}
+            )
+            return
+        self._open_html_view(markup, "conflict_map")
+
+    def _visualise_field(self, key: str, plugins: Sequence[str], per: Mapping[str, Any]) -> None:
+        """Open the right visualisation for the selected field.
+
+        Which view makes sense is a property of the field, so the button is
+        contextual rather than a menu of mostly-inapplicable options.
+
+        Args:
+            key: The flattened field name the user selected.
+            plugins: The plugins that touch this record, in load order.
+            per: Field values per plugin.
+        """
+        winner = plugins[-1] if plugins else ""
+        loser = plugins[-2] if len(plugins) > 1 else ""
+        cell = str(getattr(self, "_conf_record_label", "") or "")
+
+        def value(plugin: str, field: str, default: object = "") -> Any:  # noqa: ANN401
+            """Read one field for one plugin, tolerating a missing record.
+
+            Returns ``Any`` because a flattened tes3conv record holds whatever
+            the field is -- base64 text for the grids, a list for ``points``, a
+            float for the offset. Narrowing here would just move the cast.
+
+            Args:
+                plugin: The plugin to read from.
+                field: The flattened field name.
+                default: Returned when the plugin has no such field.
+
+            Returns:
+                The field value, or ``default``.
+            """
+            return (per.get(plugin) or {}).get(field, default)
+
+        try:
+            if key == "connections" and build_pathgrid_graph is not None:
+                markup = build_pathgrid_graph(
+                    value(winner, "connections"),
+                    value(winner, "points", None),
+                    winner_name=winner,
+                    loser_value=value(loser, "connections", None) or None,
+                    loser_points=value(loser, "points", None),
+                    loser_name=loser,
+                    cell_label=cell,
+                )
+                self._open_html_view(markup, "pathgrid")
+                return
+            if key == "vertex_heights.data" and loser and build_height_delta is not None:
+                markup = build_height_delta(
+                    value(winner, key),
+                    value(loser, key),
+                    winner_name=winner,
+                    loser_name=loser,
+                    winner_offset=_as_float(value(winner, "vertex_heights.offset", 0.0)),
+                    loser_offset=_as_float(value(loser, "vertex_heights.offset", 0.0)),
+                    cell_label=cell,
+                )
+                self._open_html_view(markup, "height_delta")
+                return
+            if key == "vertex_heights.data" and build_terrain_3d is not None:
+                # Only one plugin has the field, so there is nothing to
+                # subtract -- show the surface itself instead of refusing.
+                markup = build_terrain_3d(
+                    {
+                        p: (value(p, key), _as_float(value(p, "vertex_heights.offset", 0.0)))
+                        for p in plugins
+                        if value(p, key)
+                    },
+                    cell_label=cell,
+                )
+                self._open_html_view(markup, "terrain")
+        except Exception as exc:  # noqa: BLE001 - a bad record must not kill the window
+            messagebox.showerror(_("Could not build the view"), _("%(error)s") % {"error": exc})
+
+    def _show_terrain_3d(self, plugins: Sequence[str], per: Mapping[str, Any]) -> None:
+        """Open the 3D surface for every plugin that has terrain here.
+
+        Args:
+            plugins: The plugins that touch this record, in load order.
+            per: Field values per plugin.
+        """
+        if build_terrain_3d is None:
+            return
+        surfaces = {
+            p: (
+                (per.get(p) or {}).get("vertex_heights.data", ""),
+                _as_float((per.get(p) or {}).get("vertex_heights.offset", 0.0)),
+            )
+            for p in plugins
+            if (per.get(p) or {}).get("vertex_heights.data")
+        }
+        try:
+            markup = build_terrain_3d(
+                surfaces, cell_label=str(getattr(self, "_conf_record_label", "") or "")
+            )
+        except Exception as exc:  # noqa: BLE001 - a bad record must not kill the window
+            messagebox.showerror(_("Could not build the view"), _("%(error)s") % {"error": exc})
+            return
+        self._open_html_view(markup, "terrain")
+
+    def _add_field_view_buttons(
+        self, bar: ttk.Frame, key: str, plugins: Sequence[str], per: Mapping[str, Any]
+    ) -> None:
+        """Add the visualisation buttons that apply to this field.
+
+        Contextual by design: only the views that can say something about this
+        field appear, so the bar never offers an action that would open an
+        empty page.
+
+        Args:
+            bar: The detail window's button row.
+            key: The flattened field name being shown.
+            plugins: The plugins that touch this record, in load order.
+            per: Field values per plugin.
+        """
+        has_terrain = sum(1 for p in plugins if (per.get(p) or {}).get("vertex_heights.data"))
+
+        if key == "connections" and build_pathgrid_graph is not None:
+            button = ttk.Button(
+                bar,
+                text=_("Show graph..."),
+                command=lambda: self._visualise_field(key, plugins, per),
+            )
+            button.pack(side="left", padx=(12, 0))
+            add_tooltip(
+                button,
+                _(
+                    "Draw the path grid as a navigation graph, with the edges this "
+                    "plugin added in green and the ones it removed in red.\n\n"
+                    "A mod that only REMOVES edges has probably rebuilt its path grid "
+                    "by accident -- that breaks NPC movement and nothing else reports it."
+                ),
+            )
+            return
+
+        if key == "vertex_heights.data" and build_height_delta is not None and len(plugins) > 1:
+            button = ttk.Button(
+                bar,
+                text=_("Show difference..."),
+                command=lambda: self._visualise_field(key, plugins, per),
+            )
+            button.pack(side="left", padx=(12, 0))
+            add_tooltip(
+                button,
+                _(
+                    "Decode both versions to absolute heights and subtract them: red "
+                    "where the winner raised the ground, blue where it lowered it.\n\n"
+                    "Comparing the raw values above is misleading. Heights are stored "
+                    "as cumulative deltas, so moving ONE vertex changes every byte "
+                    "after it and two nearly-identical cells look completely different."
+                ),
+            )
+
+        if has_terrain and build_terrain_3d is not None:
+            button = ttk.Button(
+                bar,
+                text=_("Show in 3D..."),
+                command=lambda: self._show_terrain_3d(plugins, per),
+            )
+            button.pack(side="left", padx=(8, 0))
+            add_tooltip(
+                button,
+                _(
+                    "Draw the cell's terrain as a surface you can rotate, with each "
+                    "plugin's version switchable in place. Drag to turn it.\n\n"
+                    "Shading follows slope rather than height, which reads as terrain."
+                ),
+            )
 
     def _dump_conflict_json(self) -> None:
         """Write the tes3conv JSON for every scanned plugin to a chosen folder."""
@@ -570,6 +856,8 @@ class ConflictWindowsMixin:
             note += " · shown disassembled; undecoded spans are printed as hex"
         elif key == "variables" and variables_text_for_field is not None:
             note += " · decoded to local variable names"
+        elif describe_field is not None and (described := describe_field(key)):
+            note += f" · {described}"
         ttk.Label(win, text=f"{key}   ({note})", padding=8).pack(anchor="w")
         bar = ttk.Frame(win, padding=(8, 0))
         bar.pack(fill="x")
@@ -586,6 +874,7 @@ class ConflictWindowsMixin:
         ttk.Checkbutton(bar, text=_("Word wrap"), variable=wrap_var, command=_apply_wrap).pack(
             side="left"
         )
+        self._add_field_view_buttons(bar, key, plugins, per)
         ttk.Label(
             bar,
             text=_("Syntax highlighting: %(theme)s") % {"theme": self.log_theme_var.get()},
@@ -617,6 +906,13 @@ class ConflictWindowsMixin:
                 # Same base64+zstd wrapping as bytecode; shown as names so the
                 # diff says WHICH locals changed, not just that the blob did.
                 listing = variables_text_for_field(val)
+            elif is_plain_string and text_for_field is not None:
+                # Landscape grids and path-grid edges are base64 too, and just
+                # as unreadable: one moved vertex changes the whole string.
+                # The whole record is passed because some of these fields only
+                # mean something beside a sibling -- heights need their offset,
+                # edges need their points.
+                listing = text_for_field(key, val, per[p])
             if listing is not None:
                 text, is_listing, is_plain_string = listing, True, False
             elif is_plain_string:

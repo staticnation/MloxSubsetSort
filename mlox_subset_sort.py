@@ -114,7 +114,6 @@ import fnmatch
 import os
 import re
 import struct
-import sys
 from collections.abc import (
     Callable,
     Collection,
@@ -144,30 +143,28 @@ from typing import Any
 # any installed plugin, and every ordering edge those rules would have created
 # was lost. This restores them.
 # ---------------------------------------------------------------------------
-# Pattern translation now lives in mlox_subset/rules/patterns.py. It is
-# re-exported here so every existing caller (and the GUI) keeps working
-# unchanged; behaviour is pinned by tests/test_differential.py.
+# Pattern translation now lives in mlox_subset/rules/patterns.py; behaviour is
+# pinned by tests/test_differential.py. Only the names this module actually
+# calls are imported -- callers import from mlox_subset/ themselves (§23).
 from mlox_subset import _, get_logger, ngettext, setup_logging
-from mlox_subset.rules import (
-    MLOX_VERSION_PATTERN as _MLOX_VER,
-    mlox_pattern_to_regex,
-    pattern_has_meta,
-)
+from mlox_subset.rules import pattern_has_meta
 
 #: Diagnostics about the run (not the user's report) go through here. The
 #: report itself stays on print()/stdout -- see mlox_subset/logging_setup.py.
 _LOG = get_logger(__name__)
 
-# Tracing now lives in mlox_subset/tracing.py; re-exported so core.trace(),
-# core.set_trace_file() etc. keep working for the GUI and CLI unchanged.
 # ---------------------------------------------------------------------------
-# Re-exports from mlox_subset/.
+# Imports from mlox_subset/.
 #
-# The split moved the implementation into packages, but this module stays the
-# public surface the GUI, the CLI and the test suite import from -- so every
-# name they used still resolves as `core.<name>`. The F401 suppressions below
-# are therefore load-bearing, not laziness: these imports exist to be re-
-# exported, and removing an "unused" one would break a caller.
+# The split moved the implementation into packages. This module is the engine
+# and CLI -- one caller of those packages among several, not a facade in front
+# of them. Until 3.0 it also re-exported 36 names it never called, purely so
+# `core.<name>` resolved for the GUI and the tests; those callers now import
+# from mlox_subset/ directly, and the re-exports are gone (CODE_REVIEW.md §23).
+#
+# So every import below is one this module *uses*. F401 is enforced here again
+# rather than suppressed, which is what makes that claim checkable: an unused
+# import in this file is now a lint failure, not the house style.
 # ---------------------------------------------------------------------------
 from mlox_subset.tracing import (
     set_trace_file,
@@ -1995,6 +1992,18 @@ def generate_cell_map_html(
     per touched cell; brighter/hotter = more mods; click a cell to jump to its list
     entry), an exterior-cell list, and an interior-cell list. Cells your custom mods
     touch get a gold outline. A port of modmapper, fed by this tool's load order.
+
+    This map is deliberately left alone by the conflict visualisations
+    (``mlox_subset/viz/``): coverage and collision are different questions, and
+    the conflict map is a *parallel* view that links back here rather than a
+    set of marks layered on top of this one.
+
+    Args:
+        coverage: The result of ``build_cell_coverage``.
+        title: The page title.
+
+    Returns:
+        A complete, self-contained HTML document.
     """
     ext = coverage["exterior"]
     inte = coverage["interior"]
@@ -2317,24 +2326,15 @@ def write_cfg(
 # mlox rule parsing (Order / NearStart / NearEnd only)
 # ---------------------------------------------------------------------------
 
-# Rule-file parsing now lives in mlox_subset/rules/parser.py, re-exported so
-# existing callers keep working. Behaviour pinned by tests/test_differential.py.
+# Rule-file parsing now lives in mlox_subset/rules/parser.py. Behaviour pinned
+# by tests/test_differential.py; callers import it from there directly.
 from mlox_subset.configurator import (
-    REMOVE_KEYS,
-    cfg_line_value,
-    configurator_remove_matches,
-    customization_string_list,
-    detect_data_quoting,
     extract_data_path_value,
-    find_anchor_index,
-    format_data_line,
     generate_customizations_toml,
     infer_data_path_anchors,
     insert_data_paths,
     normalize_data_path,
     preview_configurator_result,
-    simulate_configurator_apply,
-    toml_value,
 )
 from mlox_subset.momw import (
     base_order_matches_yml,
@@ -2342,41 +2342,12 @@ from mlox_subset.momw import (
     needs_cleaning_set,
     parse_plugin_order_yml,
 )
-from mlox_subset.net import (
-    ALLOWED_URL_SCHEMES,
-    MAX_DOWNLOAD_BYTES,
-    PLUGIN_ORDER_URLS,
-    RULES_URL_TEMPLATE,
-    fetch_url_bytes,
-    rule_file_ages,
-    update_plugin_order_yml,
-    update_rule_files,
-)
-from mlox_subset.plugins import (
-    PLUGIN_EXTS,
-    TES3_MIN_PLUGIN_SIZE as _TES3_MIN_PLUGIN_SIZE,
-    PluginFileIndex,
-    list_plugins_in_dir,
-    plugin_version as _plugin_version,
-    read_plugin_description as _read_plugin_description,
-)
+from mlox_subset.plugins import PLUGIN_EXTS, PluginFileIndex
 from mlox_subset.rules import (
     ORDER_NAME_RE as _RE_ORDER_NAME,
-    TOP_KEYWORDS,
-    TOP_RE,
     check_predicates,
-    describe_node,
-    evaluate_node,
-    get_triggered_plugins,
     load_rule_blocks,
     load_rules_raw_text,
-    parse_mlox_file,
-    parse_mlox_lisp,
-    strip_comment,
-    tokenize_mlox_logic,
-)
-from mlox_subset.versions import (
-    format_version as _format_version,
 )
 
 # ---------------------------------------------------------------------------
@@ -2945,12 +2916,7 @@ RULES_REPO = (
 # ---------------------------------------------------------------------------
 
 # Graph primitives now live in mlox_subset/sort/graph.py.
-from mlox_subset.sort import (
-    build_and_sort,
-    expand_pattern,
-    is_master_file as _is_master_file,
-    would_create_cycle,
-)
+from mlox_subset.sort import build_and_sort
 
 # ---------------------------------------------------------------------------
 # main

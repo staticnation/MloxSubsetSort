@@ -20,11 +20,14 @@ future Configurator rebuilds.
 
 ## Contents
 
-- `mlox_subset_sort.py` — the command-line tool, and the stable import surface
-  for the engine (it re-exports `mlox_subset/`, so `core.<name>` keeps working).
+- `mlox_subset_sort.py` — the command-line tool and the sort engine. It imports
+  from `mlox_subset/` like any other caller; import library names from the
+  package they live in, not from here.
 - `mlox_subset/` — the engine itself, split by concern: rule handling, the
   load-order sort, `openmw.cfg` reading/emitting, plugin metadata, downloads,
-  and compiled-script decoding.
+  compiled-script decoding, and the conflict visualisations (`viz/`, which
+  renders conflicts as self-contained HTML: a world conflict map, terrain
+  height differences, path-grid graphs and a rotatable 3D surface).
 - `mlox_subset_sort_gui.py` — a drag-and-drop GUI front-end (imports the engine
   directly; it reimplements no logic).
 - `mlox_base.txt`, `mlox_user.txt` — mlox rule databases (download/update with
@@ -617,10 +620,10 @@ Only the standard library is needed to *run* the tool. The checks below need
 `ruff`, `black`, `mypy` and `pytest`.
 
 ```bash
-python -m pytest                # 802 tests: no network, no Tk, no real mods needed
+python -m pytest                # 984 tests: no network, no Tk, no real mods needed
 python -m ruff check .          # PEP 8 style, naming, import order, security, perf
 python -m black --check .       # formatting
-python -m mypy                  # PEP 484 types; gates all 35 shipped files
+python -m mypy                  # PEP 484 types; gates all 46 shipped files
 python tools/check_undefined.py mlox_subset_sort_gui.py
 python tools/check_placeholders.py   # i18n %(key)s placeholders vs their dicts
 python tools/make_pot.py --check     # the .pot template must be current
@@ -656,7 +659,9 @@ changing anything:
   docstrings, no undocumented silent excepts — enforced by ruff and mypy in
   `pyproject.toml` rather than by convention. The only per-file exemptions left
   are genuinely specific ones, each with a stated reason (Tk's per-widget
-  `try`/`except`, the re-export shim's deliberate "unused" imports).
+  `try`/`except`, the engine's section-grouped imports). The last blanket
+  exemption — `F401` on the engine, which the re-export shim had made
+  unavoidable — was retired with the shim itself in 3.0.
 
 - **The GUI has no automated coverage** (no Tk in the test environment).
   `SMOKE_TEST.md` is a scripted manual pass with log markers, so a broken

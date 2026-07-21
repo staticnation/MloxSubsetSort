@@ -1,8 +1,9 @@
 """Load-order sorting: graph construction and the sort engine.
 
 Being populated incrementally from the engine module, each move guarded by
-``tests/test_differential.py``. The engine re-exports these names so existing
-callers keep working during the transition.
+``tests/test_differential.py``. This package is the one place these names
+live: the engine's re-export shim was removed in 3.0, so every caller imports
+from here (``CODE_REVIEW.md`` §23).
 """
 
 from __future__ import annotations

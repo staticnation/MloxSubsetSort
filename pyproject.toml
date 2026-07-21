@@ -33,6 +33,8 @@ packages = [
     "mlox_subset.plugins",
     "mlox_subset.rules",
     "mlox_subset.sort",
+    "mlox_subset.tes3fields",
+    "mlox_subset.viz",
 ]
 py-modules = ["mlox_subset_sort", "mlox_subset_sort_gui"]
 
@@ -172,13 +174,16 @@ ignore = [
 # docstrings on parametrised cases would be noise. Both shipped scripts now
 # meet the full standard, so only their genuinely-specific exemptions remain.
 "mlox_subset_sort.py" = [
-    # This module is the project's compatibility surface: the implementation
-    # lives in mlox_subset/, and everything imported here is re-exported so
-    # `core.<name>` keeps resolving for the GUI, the CLI and the tests.
-    # F401 ("unused import") is therefore the normal case in this file, not a
-    # finding -- and the imports sit after the section comments that explain
-    # each group, which is what E402 objects to.
-    "F401", "E402",
+    # E402 only: the imports sit after the section comments that group and
+    # explain them, which is what E402 objects to.
+    #
+    # F401 is deliberately NOT exempted any more. It used to be, because this
+    # module re-exported 36 names purely so `core.<name>` resolved for the GUI
+    # and the tests -- an unused import was the normal case here. Those callers
+    # now import from mlox_subset/ directly (CODE_REVIEW.md §23), so every
+    # import left in this file is one the module actually uses, and an unused
+    # import is a real finding again.
+    "E402",
 ]
 "mlox_subset_sort_gui.py" = [
     # PERF203: per-widget try/except is idiomatic and necessary in Tk -- a

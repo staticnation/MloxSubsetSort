@@ -1573,3 +1573,361 @@ black, mypy (35 files), `check_undefined`, `check_placeholders`,
 measured at 54.4% against the 52% floor; the sandbox this pass ran in reaped
 the long re-measure, so that figure is carried forward from §20 rather than
 re-derived -- and CI will report it authoritatively on the next run.
+
+## 22. Landscape and path-grid field decoding
+
+### What was added
+
+The field-diff window could already disassemble a script's `bytecode` and
+decode its `variables`. Everything else stored as binary was still shown as
+base64, which is worse than useless in a diff: two landscape cells differing by
+one vertex produce *entirely* different base64, so the viewer said "these are
+completely different" for a one-vertex nudge.
+
+New package `mlox_subset/tes3fields/` decodes six more fields:
+
+| Field | Rendered as |
+|---|---|
+| `vertex_heights.data` | absolute world-unit heights, one terrain row per line |
+| `vertex_normals.data` | `(x,y,z)` int8 normals, one row per line |
+| `vertex_colors.data` | `#rrggbb`, one row per line |
+| `world_map_data.data` | the 9x9 world-map heightmap |
+| `texture_indices.data` | the 16x16 LTEX index grid |
+| `connections` (PGRD) | a per-point adjacency list |
+
+Two of these are only meaningful *beside a sibling field*, which is the same
+shape as `bytecode` needing the record's `text`: heights need
+`vertex_heights.offset` to be absolute rather than relative, and path-grid
+edges need `points` to be sliced at all -- `PGRC` is a bare concatenation of
+every point's neighbour list with no delimiters. The whole flattened record is
+therefore passed to the renderer, and the dispatcher is a dict, so adding a
+seventh field is one entry rather than another `elif` in the GUI.
+
+### Where the format came from
+
+Two permissively-licensed sources, both already credited in `CREDITS.md`:
+
+* **UESP's record documentation** for [LAND] and [PGRD] -- prose describing the
+  subrecords, their sizes, and PGRD's worked adjacency example.
+* **TES3Tool** (MIT) -- `TES3Lib/Subrecords/LAND/*.cs` for field order and the
+  height-reconstruction semantics.
+
+This project keeps a hard line on provenance (§10): every dependency's licence
+is read from its `LICENSE` file, and `CREDITS.md` states that no copyleft
+source was copied. Reference implementations under copyleft licences sit in the
+workspace and were **not** used as sources for this module. Being able to read
+an implementation is not the same as being free to derive from it, and the
+distinction is worth stating as policy rather than rediscovering later.
+
+### How the ambiguous parts were settled: measurement, not assumption
+
+Documentation covers the layout but leaves two things a reader could get wrong
+in ways that still *look* plausible. Both were settled against real plugins in
+the workspace, by extracting the subrecords directly from the record stream
+with `struct.unpack_from` -- no third-party tooling in the loop.
+
+**1. Subrecord sizes and the height reconstruction.** Every subrecord came out
+at exactly its documented size (VNML 12,675; VHGT 4,232; WNAM 81; VCLR 12,675;
+VTEX 512). More usefully, reconstructed heights bottom out at exactly
+**-2048** -- the format's documented default-height sentinel -- and top out in
+a plausible terrain range. Hitting a documented constant on the nose is a
+strong signal that the doubly-cumulative reconstruction (a carried row height,
+then per-column accumulation within the row) is right; a naive flat sum over
+all 4,225 deltas does not land there.
+
+**2. Path-grid slicing.** `PGRC` cannot be sliced without each point's
+connection count, which lives at a specific byte offset inside `PGRP`. The
+check that settles both at once: **the sum of every point's connection count
+must equal the edge count.** On the first record tested that was 282 = 282,
+exactly, and the renderer consumes every edge with no trailing remainder.
+
+**3. VTEX ordering, decided by a statistic rather than a guess.** The 16x16
+texture grid is stored as sixteen 4x4 blocks rather than plain rows. Reading it
+row-major produces a grid that looks reasonable and is wrong -- every index in
+the wrong square. Rather than assume either reading, both were scored on real
+data using a property real terrain has and scrambled data does not: **the
+fraction of orthogonally-adjacent cells holding the same texture index.**
+
+| Reading | Raw plugin bytes (2,190 cells) | tes3conv JSON (367 cells) |
+|---|---|---|
+| row-major (storage order) | 0.714 | 0.716 |
+| de-swizzled (4x4 blocks) | **0.852** | **0.855** |
+
+De-swizzling won in 97% of cells individually on the raw bytes and 99% on the
+JSON. The de-swizzle is expressed as an index mapping over the base-4 digits of
+the stored position, and `decode_texture_indices(deswizzle=False)` still
+exposes storage order.
+
+### What the JSON dump settled that nothing else could
+
+Everything above was derived from plugin bytes. A tes3conv JSON dump of a real
+4,032-cell plugin then closed the remaining questions outright, because it is
+*the exact input this code consumes*:
+
+* **Field names and shapes** are as assumed: `vertex_heights` carries `offset`
+  and `data` separately, the rest carry `data` alone.
+* **`vertex_heights.data` is exactly `subrecord[4:4229]`** -- the float offset
+  lifted out into its own field and the three trailing unused bytes dropped.
+  Byte-compared against the same cell read straight from the ESP.
+* **VTEX bytes are byte-identical between the JSON and the ESP.** That closes
+  the one assumption the de-swizzle rested on: tes3conv passes the payload
+  through unchanged, so un-swizzling here is correct rather than probable.
+* **Path-grid points use `location` and `connection_count`** -- the first
+  spellings the decoder probes for.
+
+**And it found a real bug.** tes3conv **prefixes `connections` with a `uint32`
+count**; the raw subrecord in a plugin does not. Left in place, that prefix is
+not a cosmetic off-by-one -- it shifts every edge by one slot, so each point is
+attributed its *neighbour's* connections, and the whole adjacency list is
+quietly wrong. On the record it was found with, it also produced a leading
+"edge" of 224 in a 62-point grid: an index that cannot exist.
+
+tes3conv's own source (MIT) confirms this architecturally rather than
+statistically: it is `serde_json::to_string(&plugin.objects)` with
+`features = ["esp", "serde", "serde-zstd"]` and performs **no field-level
+transformation**. So the landscape payloads are the raw subrecord bytes -- the
+de-swizzle is ours to do -- and the `connections` prefix comes from the `tes3`
+crate's serde encoding of a length-prefixed collection, not from tes3conv. The
+`serde-zstd` feature is also why these arrive zstd-compressed under the base64.
+
+The behaviour is systematic, not a quirk of one record: across **717 path
+grids in 120 cached tes3conv dumps, 100% carry the prefix**, while the 290
+landscape records in the same dumps carry none -- every one of their fields
+decodes to exactly its documented size. So the prefix belongs to the
+length-prefixed fields specifically, and the detection is safe to leave on.
+
+Two things made it findable rather than invisible. The decoder already
+*reported* leftover edges instead of discarding them, so the mismatch surfaced
+as a `; NOTE: 1 trailing edge(s) unaccounted for` line. And the count could be
+cross-checked: `sum(connection_count)` was 224 against 225 decoded values, and
+stripping the first value put every target inside `0..61` where one had been
+out of range. `decode_connections` now detects the prefix -- confirmed by the
+points' own total when available, by the self-describing shape when not -- and
+this is the same wrapping `decode_variables_field` already strips from
+`variables`, which is a consistency worth knowing about tes3conv generally.
+
+### Verification
+
+`tests/test_tes3fields.py` (35 tests) uses synthetic fixtures whose answers are
+exact by construction -- and deliberately commits no third-party mod data. It
+pins the height reconstruction (including an explicit assertion against the
+plausible wrong answer), the de-swizzle as a *permutation* that moves values
+without losing them, UESP's worked path-grid example, the length-prefix strip
+in both directions (present, and a genuine leading edge that must not be
+mistaken for one), and totality: every decoder must return a `;` comment for
+truncated or garbage input rather than raise.
+
+The real-plugin and real-JSON validation above is the complement to that, and
+is recorded here rather than committed as fixtures -- 504 sampled landscape
+records decoded without a single failure, and the one path grid renders with
+every edge attributed and no remainder.
+
+### Gates
+
+868 tests: 867 passed, 1 skipped. ruff, black, mypy (38 files),
+`check_undefined`, `check_placeholders`, `make_pot --check` (312 messages).
+
+---
+
+## 23. Deleting the re-export shim (3.0, pre-release)
+
+The last architectural item on `REMAINING_WORK.md`. It had been scoped to 4.0
+in §16 and re-affirmed as 4.0-scoped in §21, both times for the same stated
+reason: 3.0's changelog promised every `core.<name>` call site would keep
+working, so removing it would be a breaking change owed a deprecation cycle.
+
+**The premise was checked and it did not hold.** 3.0 has not shipped. The
+"promise" was a sentence in an unreleased changelog, not an interface anyone
+depends on. Once that is noticed the cost comparison inverts: removing the shim
+now is one refactoring pass, and removing it later is a major-version cycle
+plus a release carrying a `DeprecationWarning` nobody would have needed to see.
+Recorded here because the *conclusion* in §16 and §21 was wrong while the
+*reasoning* was fine — the defect was an unexamined assumption, and it survived
+two review passes precisely because it looked settled.
+
+### What the shim actually was
+
+The phrase "62 re-exported names" was itself imprecise, and the imprecision
+mattered. Measured by parsing the module and asking which imported names its
+own body ever mentions:
+
+| | Count | Disposition |
+|---|---|---|
+| Imported from `mlox_subset/` | 62 | |
+| ...used by the engine itself | **26** | **Kept.** Ordinary imports; never re-exports. |
+| ...never used, imported to be re-exported | **36** | **Deleted.** |
+
+So a third of the "shim" was not a shim. Deleting all 62, which is what the
+item as written invited, would have broken the engine.
+
+### Method
+
+1. **Rewire callers first, delete second.** Every `core.<name>` reference in
+   `mlox_subset_sort_gui.py`, `mlox_subset/gui/` and `tests/` that resolved to
+   an import was repointed at the module the name really lives in — **42
+   distinct names across 12 files**.
+2. **Delete only names the engine never mentions**, recomputed after the
+   rewire rather than from the list in step 1.
+3. **Remove `F401` from the per-file exemption**, which is the step that makes
+   the result durable. While it stood, an unused import in this file was the
+   house style and therefore invisible.
+
+### Two things worth recording
+
+**`F401` immediately found a real defect.** With the exemption gone, ruff
+reported `sys` imported but unused — genuinely unused, its only remaining
+mention being the word "sys.stdout" inside a docstring. It had been dead since
+the CLI moved from `sys.exit()` to `raise SystemExit`, and the exemption had
+been hiding it. This is the argument for the whole exercise in miniature: a
+blanket exemption does not just permit the thing it was written for, it
+silences everything that looks like it.
+
+**Aliased imports nearly caused a silent break.** The rewiring map was built by
+parsing the engine's imports, and deliberately skipped aliased ones
+(`format_version as _format_version`) rather than guess at intent. Seven names
+were aliased, and two of them — `core._format_version` and `core._is_master_file`
+— had live call sites in the tests. The safety net was refusing to delete any
+name still referenced *anywhere*, checked across every `.py` and `.md` in the
+tree before deletion rather than trusting the rewrite to have been exhaustive.
+Both were caught there, not by a failing test. A rewrite pass should be assumed
+incomplete and verified against the source of truth, not against its own output.
+
+**75 test functions were taking the `core` fixture without using it** once
+their bodies stopped saying `core.`. Removing the parameter was mechanical but
+not free: three helpers (`parse`, `_sort_real`, `_configurator_observations`)
+were caught by the same sweep, and their call sites passed arguments
+positionally, so the signature and the callers had to move together. Two rounds
+of regex got this wrong in opposite directions before it was redone as an AST
+fixpoint — *a function must declare `core` if and only if its body loads it* —
+which converged in one pass. The lesson is the ordinary one about regex and
+syntax, and it is here because the first two attempts both left a green-looking
+tree with a broken test file underneath.
+
+### The end state, stated as something checkable
+
+`core.<name>` is still used 41 times, and that is correct: every one of those
+names is **defined in `mlox_subset_sort.py` itself** — `compute_plan`,
+`lint_plugins`, the scanners, the CLI surface. The GUI reaching into the engine
+for engine things is not the shim; the shim was the engine standing in front of
+`mlox_subset/` for names it never touched.
+
+The check that says so, and that would catch a regression:
+
+* no name reached via `core.` is one the engine merely imports, and
+* no import in the engine is unused (`F401`, now enforced).
+
+Together those two are the invariant. Either one alone can be satisfied by a
+shim creeping back.
+
+### Gates
+
+870 tests: **869 passed, 1 skipped** — including the differential baseline's 41
+pinned observations, which reproduced unchanged across the rewire and are the
+reason this was safe to do mechanically at all. ruff (now with `F401` live on
+the engine), black, mypy (38 files), `check_undefined`, `check_placeholders`,
+`make_pot --check` (312 messages, unchanged).
+
+---
+
+## 24. Visualising conflicts (`mlox_subset/viz/`)
+
+The field-diff window can now say *where* mods collide, *how much* terrain a
+plugin moved, and *which* navigation edges it rewired, as HTML pages generated
+from data the tool already had.
+
+### Why this was cheap
+
+Nothing here required new reverse-engineering. §22 had already decoded VHGT to
+absolute heights, VTEX, VCLR, WNAM and PGRD adjacency, and the conflict scanner
+already keys id-less records by grid coordinates. The only missing piece was
+drawing, which is why the whole package is pure functions from data to a string.
+
+`merged_lands` (MIT, in the resource folder) confirmed the approach: it writes
+per-cell conflict images with a green/yellow/red severity language. That
+language is reused here deliberately -- matching a tool people already read
+beats a nicer palette. The *jobs* differ, though, and the pages say so: it
+merges land and answers "what did the merge do to your mod"; this tool sorts
+and reports, so these answer "where do my mods collide and who wins".
+
+### Design constraints, both inherited
+
+**Self-contained.** No CDN, no external script. `generate_cell_map_html` holds
+to this already and it is not aesthetic: the tool runs offline and ships frozen,
+and a page that silently loses its script tag is worse than one that never had
+it. This is the whole reason the 3D view is hand-rolled on a 2D canvas rather
+than built on Three.js. A height *field* is a much smaller problem than general
+3D -- a regular grid of quads sorts back-to-front exactly, with no depth buffer
+and no camera library -- so it fits in the page.
+
+**No f-string templates.** The cell map's generator is one 185-line f-string
+that §5 of `REMAINING_WORK.md` flags as effectively uneditable. `viz/html.py`
+assembles pages from small helpers that each escape their own input, so the
+parts are individually testable and a plugin name cannot inject markup.
+
+### The bug that only rendering could find
+
+The severity ramp originally used a square root, reasoning that conflict counts
+are heavily skewed and a few huge cells would otherwise flatten everyone else to
+green. Sound reasoning; wrong conclusion. Rendered against a realistic spread it
+did the *opposite* of the intent: 3 conflicts against a worst of 30 came out
+yellow, so the entire map read as "everything is on fire" and the genuinely busy
+region did not stand out at all.
+
+The skew is real, but it belongs in the **scale**, not the curve: the ramp is
+now linear and saturates at the 95th percentile, so one pathological cell clamps
+instead of rescaling everybody. Both the old and new behaviours are now pinned
+by tests.
+
+This is worth recording as a method point. Every test in `test_viz.py` passed
+while the map was unreadable, because "unreadable" is not a property any
+assertion here was checking -- it was found by generating a page, rasterising
+the SVG and looking at it. For visual output, rendering *is* part of
+verification, and the tests that now guard it were written after the fact from
+what the picture showed.
+
+### The `_` shadowing hazard, now enforced
+
+`_coords, before = _points_and_edges(...)` in the path-grid renderer started
+life as `_, before = ...`, which rebinds the gettext marker and makes every
+later `_("...")` in that function raise `TypeError`. This is the second time it
+has cost a debugging round (the sort engine's `_rank` was the first), so it is
+now pinned by `test_gettext_marker_is_never_shadowed_by_unpacking`.
+
+Writing that test surfaced a distinction worth keeping: **comprehension targets
+are not the bug.** `[name for name, _ in pairs]` appears seven times in shipped
+code and is correct, because a comprehension has its own scope. The check
+therefore flags `Assign` and `For` targets always, and comprehension targets
+only when the comprehension itself calls `_()`. The first version of the test
+flagged all seven and would have caused seven pointless edits.
+
+The test was verified by injecting a real shadowing bug and confirming it failed
+-- a negative control, because a checker that cannot fail is not a check.
+
+### Cross-linking: an alternative map, not an overlay
+
+The conflict map is a **parallel view over the same world grid**, and
+`generate_cell_map_html` is left byte-for-byte unchanged.
+
+The first attempt did modify it -- an optional `conflict_cells` set that marked
+the affected cells in the existing SVG. That was reverted on the explicit point
+that the cell map should stay as it is. The reasoning holds up independently:
+coverage is much the larger set, so painting collisions onto it invites reading
+a busy cell as a broken one, and the two questions stay clearer as two maps. The
+conflict map links back to the cell map; nothing links forward, so the coverage
+view has no new failure mode and no new parameter.
+
+The two genuinely carry different data, which is why one cannot replace the
+other: the cell map says *what touches a cell*, and this one says *what edits
+the land record and path grid in that cell, and how those edits conflict*. The
+page therefore breaks its counts down by record type and states what each type
+governs -- terrain shape for `Landscape`, NPC navigation for `PathGrid` -- since
+"12 conflicts here" does not distinguish two mods reshaping the same hillside
+from two mods both placing a barrel.
+
+### Gates
+
+984 tests: 983 passed, 1 skipped. ruff, black, mypy (**46** files, up from 38),
+`check_undefined`, `check_placeholders`, `make_pot --check` (393 messages, up from 312). The jump in test
+count is mostly `test_standards.py`'s per-file parametrisation picking up six new
+modules -- the conformance sweep applies to new code automatically, which is the
+point of writing it that way.

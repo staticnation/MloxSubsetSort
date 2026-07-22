@@ -24,15 +24,32 @@ collide and who wins" rather than "what did the merge do".
 
 from __future__ import annotations
 
+from mlox_subset.viz.assets import write_assets
+from mlox_subset.viz.cellpage import build_cell_page, build_cell_pages
 from mlox_subset.viz.conflictmap import build_conflict_map, cells_with_conflicts
+from mlox_subset.viz.detail import (
+    cell_page_detail,
+    collect_detail,
+    collect_world_terrain,
+    detail_cells,
+)
+from mlox_subset.viz.explorer import build_explorer
 from mlox_subset.viz.heightdelta import build_height_delta
 from mlox_subset.viz.pathgrid import build_pathgrid_graph
 from mlox_subset.viz.terrain3d import build_terrain_3d
 
 __all__ = [
+    "build_cell_page",
+    "build_cell_pages",
     "build_conflict_map",
+    "build_explorer",
     "build_height_delta",
     "build_pathgrid_graph",
     "build_terrain_3d",
+    "cell_page_detail",
     "cells_with_conflicts",
+    "collect_detail",
+    "collect_world_terrain",
+    "detail_cells",
+    "write_assets",
 ]

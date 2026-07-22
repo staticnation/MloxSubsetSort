@@ -19,9 +19,42 @@ own escaping, so a page is assembled from pieces that can each be tested.
 from __future__ import annotations
 
 import html
+import json
 from collections.abc import Iterable, Mapping
+from typing import Any
 
 from mlox_subset import _
+
+
+def script_json(value: Any) -> str:  # noqa: ANN401 - encodes arbitrary JSON-able data
+    r"""Serialise a value for safe embedding inside an inline ``<script>`` tag.
+
+    ``json.dumps`` does not escape ``<``, ``>`` or ``&``, so a plugin named
+    ``</script>...`` -- an attacker-controlled filename on disk -- would close
+    the script element and inject arbitrary markup. These pages embed
+    third-party plugin names in inline JSON, so that is a real hole, not a
+    hypothetical one.
+
+    Escaping ``<``/``>``/``&`` to their ``\\u00xx`` forms (and the two Unicode
+    line separators, which are raw newlines inside a JS string) makes the JSON
+    inert as HTML while remaining byte-identical once parsed. This is the
+    standard mitigation; it is applied wherever JSON is inlined.
+
+    Args:
+        value: Any JSON-serialisable structure.
+
+    Returns:
+        A JSON string safe to drop between ``<script>`` and ``</script>``.
+    """
+    encoded = json.dumps(value, separators=(",", ":"))
+    return (
+        encoded.replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+
 
 #: The shared dark palette, matching the GUI's default theme so a page opened
 #: from the diff window does not look like a different application.

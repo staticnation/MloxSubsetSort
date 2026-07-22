@@ -20,7 +20,6 @@ surface slope, which reads as terrain far better than shading by height does.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 
 from mlox_subset import _
@@ -146,8 +145,8 @@ def build_terrain_3d(
 
     payload = {
         "surfaces": decoded,
-        "zoom": 6.0,
-        "relief": 90.0,
+        "zoom": 8.0,
+        "relief": 110.0,
         "labels": {"range": _("Height range: %(lo)s to %(hi)s units")},
     }
     buttons = "".join(
@@ -175,14 +174,14 @@ def build_terrain_3d(
             _("Terrain surface"),
             warning
             + f'<div class="tabs">{buttons}</div>'
-            + '<canvas id="surface" width="760" height="520"></canvas>'
+            + '<canvas id="surface" width="1100" height="740"></canvas>'
             + f'<div class="legend"><span id="range"></span><span>{h.escape(note)}</span></div>',
         )
         + "<style>.tabs{margin-bottom:10px}.tabs button{background:#2c313a;color:#d7dae0;"
         "border:1px solid #333945;border-radius:4px;padding:5px 10px;margin-right:6px;"
         "cursor:pointer;font:inherit}.tabs button.on{background:#3d4450;border-color:#7cc5ff;"
         "color:#fff}canvas{background:#1a1d23;border-radius:4px;max-width:100%;cursor:grab}</style>"
-        + f"<script>window.__terrain={json.dumps(payload)};</script><script>{_SCRIPT}</script>"
+        + f"<script>window.__terrain={h.script_json(payload)};</script><script>{_SCRIPT}</script>"
     )
     return h.page(
         _("Terrain surface"),

@@ -16,6 +16,7 @@ import traceback
 import webbrowser
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from typing import TYPE_CHECKING, Any, Literal
@@ -33,6 +34,14 @@ from mlox_subset.gui.theme import (
 from mlox_subset.gui.widgets import QueueWriter, add_tooltip
 from mlox_subset.i18n import gettext as _, ngettext
 from mlox_subset.plugins import PluginFileIndex
+from mlox_subset.tracing import trace
+from mlox_subset.viz import sidecar
+
+try:
+    from mlox_subset.viz import assets as viz_assets, cache as viz_cache
+except ImportError:  # pragma: no cover - only when viz/ is absent
+    viz_assets = None  # type: ignore[assignment]
+    viz_cache = None  # type: ignore[assignment]
 
 # Compiled-script disassembly for the field-diff window. Optional, exactly as
 # in the main module: without it the diff shows the raw base64 blob. Declared
@@ -59,19 +68,31 @@ except ImportError:  # pragma: no cover - only when tes3fields/ is absent
 
 # The HTML visualisations. Optional on the same terms again: without the
 # package the windows lose their "Visualise" buttons and nothing else changes.
+build_cell_pages: Callable[..., dict] | None
+build_conflict_map: Callable[..., str] | None
+build_explorer: Callable[..., str] | None
 build_height_delta: Callable[..., str] | None
 build_pathgrid_graph: Callable[..., str] | None
 build_terrain_3d: Callable[..., str] | None
+collect_detail: Callable[..., dict] | None
 try:
     from mlox_subset.viz import (
+        build_cell_pages,
+        build_conflict_map,
+        build_explorer,
         build_height_delta,
         build_pathgrid_graph,
         build_terrain_3d,
+        collect_detail,
     )
 except ImportError:  # pragma: no cover - only when viz/ is absent
+    build_cell_pages = None
+    build_conflict_map = None
+    build_explorer = None
     build_height_delta = None
     build_pathgrid_graph = None
     build_terrain_3d = None
+    collect_detail = None
 
 
 def _as_float(value: object) -> float:
@@ -540,27 +561,71 @@ class ConflictWindowsMixin:
             ttk.Button(
                 btns, text=_("Dump tes3conv JSON..."), command=self._dump_conflict_json
             ).pack(side="left", padx=(8, 0))
+        if build_explorer is not None:
+            map_button = ttk.Button(
+                btns, text=_("Conflict explorer..."), command=self._show_conflict_map
+            )
+            map_button.pack(side="left", padx=(8, 0))
+            add_tooltip(
+                map_button,
+                _(
+                    "Open the conflict explorer: a world map of WHERE your mods collide, "
+                    "filterable by mod, plus exterior and interior lists. Click any cell "
+                    "to see that cell's terrain surface, height difference and navigation "
+                    "grid.\n\n"
+                    "This is not the cell map: that shows which mods TOUCH which cells. "
+                    "This shows which mods EDIT the land record and path grid there, and "
+                    "how those edits conflict."
+                ),
+            )
         ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
 
         self._refill_conflict_tree()
 
-    def _open_html_view(self, markup: str, stem: str) -> None:
-        """Write a generated page beside the app and open it in the browser.
+    def _detail_cache(self) -> tuple[Any, Callable[[Mapping[str, Any]], str] | None]:
+        """Build the mtime cache and per-conflict signature function.
 
-        The visualisations are deliberately plain files rather than embedded
-        widgets: they open in whatever the user already uses, they can be kept
-        and attached to a bug report, and the rendering code stays free of Tk
-        (which is what lets the hermetic suite test it at all).
+        The cache persists decoded cell JSON under the app directory, so the
+        slow tes3conv decode is skipped for cells whose plugins have not
+        changed since the last run -- which is what "help with load times"
+        means here. The signature is the mtime and size of the conflict's
+        plugins, so a re-saved plugin transparently invalidates just its cells.
+
+        Returns:
+            ``(cache, signature_for)``, or ``(None, None)`` if the viz cache is
+            unavailable.
+        """
+        if viz_cache is None:
+            return None, None
+        cache = viz_cache.DetailCache(app_base_dir() / ".viz_cache")
+        paths = dict(getattr(self, "_conf_paths", {}) or {})
+
+        def signature_for(conflict: Mapping[str, Any]) -> str:
+            """Change signature for one conflict's contributing plugins."""
+            return viz_cache.plugin_signature(conflict.get("plugins") or [], paths)
+
+        return cache, signature_for
+
+    def _open_html_view(self, markup: str, stem: str, title: str = "") -> None:
+        """Write a generated page beside the app and show it in-app.
+
+        The visualisations are plain files rather than embedded widgets so the
+        rendering code stays free of Tk -- which is what lets the hermetic
+        suite test it at all -- but they are *displayed* through the same
+        viewer chain as the cell map (pywebview, then tkinterweb, then the
+        browser), not flung straight into a browser.
 
         Args:
             markup: The complete HTML document.
             stem: Filename stem; a timestamp is appended so successive views do
                 not overwrite each other mid-comparison.
+            title: Window title for the in-app viewer.
         """
         from datetime import datetime
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005 - local clock is correct
         path = app_base_dir() / f"{stem}_{stamp}.html"
+        self._last_written_view = str(path)
         try:
             path.write_text(markup, encoding="utf-8")
         except OSError as exc:
@@ -569,15 +634,152 @@ class ConflictWindowsMixin:
                 _("Writing %(path)s failed: %(error)s") % {"path": path, "error": exc},
             )
             return
+        # Prefer the in-app viewer, exactly as the cell map does.
+        opener = getattr(self, "open_html_in_app", None)
         try:
-            webbrowser.open(path.as_uri())
-        except Exception as exc:  # noqa: BLE001 - any browser failure is non-fatal
+            if callable(opener):
+                opener(path, title or stem)
+            else:  # pragma: no cover - only if the mixin is used outside App
+                webbrowser.open(path.as_uri())
+        except Exception as exc:  # noqa: BLE001 - a viewer failure is non-fatal
             # The file exists either way, so tell the user where it is rather
-            # than losing the work to a browser that would not launch.
+            # than losing the work to a viewer that would not launch.
             messagebox.showinfo(
-                _("Saved, but could not open a browser"),
+                _("Saved, but could not open a viewer"),
                 _("The page was written to %(path)s (%(error)s)") % {"path": path, "error": exc},
             )
+
+    def _show_conflict_map(self) -> None:
+        """Build the conflict explorer off the main thread, then show it.
+
+        Threaded because it is genuinely slow: decoding landscape and path-grid
+        payloads means a tes3conv field lookup per cell. Doing that inline froze
+        the window with no indication of why -- the first version of this did
+        exactly that, and looked like a hang rather than work in progress.
+        """
+        conflicts = getattr(self, "_all_conflicts", None)
+        if not conflicts or build_explorer is None or self.worker_running:
+            return
+        self.worker_running = True
+        self.status_var.set(_("Building the conflict explorer..."))
+        threading.Thread(target=self._explorer_worker, args=(list(conflicts),), daemon=True).start()
+
+    def _explorer_worker(self, conflicts: list[dict]) -> None:
+        """Decode, render and write the explorer, then hand back to the UI.
+
+        Args:
+            conflicts: The conflict list to render.
+        """
+        written: str | None = None
+        error = ""
+        cells = 0
+        if build_explorer is None:  # pragma: no cover - guarded by the caller too
+            self.root.after(0, lambda: self._explorer_done(None, "viz is unavailable", 0))
+            return
+        try:
+            detail: dict = {}
+            if collect_detail is not None and self._conf_session is not None:
+
+                def fields_for(conflict: Mapping[str, Any]) -> dict:
+                    """Look one conflict's fields up through tes3conv."""
+                    _keys, per, _diff = core.diff_record_fields(
+                        self._conf_session, conflict, self._conf_paths
+                    )
+                    return per
+
+                cache, sig_for = self._detail_cache()
+                # Only the sampled overview here (bounded to ~60 cells) so the
+                # explorer opens promptly. Full-resolution cell pages are the
+                # expensive part and are written in the background afterwards --
+                # the world 3D terrain is not decoded at all (held back).
+                detail = collect_detail(conflicts, fields_for, cache=cache, signature_for=sig_for)
+            cells = len(detail)
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005 - local clock
+            path = app_base_dir() / f"conflict_explorer_{stamp}.html"
+            data_dir = path.stem + sidecar.DATA_SUFFIX
+            markup = build_explorer(
+                conflicts,
+                detail=detail,
+                cell_map_href="cell_map.html",
+                data_dir=data_dir,
+                embed_detail=False,
+            )
+            path.write_text(markup, encoding="utf-8")
+            sidecar.write_sidecars(path, {"detail": detail})
+            if viz_assets is not None:
+                # Shared JS/CSS as files, so the pages are small and debuggable.
+                viz_assets.write_assets(app_base_dir() / data_dir)
+            written = str(path)
+            if detail and build_cell_pages is not None:
+                threading.Thread(
+                    target=self._fill_cell_pages,
+                    args=(list(conflicts), str(path), data_dir, len(detail)),
+                    daemon=True,
+                ).start()
+        except Exception as exc:  # noqa: BLE001 - a view must never kill the scan
+            error = str(exc)
+        self.root.after(0, lambda: self._explorer_done(written, error, cells))
+
+    def _fill_cell_pages(
+        self, conflicts: list[dict], page_path: str, data_dir: str, limit: int
+    ) -> None:
+        """Decode full-resolution cells and write their pages, in the background.
+
+        Runs after the explorer is already open, so its cost is never on the
+        path to seeing it. Best-effort: any failure is swallowed, because the
+        pages enrich the explorer rather than being required by it, and the
+        client degrades to the sampled view for a cell whose page is not ready.
+
+        Args:
+            conflicts: The conflict rows.
+            page_path: The explorer HTML path (for sibling filenames).
+            data_dir: The sidecar folder name.
+            limit: How many cells the overview covered, so the two agree.
+        """
+        if self._conf_session is None or collect_detail is None or build_cell_pages is None:
+            return
+        try:
+
+            def fields_for(conflict: Mapping[str, Any]) -> dict:
+                """Look one conflict's fields up through tes3conv."""
+                _keys, per, _diff = core.diff_record_fields(
+                    self._conf_session, conflict, self._conf_paths
+                )
+                return per
+
+            cache, sig_for = self._detail_cache()
+            full = collect_detail(
+                conflicts, fields_for, limit=limit, stride=1, cache=cache, signature_for=sig_for
+            )
+            path = Path(page_path)
+            pages = build_cell_pages(full, explorer_href=path.name, cell_map_href="cell_map.html")
+            sidecar.write_sidecars(path, per_cell=full, cell_pages=pages)
+            trace(f"conflict explorer: {len(pages)} full-resolution cell page(s) written")
+        except Exception:  # noqa: BLE001 - enrichment only; the explorer is already open
+            trace("conflict explorer: cell-page fill FAILED:\n" + traceback.format_exc())
+
+    def _explorer_done(self, path: str | None, error: str, cells: int) -> None:
+        """Open the built explorer, or report why it could not be built.
+
+        Args:
+            path: The written page, or ``None`` on failure.
+            error: The failure message, if any.
+            cells: How many cells got local detail.
+        """
+        self.worker_running = False
+        if path is None:
+            self.status_var.set(_("The conflict explorer could not be built."))
+            messagebox.showerror(
+                _("Could not build the conflict explorer"), _("%(error)s") % {"error": error}
+            )
+            return
+        self._last_explorer_file = path
+        self.status_var.set(
+            _("Conflict explorer: %(cells)d cell(s) with local detail.") % {"cells": cells}
+        )
+        opener = getattr(self, "open_html_in_app", None)
+        if callable(opener):
+            opener(Path(path), _("Conflict explorer"))
 
     def _visualise_field(self, key: str, plugins: Sequence[str], per: Mapping[str, Any]) -> None:
         """Open the right visualisation for the selected field.
@@ -818,7 +1020,7 @@ class ConflictWindowsMixin:
         win = tk.Toplevel(self.root)
         win.title(f"Field: {key}")
         win.configure(bg=DARK["bg"])
-        win.geometry("820x520")
+        win.geometry("1040x680")
         note = "last plugin wins · ★ orange = your custom mod"
         if key == "bytecode" and listing_for_bytecode_field is not None:
             note += " · shown disassembled; undecoded spans are printed as hex"

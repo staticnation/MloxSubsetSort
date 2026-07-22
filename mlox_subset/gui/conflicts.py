@@ -59,19 +59,16 @@ except ImportError:  # pragma: no cover - only when tes3fields/ is absent
 
 # The HTML visualisations. Optional on the same terms again: without the
 # package the windows lose their "Visualise" buttons and nothing else changes.
-build_conflict_map: Callable[..., str] | None
 build_height_delta: Callable[..., str] | None
 build_pathgrid_graph: Callable[..., str] | None
 build_terrain_3d: Callable[..., str] | None
 try:
     from mlox_subset.viz import (
-        build_conflict_map,
         build_height_delta,
         build_pathgrid_graph,
         build_terrain_3d,
     )
 except ImportError:  # pragma: no cover - only when viz/ is absent
-    build_conflict_map = None
     build_height_delta = None
     build_pathgrid_graph = None
     build_terrain_3d = None
@@ -543,21 +540,6 @@ class ConflictWindowsMixin:
             ttk.Button(
                 btns, text=_("Dump tes3conv JSON..."), command=self._dump_conflict_json
             ).pack(side="left", padx=(8, 0))
-        if build_conflict_map is not None:
-            map_button = ttk.Button(
-                btns, text=_("Conflict map..."), command=self._show_conflict_map
-            )
-            map_button.pack(side="left", padx=(8, 0))
-            add_tooltip(
-                map_button,
-                _(
-                    "Plot every conflicting record onto the world grid, so you can see "
-                    "WHERE your mods collide. Hotter cells have more conflicts; cells "
-                    "involving your own mods are outlined. Opens as an HTML page.\n\n"
-                    "This is not the cell map: that shows which mods TOUCH which cells, "
-                    "which is a different (and much larger) set."
-                ),
-            )
         ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
 
         self._refill_conflict_tree()
@@ -596,20 +578,6 @@ class ConflictWindowsMixin:
                 _("Saved, but could not open a browser"),
                 _("The page was written to %(path)s (%(error)s)") % {"path": path, "error": exc},
             )
-
-    def _show_conflict_map(self) -> None:
-        """Render every conflict onto the world grid and open it."""
-        conflicts = getattr(self, "_all_conflicts", None)
-        if not conflicts or build_conflict_map is None:
-            return
-        try:
-            markup = build_conflict_map(conflicts)
-        except Exception as exc:  # noqa: BLE001 - a view must never kill the scan
-            messagebox.showerror(
-                _("Could not build the conflict map"), _("%(error)s") % {"error": exc}
-            )
-            return
-        self._open_html_view(markup, "conflict_map")
 
     def _visualise_field(self, key: str, plugins: Sequence[str], per: Mapping[str, Any]) -> None:
         """Open the right visualisation for the selected field.

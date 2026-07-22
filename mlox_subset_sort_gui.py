@@ -192,6 +192,27 @@ from mlox_subset.net import (  # noqa: E402
 )
 from mlox_subset.plugins import PluginFileIndex  # noqa: E402
 from mlox_subset.rules import ORDER_NAME_RE  # noqa: E402
+
+# The conflict explorer, built beside the cell map. Optional like every other
+# extra: without it the cell map renders exactly as it always has.
+build_cell_pages: Callable[..., dict] | None
+build_explorer: Callable[..., str] | None
+collect_detail: Callable[..., dict] | None
+collect_world_terrain: Callable[..., dict] | None
+try:
+    from mlox_subset.viz import (
+        build_explorer,
+        collect_detail,
+        collect_world_terrain,
+        sidecar as viz_sidecar,
+    )
+except ImportError:  # pragma: no cover - only when viz/ is absent
+    build_cell_pages = None
+    build_explorer = None
+    collect_detail = None
+    collect_world_terrain = None
+    viz_assets = None
+    viz_sidecar = None  # type: ignore[assignment]
 from mlox_subset.tracing import set_trace_file, trace  # noqa: E402
 
 
@@ -2308,7 +2329,13 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                 trace(
                     f"cell map: coverage built, {len(cov['exterior'])} ext, {len(cov['interior'])} int"
                 )
-                html = core.generate_cell_map_html(cov)
+                # Build the explorer alongside the map when a conflict scan
+                # has run, so the cell map's "Conflicts" button is there the
+                # first time rather than only after the explorer was opened
+                # by hand. Requiring that order was a real usability bug: the
+                # button silently did not exist and nothing said why.
+                href = self._ensure_explorer_for_cell_map(cov)
+                html = core.generate_cell_map_html(cov, explorer_href=href)
                 trace(f"cell map: html built, {len(html)} bytes")
                 # Write straight to disk and drop the string -- the map is viewed
                 # FROM the file (browser / tkinterweb load_file), never rendered
@@ -2395,6 +2422,153 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
                 status + "  (opened in browser — pip install pywebview " "for an in-app window)"
             )
 
+    @staticmethod
+    def _coverage_to_conflicts(coverage: Mapping[str, Any]) -> list[dict]:
+        """Turn cell coverage into conflict-shaped rows to populate the explorer.
+
+        The cell map already knows which cells more than one mod touches, and
+        the explorer's map and lists only need exactly that shape. So when no
+        record scan has run, the explorer is populated from coverage rather than
+        left empty -- which is what a user sees on first open, and an empty page
+        beside a busy cell map reads as broken.
+
+        This is coverage, **not** record-level conflict, and the page says so:
+        two mods touching a cell is not the same as their records colliding.
+        The overlap is the honest superset -- every record conflict is in here,
+        alongside cells that merely share space -- and the terrain/nav/field
+        detail that needs tes3conv is added by 'Check Conflicts'.
+
+        Args:
+            coverage: The result of ``build_cell_coverage``.
+
+        Returns:
+            One row per cell touched by two or more mods.
+        """
+        subl = {s.lower() for s in coverage.get("subset_lower", set())}
+        rows: list[dict] = []
+        for (gx, gy), mods in coverage.get("exterior", {}).items():
+            if len(mods) < 2:
+                continue
+            rows.append(
+                {
+                    "type": "Cell (coverage)",
+                    "id": f"({gx}, {gy})",
+                    "plugins": list(mods),
+                    "winner": mods[-1],
+                    "involves_subset": any(m.lower() in subl for m in mods),
+                }
+            )
+        for name, mods in coverage.get("interior", {}).items():
+            if len(mods) < 2:
+                continue
+            rows.append(
+                {
+                    "type": "Cell (coverage)",
+                    "id": str(name),
+                    "plugins": list(mods),
+                    "winner": mods[-1],
+                    "involves_subset": any(m.lower() in subl for m in mods),
+                }
+            )
+        return rows
+
+    def _ensure_explorer_for_cell_map(self, coverage: Mapping[str, Any] | None = None) -> str:
+        """Write a conflict explorer next to the cell map, and return its name.
+
+        **Always writes a populated one.** Two earlier bugs came from this
+        method being conditional: first the button was missing without a prior
+        scan, then the button was there but the page was empty. Both had the
+        same cause -- the explorer read only the record-scan results, which the
+        cell map does not produce. It now falls back to the coverage the cell
+        map *did* compute, so the map and lists are populated on first open.
+
+        The distinction is preserved, not erased: coverage-derived rows are
+        marked as such and the page states that record-level detail (which
+        records actually conflict, terrain, navigation) needs 'Check Conflicts'.
+        A record scan, once run, supersedes the coverage rows entirely.
+
+        Runs on the cell-map worker thread, so it costs nothing interactively.
+
+        Args:
+            coverage: The cell coverage already built for the map, used as the
+                fallback data source when no record scan has run.
+
+        Returns:
+            The explorer's filename for a relative link, or ``""`` only if the
+            viz package is unavailable or writing failed.
+        """
+        if build_explorer is None or viz_sidecar is None:
+            return ""
+        conflicts = list(getattr(self, "_all_conflicts", None) or [])
+        coverage_only = not conflicts
+        if coverage_only and coverage is not None:
+            conflicts = self._coverage_to_conflicts(coverage)
+        try:
+            detail: dict = {}
+            session = getattr(self, "_conf_session", None)
+            # Sampled detail only, and bounded (60 cells) -- this is the map's
+            # in-page preview. The world 3D terrain is NOT decoded here: it is
+            # held back (its toggle is off), and decoding thousands of cells for
+            # it was what froze the cell map and, because it ran before the
+            # button was written, cost the button too. Full-resolution cell
+            # pages are generated in the BACKGROUND below so the map and its
+            # Conflicts button appear immediately.
+            if not coverage_only and session is not None and collect_detail is not None:
+
+                def fields_for(conflict: dict) -> dict:
+                    """Look one conflict's fields up through tes3conv."""
+                    _keys, per, _diff = core.diff_record_fields(
+                        session, conflict, getattr(self, "_conf_paths", {})
+                    )
+                    return per
+
+                cache, sig_for = self._detail_cache()
+                detail = collect_detail(conflicts, fields_for, cache=cache, signature_for=sig_for)
+            path = self._cellmap_file().with_name("conflict_explorer.html")
+            data_dir = path.stem + viz_sidecar.DATA_SUFFIX
+            path.write_text(
+                build_explorer(
+                    conflicts,
+                    detail=detail,
+                    cell_map_href=self._cellmap_file().name,
+                    data_dir=data_dir,
+                    embed_detail=False,
+                    coverage_only=coverage_only,
+                ),
+                encoding="utf-8",
+            )
+            viz_sidecar.write_sidecars(path, {"detail": detail})
+            if viz_assets is not None:
+                viz_assets.write_assets(path.with_name(data_dir))
+            self._last_explorer_file = str(path)
+            trace(
+                f"cell map: explorer written ({len(conflicts)} rows, "
+                f"coverage_only={coverage_only}, {len(detail)} detailed)"
+            )
+            # Enrich with full-resolution per-cell pages off the critical path,
+            # so the map is already on screen. Best-effort: if this thread is
+            # slow or fails, the map, the lists and the button are untouched.
+            if not coverage_only and detail and build_cell_pages is not None:
+                threading.Thread(
+                    target=self._fill_cell_pages,
+                    args=(list(conflicts), str(path), data_dir, len(detail)),
+                    daemon=True,
+                ).start()
+            if coverage_only:
+                print(
+                    _(
+                        "  Conflict explorer: %(cells)d multi-mod cell(s) from coverage. "
+                        "Run 'Check Conflicts' for record-level detail."
+                    )
+                    % {"cells": len(conflicts)}
+                )
+            else:
+                print(_("  Conflict explorer ready; full-resolution cell pages filling in..."))
+        except Exception:  # noqa: BLE001 - the cell map must render regardless
+            trace("cell map: explorer build FAILED:\n" + traceback.format_exc())
+            return ""
+        return path.name
+
     def _open_cell_map_pywebview(self, path: str | Path) -> None:
         """Show the map in an embedded OS webview.
 
@@ -2419,6 +2593,84 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
         except (OSError, ValueError):  # Popen: missing exe or bad argv
             trace("cell map: pywebview child launch FAILED:\n" + traceback.format_exc())
             self._open_cell_map_browser()
+
+    def open_html_in_app(self, path: str | Path, title: str) -> None:
+        """Show a generated HTML page in-app, falling back the same way the map does.
+
+        The chain is pywebview (a real OS webview, so canvas and SVG both work)
+        -> tkinterweb -> the browser. It mirrors the cell map's chain
+        deliberately: those pages are read in the same sitting, and a view that
+        opened somewhere else would be its own surprise.
+
+        The browser is the last resort rather than the default, which is the
+        whole point -- but it is still a *real* resort, because tkinterweb
+        cannot run the canvas the terrain and nav views draw on.
+
+        Args:
+            path: The written HTML file.
+            title: Window title.
+        """
+        target = Path(path)
+        self._last_view_file = str(target)
+        can_tkweb = HTMLViewer is not None and hasattr(HTMLViewer, "load_file")
+        if HAVE_PYWEBVIEW:
+            trace(f"view: pywebview for {target.name}")
+            self._open_cell_map_pywebview(target)
+            return
+        if can_tkweb:
+            trace(f"view: tkinterweb for {target.name}")
+            self._show_html_window(target, title)
+            return
+        trace(f"view: browser for {target.name} (no pywebview/tkinterweb)")
+        self._open_file_in_browser(target)
+
+    def _open_file_in_browser(self, path: str | Path) -> None:
+        """Open any local file in the user's browser.
+
+        Args:
+            path: The file to open.
+        """
+        target = Path(path)
+        if not target.exists():
+            return
+        try:
+            webbrowser.open(target.resolve().as_uri())
+        except (OSError, ValueError, webbrowser.Error):
+            pass
+
+    def _show_html_window(self, path: str | Path, title: str) -> None:
+        """Render a page in an in-app tkinterweb window.
+
+        Args:
+            path: The HTML file.
+            title: Window title.
+        """
+        win = tk.Toplevel(self.root)
+        win.title(title)
+        win.configure(bg=DARK["bg"])
+        win.geometry("1280x860")
+        bar = ttk.Frame(win, padding=6)
+        bar.pack(fill="x")
+        ttk.Button(
+            bar,
+            text=_("Open in browser"),
+            command=lambda: self._open_file_in_browser(path),
+        ).pack(side="left")
+        ttk.Button(bar, text=_("Close"), command=win.destroy).pack(side="right")
+        try:
+            viewer = HTMLViewer(win)
+            viewer.pack(fill="both", expand=True)
+            viewer.load_file(str(path))
+        except Exception:  # noqa: BLE001 - third-party widget; the browser still works
+            ttk.Label(
+                win,
+                foreground="#ffb454",
+                padding=8,
+                text=_(
+                    "(inline render failed -- use 'Open in browser'. The 3D and "
+                    "nav views need a real browser engine.)"
+                ),
+            ).pack(anchor="w")
 
     def _show_cell_map_window(self, path: str | Path) -> None:
         win = getattr(self, "_cellmap_win", None)

@@ -1902,3 +1902,204 @@ flagged all seven and would have caused seven pointless edits.
 
 The test was verified by injecting a real shadowing bug and confirming it failed
 -- a negative control, because a checker that cannot fail is not a check.
+
+### Cross-linking: an alternative map, not an overlay
+
+The conflict map is a **parallel view over the same world grid**, and
+`generate_cell_map_html` is left byte-for-byte unchanged.
+
+The first attempt did modify it -- an optional `conflict_cells` set that marked
+the affected cells in the existing SVG. That was reverted on the explicit point
+that the cell map should stay as it is. The reasoning holds up independently:
+coverage is much the larger set, so painting collisions onto it invites reading
+a busy cell as a broken one, and the two questions stay clearer as two maps. The
+conflict map links back to the cell map; nothing links forward, so the coverage
+view has no new failure mode and no new parameter.
+
+The two genuinely carry different data, which is why one cannot replace the
+other: the cell map says *what touches a cell*, and this one says *what edits
+the land record and path grid in that cell, and how those edits conflict*. The
+page therefore breaks its counts down by record type and states what each type
+governs -- terrain shape for `Landscape`, NPC navigation for `PathGrid` -- since
+"12 conflicts here" does not distinguish two mods reshaping the same hillside
+from two mods both placing a barrel.
+
+### Gates
+
+984 tests: 983 passed, 1 skipped. ruff, black, mypy (**46** files, up from 38),
+`check_undefined`, `check_placeholders`, `make_pot --check` (393 messages, up from 312). The jump in test
+count is mostly `test_standards.py`'s per-file parametrisation picking up six new
+modules -- the conformance sweep applies to new code automatically, which is the
+point of writing it that way.
+
+---
+
+## 25. Full-resolution cell pages, shared drawing, and an mtime cache
+
+Three connected additions to `viz`, plus one security fix found on the way.
+
+### One drawing implementation, two consumers
+
+The terrain surface, height difference and nav graph were drawn inline in the
+explorer's client. Adding a second place that draws them -- the dedicated
+cell pages -- would have meant two copies destined to drift, the exact failure
+the `viz` split exists to prevent. So the three draws were extracted into
+`viz/draw_js.py` as `window.VizDraw`: pure functions over `(canvas, detail,
+opts)` that render and return the numbers worth reporting, knowing no labels.
+The explorer and the cell pages both call them; the client tests were updated
+to load `DRAW_JS` alongside, and all pass unchanged, which is the evidence the
+extraction preserved behaviour.
+
+### The pages
+
+`viz/cellpage.py` builds a standalone page per detailed cell: one cell, its own
+document, **full resolution** (stride 1, where the explorer's embedded preview
+decimates for drag smoothness). Reached from the explorer's cell-detail tab via
+an "Open full-resolution page" link, written into the sidecar folder under
+`pages/`. Generated at the same two points that already dump the JSON -- the
+Check Conflicts scan and the Cell Map button -- so there is no third code path
+and no new ordering to remember.
+
+The surface view also draws the centre cell's neighbours as **border strips**:
+a half-cell on each edge neighbour, a quarter on each corner, abutting the
+centre at their true world extent. A border height that does not match the next
+cell shows as a step -- a seam, a visible cliff in game. Only neighbours that
+are themselves in the detail set are shown, because a non-conflict neighbour's
+terrain would need a separate load-order-winner lookup, and the neighbours that
+matter for a seam are the ones both mods edit, which are conflicts by
+definition. Rendering it confirmed the seam reads: the centre draws smooth and
+full-res, the mismatched neighbour floats a clear step above the shared edge.
+
+### The cache
+
+Decoding a cell is the slow part -- a tes3conv field lookup plus a VHGT
+reconstruction -- and it was repeated on every open. `viz/cache.py` persists the
+decoded per-cell JSON under the app directory, keyed on a `(name, mtime_ns,
+size)` signature of the plugins that produced it. A cell is re-decoded only when
+one of its plugins actually changed; everything else is served from disk. The
+cache is **injected** into `collect_detail` (default: none), so the viz package
+stays free of the filesystem and the tests drive it with a temp dir. The cache
+key folds in the sampling stride, because the overview and the full-resolution
+page decode the same cell to different data and must not collide.
+
+### The security fix rendering forced
+
+Writing the cell page's XSS test surfaced a real hole, not a test nicety.
+`json.dumps` does not escape `<`, so a plugin literally named
+`</script><script>...` -- an attacker-controlled filename on disk -- would close
+an inline `<script>` block and inject arbitrary markup. Every page that inlines
+JSON (explorer, cell page, world terrain) was affected. `html.script_json`
+escapes `<`, `>`, `&` and the two Unicode line separators to their `\uXXXX`
+forms, which is inert as HTML and byte-identical once parsed; it is now used at
+every inline-JSON site. The `.js` sidecars loaded via `<script src>` are not
+affected -- a script file is not parsed as HTML -- but the inline blocks were,
+and are the ones that ship a filename into the page. Pinned by a regression
+test that feeds a `</script>`-bearing plugin name through and asserts it cannot
+break out.
+
+### Gates
+
+ruff, black, mypy (**53** files), `check_undefined`, `check_placeholders`,
+`make_pot --check` (441 messages) all clean; every test group green. The suite
+is run in groups now because the client tests spawn a Node process each, and
+the whole suite in one invocation exceeds the sandbox's per-command timeout --
+a harness limit, not a code one. Batching those into a single Node process is a
+worthwhile later cleanup, noted rather than done.
+
+---
+
+## 26. Externalising the page assets, and holding back the world map
+
+Two release-shaping changes, on the user's direction.
+
+### The inline blob was undebuggable
+
+Every generated page inlined its scripts and stylesheet into one HTML string.
+The consequence, in the user's words, was that it "doesn't help with us trying
+to do anything": a browser's dev tools saw one anonymous `<script>` thousands of
+lines long, there was no file name to breakpoint against, and editing meant
+finding the code inside a Python string literal. The HTML itself was unreadable
+at ~110 KB.
+
+The shared JavaScript and CSS are now written **once** into `<data>/assets/` and
+every page references them with `<script src>` and `<link rel="stylesheet">`.
+The explorer dropped from ~110 KB to ~6 KB; a cell page is a readable shell.
+Those tags work from `file://` -- only `fetch()` is blocked there -- so nothing
+about the offline guarantee changed. When no data folder is given (the tests,
+one-off standalone pages) the assets are still inlined, so a self-contained page
+is available on demand; the real app always writes a folder and so always gets
+the debuggable form.
+
+**No effect on the packaged binary**, which was the user's specific concern. The
+JS/CSS still live as string constants inside the modules, so PyInstaller bundles
+them exactly as before -- no `--add-data`, no new bundled data files. They are
+merely *written out* at generation time rather than pasted into the markup, the
+same mechanism the data sidecars already use. Assets are shared rather than
+copied per page because the data folder already exists and a 10 KB `draw.js`
+duplicated across sixty cell pages would be 600 KB of identical bytes.
+
+### The world 3D map is held back, not deleted
+
+The knitted world-terrain view works but its rendering needs another pass, and
+it was blocking a shippable feature set. Its toggle is gated behind
+`_WORLD_TERRAIN_TOGGLE = ""` in the explorer -- one string to restore -- and the
+data collector (`collect_world_terrain`) and the client's `drawWorld` stay in
+the tree, still tested. So the rest of the explorer ships now and the world map
+is a one-line re-enable later, once the inline work has made it debuggable.
+
+### The XSS fix from §25 earns its place here
+
+Externalising moved the big constants out of the inline blocks, but the data
+payload (`window.__viz = {...}`) is still inlined -- it has to be, it is
+per-page. That payload carries plugin filenames, so `html.script_json` is still
+what stands between a plugin named `</script>...` and a broken-out script tag.
+The regression test guards it unchanged.
+
+### Gates
+
+ruff, black, mypy (**54** files), `check_undefined`, `check_placeholders`,
+`make_pot --check` all clean; every test group green. A source-only development
+snapshot was archived (5 MB zip, `tes3conv_json` and the `.7z` excluded) so this
+work-in-progress can be revisited independently of the shippable set.
+
+---
+
+## 27. The freeze, the missing button, and the gray window -- one cause
+
+A field report: the cell map "damn near froze" when it tried to fill in the 3D
+map, sometimes rendered with no Conflicts button, and once showed a gray,
+unpopulated 3D window. Three symptoms, one cause, plus a structural fix.
+
+**The freeze was the world terrain.** The cell-map path called
+`collect_world_terrain(conflicts, fields_for)` with a limit of **4000 cells** --
+a tes3conv field lookup and a VHGT decode for every landscape cell in the load
+order. On a real 989-plugin order that is minutes of work on the generation
+thread. It is now **not called at all**: the 3D world map is held back (§26), so
+decoding its data was pure waste.
+
+**The missing button was the same work, in the wrong place.** The world decode
+ran *before* the explorer was written and its filename returned, all inside one
+`try`. When the decode was slow enough to look hung, or threw, the `except`
+returned `""` and the cell map got no button. The generation is now **two-phase**:
+
+* Phase 1, which the map waits for, writes only the sampled overview, the
+  explorer HTML and the shared assets, then returns the button href. Measured at
+  ~1.5 s on a synthetic 60-cell fixture.
+* Phase 2, a background thread, decodes the full-resolution cells and writes
+  their pages. Best-effort: if it is slow or fails, the map, the lists and the
+  button are already on screen, and the client degrades a not-yet-written cell
+  to its sampled view.
+
+`write_sidecars` was made write-only-what-it-is-given so phase 2 can add
+per-cell files and pages without clobbering the overview phase 1 wrote. Both
+properties are pinned by tests.
+
+**The gray window was the held-back feature showing through.** The world-terrain
+toggle is gone (§26), so there is no empty 3D canvas to render gray. The
+explorer no longer references `world.js` either -- requesting a file that is
+deliberately not written would only 404.
+
+### Gates
+
+ruff, black, mypy (54 files), `check_undefined`, `check_placeholders`,
+`make_pot --check` all clean; every test group green.

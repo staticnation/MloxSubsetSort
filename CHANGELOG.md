@@ -108,33 +108,6 @@ field-diff window, and the PEP-conformance and blind-except passes.
   count** (100% of 717 path grids checked), and left in place that prefix
   shifts every edge by one slot — silently attributing each path point its
   *neighbour's* connections.
-- **Conflicts can now be seen, not just listed** (`mlox_subset/viz/`). Four
-  self-contained HTML views, generated from data the tool already had and
-  opened from the Conflicts and field-diff windows:
-  - a **conflict map** plotting every colliding record onto the world grid,
-    with a breakdown of *what* is being edited (terrain shape, NPC navigation,
-    the cell record) rather than a bare count. This is an **alternative** to
-    the cell map, not a change to it: that map answers which mods *touch* a
-    cell, this one answers which mods *edit the land record and path grid* in
-    it and how those edits conflict. The two cross-link; the cell map's own
-    SVG is untouched.
-  - a **terrain height difference**, decoding both plugins' `VHGT` to absolute
-    heights and subtracting them -- red where the winner raised the ground,
-    blue where it lowered it. This is the view that makes landscape diffs
-    honest: heights are stored as cumulative deltas, so moving **one** vertex
-    changes every byte after it and two nearly-identical cells look completely
-    different in the raw field.
-  - a **path-grid graph**, drawing the navigation mesh with edges the winner
-    added in green and removed in red. A plugin that *only* removes edges has
-    likely rebuilt its path grid by accident, which strands NPCs and which
-    nothing else in the toolchain reports; the page says so explicitly.
-  - a **3D terrain surface** you can rotate, with each plugin's version
-    switchable in place.
-
-  All four are dependency-free and work offline -- no CDN, no external script,
-  matching the cell map's existing guarantee. The 3D view is hand-rolled on a
-  2D canvas for exactly that reason. The severity palette (green/yellow/red)
-  follows `merged_lands` (MIT), which established it for TES3 land conflicts.
 - **`theme_template.json`** — a commented, import-ready starting point for
   custom themes, sitting next to the app. Covers the 9 required fields, the 7
   optional syntax-token roles (and what each falls back to), and the optional

@@ -49,7 +49,7 @@ mlox_subset = ["py.typed"]
 # below and mlox_subset.__version__ never drift apart.
 [project]
 name = "mlox-subset-sort"
-version = "3.0.0"
+version = "3.1.0"
 description = "Sort your own Morrowind mods into a frozen MOMW load order."
 readme = "README.md"
 requires-python = ">=3.10"

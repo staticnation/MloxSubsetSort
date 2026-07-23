@@ -2678,7 +2678,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin):
             win.destroy()
         win = tk.Toplevel(self.root)
         self._cellmap_win = win
-        win.title("Cell Map")
+        win.title("Viz Window")
         win.configure(bg=DARK["bg"])
         win.geometry("1000x720")
         bar = ttk.Frame(win, padding=6)

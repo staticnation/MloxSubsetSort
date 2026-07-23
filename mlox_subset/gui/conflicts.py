@@ -16,6 +16,7 @@ import traceback
 import webbrowser
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from typing import TYPE_CHECKING, Any, Literal
@@ -57,18 +58,23 @@ except ImportError:  # pragma: no cover - only when tes3fields/ is absent
     text_for_field = None
     describe_field = None
 
-# The HTML visualisations. Optional on the same terms again: without the
-# package the windows lose their "Visualise" buttons and nothing else changes.
+# The HTML visualisations that don't depend on the explorer/cell-page/detail
+# machinery: the direct conflict map and the per-field graph/difference/3D
+# views. Optional on the same terms as above: without the package the
+# windows lose their "Visualise" buttons and nothing else changes.
+build_conflict_map: Callable[..., str] | None
 build_height_delta: Callable[..., str] | None
 build_pathgrid_graph: Callable[..., str] | None
 build_terrain_3d: Callable[..., str] | None
 try:
     from mlox_subset.viz import (
+        build_conflict_map,
         build_height_delta,
         build_pathgrid_graph,
         build_terrain_3d,
     )
 except ImportError:  # pragma: no cover - only when viz/ is absent
+    build_conflict_map = None
     build_height_delta = None
     build_pathgrid_graph = None
     build_terrain_3d = None
@@ -375,7 +381,7 @@ class ConflictWindowsMixin:
         tree.bind("<<TreeviewSelect>>", on_sel)
         btns = ttk.Frame(win, padding=8)
         btns.pack(fill="x")
-        ttk.Button(btns, text=_("Save report (CSV)..."), command=self._save_resource_csv).pack(
+        ttk.Button(btns, text=_("Save Report (CSV)"), command=self._save_resource_csv).pack(
             side="left"
         )
         ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
@@ -533,34 +539,51 @@ class ConflictWindowsMixin:
 
         btns = ttk.Frame(win, padding=8)
         btns.pack(fill="x")
-        ttk.Button(btns, text=_("Save report (CSV)..."), command=self._save_conflicts_csv).pack(
+        ttk.Button(btns, text=_("Save Report (CSV)"), command=self._save_conflicts_csv).pack(
             side="left"
         )
         if self._conf_session is not None:
             ttk.Button(
-                btns, text=_("Dump tes3conv JSON..."), command=self._dump_conflict_json
+                btns, text=_("Dump tes3conv JSON"), command=self._dump_conflict_json
             ).pack(side="left", padx=(8, 0))
+        if build_conflict_map is not None:
+            cmap_button = ttk.Button(
+                btns, text=_("Conflict Map"), command=self._show_conflict_map
+            )
+            cmap_button.pack(side="left", padx=(8, 0))
+            add_tooltip(
+                cmap_button,
+                _(
+                    "Plot every conflicting record onto the world grid, so you can see "
+                    "WHERE your mods collide. Hotter cells have more conflicts; cells "
+                    "involving your own mods are outlined.\n\n"
+                    "This is not the cell map: that shows which mods TOUCH which cells, "
+                    "which is a different (and much larger) set."  
+                ),
+            )
         ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
-
         self._refill_conflict_tree()
 
-    def _open_html_view(self, markup: str, stem: str) -> None:
-        """Write a generated page beside the app and open it in the browser.
+    def _open_html_view(self, markup: str, stem: str, title: str = "") -> None:
+        """Write a generated page beside the app and show it in-app.
 
-        The visualisations are deliberately plain files rather than embedded
-        widgets: they open in whatever the user already uses, they can be kept
-        and attached to a bug report, and the rendering code stays free of Tk
-        (which is what lets the hermetic suite test it at all).
+        The visualisations are plain files rather than embedded widgets so the
+        rendering code stays free of Tk -- which is what lets the hermetic
+        suite test it at all -- but they are *displayed* through the same
+        viewer chain as the cell map (pywebview, then tkinterweb, then the
+        browser), not flung straight into a browser.
 
         Args:
             markup: The complete HTML document.
             stem: Filename stem; a timestamp is appended so successive views do
                 not overwrite each other mid-comparison.
+            title: Window title for the in-app viewer.
         """
         from datetime import datetime
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005 - local clock is correct
         path = app_base_dir() / f"{stem}_{stamp}.html"
+        self._last_written_view = str(path)
         try:
             path.write_text(markup, encoding="utf-8")
         except OSError as exc:
@@ -569,15 +592,35 @@ class ConflictWindowsMixin:
                 _("Writing %(path)s failed: %(error)s") % {"path": path, "error": exc},
             )
             return
+        # Prefer the in-app viewer, exactly as the cell map does.
+        opener = getattr(self, "open_html_in_app", None)
         try:
-            webbrowser.open(path.as_uri())
-        except Exception as exc:  # noqa: BLE001 - any browser failure is non-fatal
+            if callable(opener):
+                opener(path, title or stem)
+            else:  # pragma: no cover - only if the mixin is used outside App
+                webbrowser.open(path.as_uri())
+        except Exception as exc:  # noqa: BLE001 - a viewer failure is non-fatal
             # The file exists either way, so tell the user where it is rather
-            # than losing the work to a browser that would not launch.
+            # than losing the work to a viewer that would not launch.
             messagebox.showinfo(
-                _("Saved, but could not open a browser"),
+                _("Saved, but could not open a viewer"),
                 _("The page was written to %(path)s (%(error)s)") % {"path": path, "error": exc},
             )
+
+    def _show_conflict_map(self) -> None:
+        """Render every conflict onto the world grid and open it."""
+        conflicts = getattr(self, "_all_conflicts", None)
+        if not conflicts or build_conflict_map is None:
+            return
+        try:
+            markup = build_conflict_map(conflicts)
+        except Exception as exc:  # noqa: BLE001 - a view must never kill the scan
+            messagebox.showerror(
+                _("Could not build the conflict map"), _("%(error)s") % {"error": exc}
+            )
+            return
+        self._open_html_view(markup, "conflict_map")
+
 
     def _visualise_field(self, key: str, plugins: Sequence[str], per: Mapping[str, Any]) -> None:
         """Open the right visualisation for the selected field.
@@ -624,7 +667,7 @@ class ConflictWindowsMixin:
                 )
                 self._open_html_view(markup, "pathgrid")
                 return
-            if key == "vertex_heights.data" and loser and build_height_delta is not None:
+            if key == "vertex_heights.data" and build_height_delta is not None and len(plugins) > 1:
                 markup = build_height_delta(
                     value(winner, key),
                     value(loser, key),
@@ -636,18 +679,13 @@ class ConflictWindowsMixin:
                 )
                 self._open_html_view(markup, "height_delta")
                 return
+
             if key == "vertex_heights.data" and build_terrain_3d is not None:
-                # Only one plugin has the field, so there is nothing to
-                # subtract -- show the surface itself instead of refusing.
-                markup = build_terrain_3d(
-                    {
-                        p: (value(p, key), _as_float(value(p, "vertex_heights.offset", 0.0)))
-                        for p in plugins
-                        if value(p, key)
-                    },
-                    cell_label=cell,
-                )
-                self._open_html_view(markup, "terrain")
+                has_single_plugin = sum(
+                    1 for p in plugins if (per.get(p) or {}).get("vertex_heights.data")
+                ) == 1
+                if has_single_plugin:
+                    self._show_terrain_3d(plugins, per)
         except Exception as exc:  # noqa: BLE001 - a bad record must not kill the window
             messagebox.showerror(_("Could not build the view"), _("%(error)s") % {"error": exc})
 
@@ -697,7 +735,7 @@ class ConflictWindowsMixin:
         if key == "connections" and build_pathgrid_graph is not None:
             button = ttk.Button(
                 bar,
-                text=_("Show graph..."),
+                text=_("Show Path Grid"),
                 command=lambda: self._visualise_field(key, plugins, per),
             )
             button.pack(side="left", padx=(12, 0))
@@ -715,7 +753,7 @@ class ConflictWindowsMixin:
         if key == "vertex_heights.data" and build_height_delta is not None and len(plugins) > 1:
             button = ttk.Button(
                 bar,
-                text=_("Show difference..."),
+                text=_("Show Height Delta"),
                 command=lambda: self._visualise_field(key, plugins, per),
             )
             button.pack(side="left", padx=(12, 0))
@@ -733,7 +771,7 @@ class ConflictWindowsMixin:
         if has_terrain and build_terrain_3d is not None:
             button = ttk.Button(
                 bar,
-                text=_("Show in 3D..."),
+                text=_("Show 3D Terrain"),
                 command=lambda: self._show_terrain_3d(plugins, per),
             )
             button.pack(side="left", padx=(8, 0))
@@ -818,7 +856,7 @@ class ConflictWindowsMixin:
         win = tk.Toplevel(self.root)
         win.title(f"Field: {key}")
         win.configure(bg=DARK["bg"])
-        win.geometry("820x520")
+        win.geometry("1040x680")
         note = "last plugin wins · ★ orange = your custom mod"
         if key == "bytecode" and listing_for_bytecode_field is not None:
             note += " · shown disassembled; undecoded spans are printed as hex"

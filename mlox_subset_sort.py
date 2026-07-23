@@ -1982,7 +1982,9 @@ def _html_escape(s: object) -> str:
 
 
 def generate_cell_map_html(
-    coverage: Mapping[str, Any], title: str = "MLOX Subset Sort — Cell Map"
+    coverage: Mapping[str, Any],
+    title: str = "MLOX Subset Sort — Cell Map",
+    explorer_href: str = "",
 ) -> str:
     """Render the cell map as a self-contained HTML page.
 
@@ -2001,6 +2003,10 @@ def generate_cell_map_html(
     Args:
         coverage: The result of ``build_cell_coverage``.
         title: The page title.
+        explorer_href: Where the conflict explorer lives. When given, a button
+            appears beside the tabs so the two maps reach each other. The map's
+            own SVG and data are untouched either way -- the explorer is a
+            parallel view, not a layer over this one.
 
     Returns:
         A complete, self-contained HTML document.
@@ -2087,6 +2093,18 @@ def generate_cell_map_html(
     ext = ext_ok
     n_ext_conf = sum(1 for m in ext.values() if len(m) > 1)
     n_int_conf = sum(1 for m in inte.values() if len(m) > 1)
+    # The other direction of the cross-link. Rendered only when a target is
+    # given, so a cell map generated on its own has no dead button.
+    explorer_tip = (
+        "Which mods EDIT the land record and path grid in a cell, and how those "
+        "edits conflict -- a different question from coverage."
+    )
+    explorer_button = (
+        f"<button onclick=\"location.href='{_html_escape(explorer_href)}'\" "
+        f'title="{_html_escape(explorer_tip)}">Conflicts &raquo;</button>'
+        if explorer_href
+        else ""
+    )
 
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>{_html_escape(title)}</title>
@@ -2132,6 +2150,7 @@ def generate_cell_map_html(
  <button id="b0" class="on" onclick="show(0)">Map</button>
  <button id="b1" onclick="show(1)">Exterior list ({len(ext)})</button>
  <button id="b2" onclick="show(2)">Interior list ({len(inte)})</button>
+ {explorer_button}
 </div>
 <div id="t0" class="tab on">{grid}</div>
 <div id="t1" class="tab"><input class="f" placeholder="Filter exterior cells / mods..." onkeyup="ff('xt')">

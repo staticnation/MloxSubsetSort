@@ -67,3 +67,25 @@ class TestCaseInsensitiveFiletypes:
         monkeypatch.setattr("sys.platform", "linux")
         out = case_insensitive_filetypes([("Plugin", "*.esp"), ("All", "*.*")])
         assert out == (("Plugin", "*.[eE][sS][pP]"), ("All", "*.*"))
+
+    def test_wrapping_twice_does_not_double_the_pattern(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: a filter wrapped twice must equal one wrapped once.
+
+        The reported bug was a filter wrapped in both ``__init__`` and the GUI,
+        producing ``*.[[cC]][[fF]]...`` that matched nothing so the file picker
+        could not select ``openmw.cfg`` at all.
+        """
+        monkeypatch.setattr("sys.platform", "linux")
+        once = case_insensitive_filetypes((("openmw.cfg", "*.cfg"), ("All files", "*.*")))
+        twice = case_insensitive_filetypes(once)
+        assert once == (("openmw.cfg", "*.[cC][fF][gG]"), ("All files", "*.*"))
+        assert twice == once  # idempotent -- no doubled brackets
+
+    def test_the_openmw_cfg_filter_matches_any_case(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The exact filter from the screenshot must actually match the file."""
+        monkeypatch.setattr("sys.platform", "linux")
+        (_label, pattern), _all = case_insensitive_filetypes((("openmw.cfg", "*.cfg"), ("", "*")))
+        assert fnmatch.fnmatchcase("openmw.cfg", pattern)
+        assert fnmatch.fnmatchcase("OpenMW.CFG", pattern)

@@ -142,12 +142,29 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # Sign the artifact with minisign (pure-Python, no C/Rust toolchain) so the
+      # download can be verified. Skipped, not failed, when the signing secret is
+      # not configured yet, so a release can still go out unsigned during setup.
+      - name: Sign the .exe (tag builds only)
+        if: ${{ startsWith(github.ref, 'refs/tags/') && secrets.MINISIGN_SECRET_KEY != '' }}
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          python -m pip install py-minisign==0.21.1
+          python tools/sign_release.py "dist/wraithguard-toolkit-windows-x86_64${{ matrix.suffix }}.exe"
+
       - name: Attach to the release (tag builds only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/wraithguard-toolkit-windows-x86_64${{ matrix.suffix }}.exe
-          fail_on_unmatched_files: true
+          # The .minisig line matches nothing when signing was skipped, so
+          # fail_on_unmatched_files is off; the .exe is always produced by the
+          # build step above (which fails the job if it is not).
+          files: |
+            dist/wraithguard-toolkit-windows-x86_64${{ matrix.suffix }}.exe
+            dist/wraithguard-toolkit-windows-x86_64${{ matrix.suffix }}.exe.minisig
+          fail_on_unmatched_files: false
           # No generate_release_notes here: this step runs once per matrix backend
           # (edgechromium + qt), and each softprops call with it set regenerates
           # and appends a "Full Changelog" block to the shared release. Exactly one

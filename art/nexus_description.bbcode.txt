@@ -1,23 +1,22 @@
-[b][color=#e8905a]Wraithguard Toolkit[/color][/b]
+[size=6][b][color=#e8905a]Wraithguard Toolkit[/color][/b][/size]
 [i]Sort your custom mods into your OpenMW load order - without ever touching your curated Modding-OpenMW.com list.[/i]
-
+[center][youtube]yx7eFfxFLlU[/youtube][/center]
 [line]
-
 [b][color=#e8905a]The problem[/color][/b]
 You built a carefully-tuned mod list from [url=https://modding-openmw.com/]Modding-OpenMW.com[/url] with umo + MOMW Configurator. Then you added a few mods of your own. They need to slot into the load order - but running a whole-list sorter like PLOX would scramble the curated MOMW order, which MOMW [b]explicitly warns against[/b].
-
 [b][color=#e8905a]What it does[/color][/b]
 Wraithguard Toolkit treats your existing [font=Courier New]openmw.cfg[/font] order as [b]frozen[/b] and only works out where [i]your[/i] additions belong - using the real mlox rules - then writes the result back as a corrected [font=Courier New]momw-customizations.toml[/font].
-
 That's the durable fix: it [b]survives every future Configurator rebuild[/b], and your curated list is [b]never reordered[/b]. Only your mods move.
-
 [b][color=#e8905a]Features[/color][/b]
 • [b]Frozen curated order[/b] - sorts only your custom additions; the MOMW list is left exactly as it is.
 • [b]Real mlox engine[/b] - ported from mlox and cross-checked against plox: [font=Courier New]*[/font]/[font=Courier New]?[/font] wildcards and the [font=Courier New]<VER>[/font] token, ordering that bridges over plugins you don't have, and [font=Courier New][Conflict]/[Requires]/[Note][/font] warnings that understand [font=Courier New]ALL/ANY/NOT/DESC[/font] plus the [font=Courier New][VER]/[SIZE]/[DESC][/font] functions.
 • [b]plugin-order.yml aware[/b] - with your list name set, it tells curated-list plugins apart from your true additions and flags [color=#ffb454]redundant[/color], [color=#ffb454]orphan[/color], [color=#ffb454]needs-cleaning[/color], and base-order-drift issues.
-• [b]Conflict detection[/b] - find records two mods both touch, drill into a [b]field-level diff[/b], and see which plugin wins. Compiled scripts are [b]disassembled[/b] rather than shown as base64, so a script edit reads as the change it actually is.
+• [b]Conflict detection, the xEdit way[/b] - a plugin → record-type → record tree and a [b]field-level diff[/b] carrying the two-axis conflict status modders know from xEdit, [b]colour-coded[/b] ([color=#7ee0a0]green = agree[/color], [color=#ffb454]amber = benign override[/color], [color=#ff6b6b]red = a losing edit[/color]). See which plugin wins, and why.
+• [b]See the change, not just the bytes[/b] - compiled scripts are [b]disassembled[/b] rather than shown as base64; a conflicting mesh opens the actual [b]3D model[/b] side-by-side (our own NIF reader) and a texture the [b]decoded image[/b] (our own DDS/BC7/TGA decoder); and a [b]DIAL/INFO[/b] record reads as [b]dialogue[/b] - the line an NPC says, to whom, and under what conditions.
+• [b]Merged Lands[/b] - merges the landscape edits a load order would otherwise silently discard (a function-by-function port of David Von Derau's Rust tool), with a slope limiter, curvature-weighted resolution, per-layer [font=Courier New].mergedlands.toml[/font] control, seam repair and conflict images.
 • [b]Cell map[/b] - a heatmap of which mods touch which cells, rendered in-app or in your browser.
 • [b]Resource (VFS) conflicts[/b] - the loose-file "Data" conflict view for your data paths, in load order.
+• [b]Rule maker[/b] - author and test your own mlox rules in-app, from a conflict you found.
 • [b]Health checks[/b] - master presence/order verification, a lint pass, save-file checks and timestamped backups.
 • [b]tes3cmd frontend[/b] - clean plugins without leaving the app (Morrowind/Tribunal/Bloodmoon are never touched).
 • [b]One-click mods-folder scan[/b] - point it at your custom mods folder and it builds the subset for you.
@@ -25,19 +24,18 @@ That's the durable fix: it [b]survives every future Configurator rebuild[/b], an
 • [b]Fully themeable[/b] - [color=#bd93f9]Dracula[/color], [color=#a6e22e]Monokai[/color], [color=#61afef]Atom One Dark[/color], [color=#fabd2f]Gruvbox[/color] built in, and you can import your own or any [b]base16[/b] scheme. Themes the whole app, and switching applies instantly to every open window.
 • [b]Opt out what you don't want[/b] - disable plugins/paths (multi-select); anything already in your cfg is removed durably via [font=Courier New]removeContent[/font]/[font=Courier New]removeData[/font].
 • [b]Safe by default[/b] - dry-run preview, timestamped backups, and it can either emit a corrected TOML (recommended) or patch [font=Courier New]openmw.cfg[/font] directly.
-• [b]Cross-platform[/b] - Windows, Linux, macOS. Pure Python + tkinter.
-
-[b][color=#e8905a]New in 3.0[/color][/b]
-• [b]Theming for the whole app[/b] - the theme picker was log-panel-only; it now drives every window, button, frame, tab and list, and re-themes anything already open the moment you switch. Import your own theme as JSON or drop in a base16 scheme; a commented [font=Courier New]theme_template.json[/font] ships alongside to start from.
-• [b]The engine was rebuilt as a proper package[/b] - the monolithic script is now split by concern (rules, sorting, cfg handling, plugin metadata, downloads, script decoding). This is the invisible half of the release, and the important one: separating the pieces exposed code that was written but never wired up, and [b]that is where several real bugs were hiding[/b]. Most notably, [font=Courier New][SIZE][/font]/[font=Courier New][DESC][/font] rules were claiming matches for plugins that aren't on disk - which could fire a [font=Courier New][Conflict][/font] or [font=Courier New][Requires][/font] warning that was simply wrong.
-• [b]Verified, not asserted[/b] - 717 automated tests, plus a differential baseline pinning 41 behaviours against a real 687-plugin load order, so the refactor could be made without taking sorting behaviour on trust.
-
+• [b]Cross-platform[/b] - Windows, Linux and macOS (Intel + Apple Silicon). Prebuilt binaries for all three, or run from source (pure Python + tkinter).
+[b][color=#e8905a]New in 3.1.X[/color][/b]
+• [b]Merged Lands[/b] - the landscape merge, ported function-by-function from David Von Derau's Rust tool with our own slope limiter, curvature-weighted resolution and digest-based cleaning. Terrain edits a load order would otherwise discard are merged into one plugin, with per-layer control, corner-then-edge seam repair and conflict images. [font=Courier New]MERGED_LANDS.md[/font] accounts for every function and records where we diverge.
+• [b]An xEdit-style conflict view[/b] - Check Conflicts grew a plugin → type → record tree and a field-level diff carrying the two-axis conflict status (what each plugin does, and what happens overall), colour-coded the way modders read xEdit. Mesh and texture conflicts open the real 3D mesh or decoded texture side-by-side, and DIAL/INFO records read as dialogue.
+• [b]Our own NIF, DDS/BC7 and BSA readers[/b] - so the diff can show meshes and textures with no heavyweight binary dependency, each verified byte-for-byte against a reference implementation (documented in [font=Courier New]NIF_PROVENANCE.md[/font]).
+• [b]Prebuilt binaries for every platform[/b] - a Windows [font=Courier New].exe[/font], a Linux binary and a macOS [font=Courier New].app[/font] (Intel + Apple Silicon) are autobuilt in CI and attached to each release.
+• [b]Verified, not asserted[/b] - 4,500+ automated tests and a differential baseline pinning sorting behaviour against a real load order.
 [b][color=#e8905a]Requirements[/color][/b]
 • OpenMW with a MOMW list installed via the [url=https://modding-openmw.com/guides/auto/]Automatic Install Guide[/url] (umo + MOMW Configurator).
-• Python 3.10+ with tkinter (bundled with the python.org installers on Windows/macOS; on Linux e.g. [font=Courier New]sudo apt install python3-tk[/font]). [i]Not needed if you use the standalone .exe.[/i]
+• Python 3.10+ with tkinter (bundled with the python.org installers on Windows/macOS; on Linux e.g. [font=Courier New]sudo apt install python3-tk[/font]). [i]Not needed if you use the prebuilt binary for your platform.[/i]
 • mlox rule files ([font=Courier New]mlox_base.txt[/font] / [font=Courier New]mlox_user.txt[/font]).
 • [i]Optional:[/i] MOMW's [font=Courier New]plugin-order.yml[/font], and PyYAML (a built-in parser is used if it's absent).
-
 [b][color=#e8905a]How to use[/color][/b]
 See the included [b]QUICKSTART[/b] for the 5-minute version. In short:
 1. Point it at your [font=Courier New]openmw.cfg[/font] and add [font=Courier New]mlox_base.txt[/font] + [font=Courier New]mlox_user.txt[/font].
@@ -45,170 +43,96 @@ See the included [b]QUICKSTART[/b] for the 5-minute version. In short:
 3. Set your [b]list name[/b] (e.g. [font=Courier New]total-overhaul[/font]) and point [b]plugin-order.yml[/b] at MOMW's file.
 4. Click [b]1. Sort[/b], review the panels and log, then [b]2. Export[/b] a corrected [font=Courier New]momw-customizations.toml[/font].
 5. Drop that file next to your [font=Courier New]openmw.cfg[/font] and re-run MOMW Configurator. Done - your mods sort into place on every rebuild.
-
 [b][color=#e8905a]What it will NOT do[/color][/b]
 • Reorder your curated MOMW list - ever.
 • Write anything until you tell it to (dry-run is on by default; backups are made first).
 • Guarantee your customizations are conflict-free. It helps you [i]see[/i] and [i]place[/i] them - the rest is on you. Customizations are not supported by the MOMW team.
-
 [line]
-
 [b][color=#e8905a]Credits & Acknowledgements[/color][/b]
 Wraithguard Toolkit stands on the work of a lot of other people. This tool exists because these projects were generous enough to share their code, formats, and research. Huge thanks to everyone below - the good ideas are theirs; any bugs are ours.
-
 If you are one of these authors and want your attribution changed (or removed), please get in touch and we'll fix it right away.
-
 [line]
-
 [b][color=#e8905a]Code ported or adapted from (MIT-licensed)[/color][/b]
 These projects are MIT-licensed. We ported logic and/or cross-referenced their implementations; their copyright notices are reproduced with the relevant parts and their [font=Courier New]LICENSE[/font] files are included in their source folders in this repo.
-
 • [b]mlox[/b] - © 2009–2017 John Moonsugar (alias), dragon32, Arthur Moore. MIT. The load-order rule engine and the rule databases ([font=Courier New]mlox_base.txt[/font] / [font=Courier New]mlox_user.txt[/font]) this whole tool is built around. Our matching, ordering, and [font=Courier New][Conflict]/[Requires]/[Note][/font] predicate logic is a port of mlox's. Several of our [b]Lint[/b] checks (evil GMSTs, the interior fog-density-0 bug, expansion-function dependencies) come from mlox's [font=Courier New]tes3lint[/font], credited separately below. (The missing-pathgrid check does [i]not[/i] come from mlox - see the unlicensed-scripts section.)
 • [b]tes3lint[/b] - © 2009 John Moonsugar. MIT. Distributed as part of mlox. A diagnostic tool for TES3 plugins. Our native [b]Lint[/b] feature reimplements its useful checks against plugin binaries (so they see the whole OpenMW multi-folder VFS, with no Perl needed). One thing is [i]reproduced rather than reimplemented[/i]: the table of [b]72 "evil GMSTs"[/b] - the exact name/value pairs an old Construction Set wrote when run without both expansions. Those values are research, not something we could rederive, and the table carries John Moonsugar's copyright notice inline at [font=Courier New]_EVIL_GMSTS[/font] in the engine.
 • [b][url=https://github.com/DanaePlays/mlox-rules]mlox-rules[/url][/b] - maintained by DanaePlays and contributors. The [b]actively-updated[/b] rule database that modern mlox (v1.1+) and plox both use. Our "Update Rules..." button downloads the current [font=Courier New]mlox_base.txt[/font]/[font=Courier New]mlox_user.txt[/font] from this repo.
 • [b]plox[/b] - © 2024 Moritz Baron. MIT. A Rust reimplementation of mlox. Used as a second reference to harden our engine (wildcard/[font=Courier New]<VER>[/font] matching, order transitivity, predicate functions).
 • [b]tes3conv[/b] - © 2025 Greatness7. MIT. Converts Morrowind plugins ↔ JSON. Used (optionally, if present on PATH) as the exact record-identification and field-diff engine behind Check Conflicts.
-• [b]Merged Lands[/b] - © 2022 David Von Derau. MIT. Licence text vendored at [font=Courier New]License/MergedLands/LICENSE[/font] . A Rust tool that merges the landscape changes a load order would otherwise discard. Our [font=Courier New]wraithguard/land/[/font] package is a port of it , function by
-function - the reference landmass, the per-mod diff, the four conflict strategies and their thresholds, corner-then-edge seam repair, cleaning, the shared [font=Courier New]LTEX[/font] index space, the conflict images, and the [font=Courier New].mergedlands.toml[/font] sidecar schema, which we read with
-the same field names and values so settings written for the original work here unchanged.
-[font=Courier New]MERGED_LANDS.md[/font] accounts for all 191 functions in its [font=Courier New]src/[/font] , names where each one lives here, and records every place we diverge and why. Our additions - a slope limiter, curvature-weighted resolution, and digest-based cleaning - are marked as
-ours there rather than attributed to it.
+• [b]Merged Lands[/b] - © 2022 David Von Derau. MIT. Licence text vendored at [font=Courier New]License/MergedLands/LICENSE[/font] . A Rust tool that merges the landscape changes a load order would otherwise discard. Our [font=Courier New]wraithguard/land/[/font] package is a port of it , function by function - the reference landmass, the per-mod diff, the four conflict strategies and their thresholds, corner-then-edge seam repair, cleaning, the shared [font=Courier New]LTEX[/font] index space, the conflict images, and the [font=Courier New].mergedlands.toml[/font] sidecar schema, which we read with the same field names and values so settings written for the original work here unchanged.
+[font=Courier New]MERGED_LANDS.md[/font] accounts for all 191 functions in its [font=Courier New]src/[/font] , names where each one lives here, and records every place we diverge and why. Our additions - a slope limiter, curvature-weighted resolution, and digest-based cleaning - are marked as ours there rather than attributed to it.
 • [b]momw-configurator[/b] - © Modding-OpenMW.com (johnnyhostile). MIT. We read its [font=Courier New]cfg/custom.go[/font] to reimplement its customization-apply logic faithfully, so the [b]Export preview[/b] can simulate exactly what the Configurator will do to your [font=Courier New]openmw.cfg[/font] (matching, insert/replace/remove order, ambiguity errors) before it runs.
 • [b]modmapper[/b] - © 2023 Michiel. MIT. The inspiration and reference for the cell-map heatmap (which mods touch which exterior/interior cells).
 • [b]Tes3EditX[/b] - © 2023 Moritz Baron. MIT. Referenced for TES3 record handling and conflict-resolution UX.
 • [b]TES3Tool[/b] - © 2019 SaintBahamut. MIT. Referenced for the TES3 binary record/subrecord layout used by our built-in parser.
 • [b]MWEdit[/b] - © Dave Humphrey and contributors. MIT. Its [font=Courier New]data/Functions.dat[/font] and [font=Courier New]mwedit/script_defs.h[/font] are the primary source for our script-bytecode opcode table: the function names, their opcode values, and the parameter-flag words that describe each operand's encoding. Without it the [b]Bytecode[/b] view in the diff window would be guesswork - and guesswork is exactly what we refused to ship.
-
+• [b]Morrowind Dialog Explorer (MWDE)[/b] - © 2018 Sophie Kirschner. MIT. The [b]Read as dialogue[/b] view turns a DIAL/INFO record into the line an NPC says, to whom, and under what conditions. The condition phrasing - the mapping from a SCVR filter's type/function/comparison to an English "If ..." line, the boolean special cases ("is not dead", "is a member of faction X"), and the result-script token lexer - is adapted from MWDE's [font=Courier New]src/info_string.py[/font] and [font=Courier New]src/syntax_highlight.py[/font], retargeted onto the enum names tes3conv emits. The function labels themselves follow the [font=Courier New]tes3[/font] crate's own names.
 The compiler-internal opcodes that no function table lists (notably [font=Courier New]_SetReference[/font], emitted for [font=Courier New]id->Func[/font]) were [b]measured from a corpus of real compiled scripts[/b] rather than taken from anyone's source - an opcode's numeric value is a fact about the game's own data files. [font=Courier New]tools/gen_opcodes.py[/font] regenerates the table and documents each derivation.
-
 [b][color=#e8905a]abot's tes3cmd scripts (idea credited, no code used)[/color][/b]
 • [b]missing_pathgrids.pl[/b] and [b]cell_conflicts.pl[/b] - © [b]abot[/b]. Published as [i]Missing Pathgrids[/i] and [i]Cell Conflicts[/i] on abot's own site, [url=https://abitoftaste.modlist.x10.mx/morrowind/index.php?option=downloads&catid=58&Itemid=50&-Morrowind-tools]"Morrowind is Home"[/url] (Downloads → Morrowind tools), alongside MMOG, MRS and abot's other tools.
-
 abot is behind a great deal of what makes Morrowind still worth playing - Water Life, Silt Striders, the merged-object and resource-scanning tools that half the community's load orders depend on. These two [font=Courier New]tes3cmd --program-file[/font] scripts are small by comparison and easy to overlook, so: thank you.
-
 [b]The files themselves carry no copyright line and no licence text.[/b] No licence granted means the author keeps all rights, which makes these the most restricted inputs in this project rather than the least. So we treated them as [i]read-only inspiration[/i]: [b]no line of either script is in this tool[/b], and both of our implementations were written from scratch in Python against plugin binaries. What we took is the diagnostic idea, which copyright does not cover.
-
 • [i]Missing Pathgrids[/i] - the idea: an interior cell with no [font=Courier New]PGRD[/font] record is a bug, because NPCs cannot pathfind there. Our [font=Courier New][NO PATHGRID][/font] check deliberately [i]diverges[/i]: the original only considers plugins earlier in the load order and so reports false positives, whereas ours accepts a pathgrid contributed by [b]any[/b] plugin.
 • [i]Cell Conflicts[/i] - the idea: "show me every mod touching the same cells as this one." That became the [b]Focus on mod[/b] filter in our cell map (whose implementation follows [i]modmapper[/i], MIT).
-
 abot - if you would rather we credit this differently, drop the mention, or not reference your scripts at all, say the word and it is done.
-
 [b][color=#e8905a]Approach referenced (no code copied)[/color][/b]
 • [b]TES3 Conflictsolver Editor[/b] - ©2026 kirgan (a Mini-TES3Edit–style patch tool). No license file is distributed with it; [b]no code was copied[/b]. We credit it for the field-level record-diff [i]approach[/i] that inspired our field comparison view. All rights remain with its author.
-
+• [b]xEdit / TES5Edit / SSEEdit[/b] - the xEdit team. [b]MPL 1.1; no code copied.[/b] Our conflict-colour convention - a record's overall status colours the row, what one plugin does colours the text (green = no conflict, yellow = benign override, red = a losing edit) - is xEdit's, the one every modder already reads. The specific hues in [font=Courier New]wraithguard/gui/conflict_colors.py[/font] are the Material-Design values from a community [i]Material dark-mode edit of xEdit's [font=Courier New]xEdit.ini[/font][/i]; only the colour values and the scheme were taken - data, not code.
 [b][color=#e8905a]The NIF reader, and why it is written rather than imported[/color][/b]
 [font=Courier New]wraithguard/nif/[/font] reads Morrowind meshes with our own code. That is a licence decision, taken deliberately and recorded here so it is not revisited by accident:
 • [b]pyFFI[/b] - LGPL. The obvious Python choice. This tool ships as a PyInstaller onefile binary, and statically bundling an LGPL library carries a relinking obligation that does not fit that distribution.
 • [b]nifly[/b] - GPL-3.0. [b]io_scene_mw[/b] (Greatness7's Morrowind Blender plugin) - GPL-3.0, Python, and scoped to exactly this game, which makes it the most tempting option by far. [b]NifSkope[/b] - GPL.
 • [b]nif.xml[/b] (the NifTools format description) - in a GPL-3.0 repository whose own licence status is [url=https://github.com/niftools/nifxml/issues/86]disputed upstream[/url]. An unresolved licence is worse than one that clearly says no, so it was not used as a source either.
 • [b]niflib[/b] - [b]BSD-3[/b], and therefore the permissively-licensed reference to consult if a layout ever needs checking against an implementation.
-
 [b][color=#e8905a]three.js - bundled, not merely referenced[/color][/b]
-[font=Courier New]wraithguard/nif/assets/three.cjs[/font] is [b]three.js r185, unmodified[/b], MIT licensed, with its licence text beside it as [font=Courier New]three-LICENSE.txt[/font]. It is the first third-party [i]source[/i] this project ships, as distinct from the Python packages PyInstaller already collects, so it is called out here rather than left to be discovered in a build.
-
+[font=Courier New]wraithguard/viz/assets/three.cjs[/font] is [b]three.js r185, unmodified[/b], MIT licensed, with its licence text beside it as [font=Courier New]three-LICENSE.txt[/font]. It is the first third-party [i]source[/i] this project ships, as distinct from the Python packages PyInstaller already collects, so it is called out here rather than left to be discovered in a build.
 It is the [b]CommonJS[/b] build, which looks like an odd choice until the constraint is stated: modern three.js ships ESM only, split across [font=Courier New]three.module.min.js[/font] and [font=Courier New]three.core.min.js[/font], and [b]ES module scripts do not load from [font=Courier New]file://[/font][/b] - the origin is [font=Courier New]null[/font] and the CORS check fails. The viewer pages are written to disk and opened in a browser, so no ESM packaging can work. The CJS build is one self-contained file with no [font=Courier New]require()[/font] of its own and runs as a classic script behind a three-line shim.
-
 The orbit controls in the page are ours, not three.js's [font=Courier New]OrbitControls.js[/font], because that imports the bare specifier [font=Courier New]'three'[/font] and would pull ESM back into a page built specifically to avoid it.
-
 [font=Courier New]wraithguard/nif/bsa.py[/font] reads Morrowind's archives, and is ours for the same reasons again. [b]bethesda-structs[/b] (MIT, Stephen Bunn) via [b]BSAFileExtractor[/b] (MIT, Pierre GAMBIER) would have been licence-compatible, so this was an engineering call rather than a legal one: it pulls in [font=Courier New]construct[/font], [font=Courier New]multidict[/font], [font=Courier New]attrs[/font] and [font=Courier New]lz4[/font] - the last with a compiled extension - ships a 49 MB tree covering Fallout and Skyrim record formats this project will never touch, and every archive in its own test suite is the [i]post-Morrowind[/i] BSA format, which shares an extension with Morrowind's and nothing else. Morrowind's layout is a header and three tables. Neither project was read for the format; it was implemented from the public description and checked against a shipped archive with [font=Courier New]tools/check_bsa.py[/font].
-
 [font=Courier New]wraithguard/images/[/font] is ours for the same reasons and by the same method. Pillow would decode these textures, but it is a large binary dependency in a PyInstaller onefile build. It was used instead as an [b]oracle[/b]: the corpus textures decode byte-for-byte identically to it, BC7 matches on 19,380 random blocks across every mode and partition, and every PNG we write reads back through it unchanged. Used but not read, exactly as with NifSkope.
-
 [b]pydds was evaluated for BC7 and rejected on licence.[/b] It is the closest technical fit - DDS decompression bindings including BC7, which is precisely what was wanted - and it is [b]GPLv3-or-later[/b], which would relicense this entire project. That decision needed no technical argument at all. Two further facts made it moot anyway: it [i]depends on[/i] Pillow rather than replacing it, so adopting it would have added a dependency rather than removed one; and it is a compiled extension at version 0.0.8, marked alpha.
-
 [font=Courier New]quicktex[/font] (Apache-2.0) would have been licence-compatible and remains the option if a hand-written BC7 decoder ever proves too slow. It was not needed: ours matches an independent implementation exactly, and a viewer decodes one texture on demand rather than a collection.
-
 The BC7 tables come from the [b]published format specification[/b] - Khronos's OpenGL BPTC specification and Microsoft's Direct3D 11 documentation - not from any implementation. [font=Courier New]NIF_PROVENANCE.md[/font] records how that was verified, and why transcribing six hundred numbers needed a cross-check rather than a unit test.
-
 [b][color=#e8905a]Greatness7 relicensed the es3 library so this project could use it[/color][/b]
 On 28 July 2026, [b]Greatness7[/b] - author of the Morrowind Blender Plugin and of [font=Courier New]Greatness7/tes3[/font] - offered to relicense the NIF library inside [font=Courier New]io_scene_mw[/font], and then did it: [url=https://github.com/Greatness7/io_scene_mw/commit/cbe18b558299e14ecd959183e3cf9ea096fe95df]cbe18b5[/url] adds an MIT [font=Courier New]LICENSE[/font] to [font=Courier New]lib/es3/[/font]. [font=Courier New]Greatness7/tes3[/font] was already MIT.
-
 That was an unprompted act of generosity toward a project that had spent months carefully working around his code, and it is worth naming plainly. The relicensed library is [font=Courier New]lib/es3/[/font] [b]only[/b]; the rest of [font=Courier New]io_scene_mw[/font] remains GPL-3.0 because Blender requires plugins to be, and this project respects that line. See [font=Courier New]NIF_PROVENANCE.md[/font] for the exact boundary.
-
 Within an hour of reading [font=Courier New]tes3[/font], the cross-check had confirmed this project's hardest-won layout - the typed bounding box - and found a gap it could not have found alone: [font=Courier New]NiUnionBV[/font], a bound type no file in either corpus carries, which this reader would have refused. A second implementation sees what a corpus cannot.
-
 [b]How each field layout was actually derived - and what was deliberately not read to derive it - is recorded in [font=Courier New]NIF_PROVENANCE.md[/font].[/b] That document is the companion to this one: this section says [i]why[/i] the reader is ours, and that one says [i]where every fact in it came from[/i], with the worked derivations so they can be re-run rather than taken on trust.
-
 Going GPL-3.0 was considered seriously: it would unlock io_scene_mw, pyFFI, nifly and - the bigger prize - [b]OpenMW[/b], whose NIF loading, texture handling and [font=Courier New]openmw.cfg[/font] semantics this tool models from the outside. The project stays [b]MIT[/b] for now, so none of those were read for the reader's field layouts. They come from the publicly documented format, checked against real meshes with [font=Courier New]tools/check_nif_layouts.py[/font].
-
 [b][color=#e8905a]Referenced for formats & behavior (GPL - no source copied)[/color][/b]
 We read these projects to understand file formats and expected behavior. [b]No GPL source was copied into this tool[/b], so no copyleft obligations attach to it; the credit is one of gratitude and correctness.
-
 • [b]OpenMW[/b] - GPLv3. The engine that makes modern Morrowind modding possible. Referenced for [font=Courier New]openmw.cfg[/font] semantics, the [font=Courier New].omwaddon[/font]/[font=Courier New].omwscripts[/font] Lua formats, and VFS ([font=Courier New]data=[/font]) resolution rules.
 • [b]Mod Organizer 2[/b] - GPLv3. Referenced for the "Data" loose-file conflict concept behind our data-path (VFS) resource conflict checker.
 • [b]MWSE[/b] - © NullCascade, Merzasphor, Greatness7 and contributors. [b]GPLv2.[/b] We read [font=Courier New]MWSE/OpCodes.h[/font] to [i]check[/i] our opcode table and found it agreed with MWEdit on all 533 opcodes they share. Because MWSE is copyleft and this tool is not, [b]no MWSE source was copied[/b]: the shipped table is built from MWEdit (MIT), our own corpus measurements, and [font=Courier New]customfunctions.dat[/font].
-
 That last file needs saying precisely. [font=Courier New]customfunctions.dat[/font] is a [b]data file in MWEdit's own text format[/b], describing the MWSE / MW-Enhanced script functions so MWEdit can compile against them. It is installed by running the MWSE updater rather than being part of the MWSE source tree, and it is configuration for an MIT tool, not a copyleft header - so reading it does not bring GPLv2 obligations with it. It contributes [b]360 opcodes[/b] the base game has no equivalent for, which is what makes an MWSE-scripted mod disassemble instead of coming out as raw bytes.
-
 It spells parameter types symbolically ([font=Courier New]Long | String[/font]) where [font=Courier New]Functions.dat[/font] uses hex flag words, and the mapping between the two was [b]derived, not copied[/b]: the two files describe 106 of the same functions, so correlating those pins each symbolic name to exactly one bit value. The result matches the [font=Courier New]FLAG_*[/font] constants already taken from MWEdit's MIT header, which is how we know the derivation is right.
-
 Where the two files disagree - two renames ([font=Courier New]XDrop[/font]/[font=Courier New]XDropItem[/font], [font=Courier New]XEquip[/font]/[font=Courier New]XEquipItem[/font]) and 26 differing operand shapes - [b]the existing MWEdit-derived entry is kept[/b] and the disagreement printed rather than resolved silently. 25 of the 26 are the same call: MWEdit says [font=Courier New]String[/font] where customfunctions says [font=Courier New]Long | String[/font] for a filename or object id, and UESP's per-function pages document those parameters as strings, which settles it.
-
 The 26th is a genuine error and is corrected: MWEdit gives [font=Courier New]XFileWriteFloat[/font] a single float operand with no filename, where customfunctions lists two and UESP documents [font=Courier New]xFileWriteFloat filename (string), value (float)[/font]. Corrections live in one small explicit table in the generator, each with its evidence.
-
 • [b]MGE XE[/b] - GPLv3. Referenced alongside MWSE for the same cross-check; no source copied.
-
 [b][color=#e8905a]Curated data & tooling[/color][/b]
 • [b][url=https://modding-openmw.com/]Modding-OpenMW.com[/url] (MOMW)[/b] - the curated mod lists, the [font=Courier New]umo[/font] installer, the MOMW Configurator, and [font=Courier New]plugin-order.yml[/font] (the source of truth for which plugins belong to which list). This tool is designed specifically to [i]complement[/i] MOMW lists without ever reordering them. Customizations are not supported by the MOMW team.
 • [b]tes3cmd[/b] - © 2016 John Moonsugar. MIT. ([url=https://github.com/john-moonsugar/tes3cmd/]github.com/john-moonsugar/tes3cmd[/url]) The plugin-maintenance Swiss-army knife distributed with the MOMW Tools Pack. Our [b]tes3cmd[/b] window is a front-end that stages plugins with their masters so tes3cmd works correctly on a multi-folder OpenMW VFS; we drive the real binary for [font=Courier New]clean[/font], and reimplement master-size resync in-app (tes3cmd's own sync corrupts headers on this layout). The safe-cleaning workflow (never cleaning the vanilla masters, cleaning masters before dependents) is adapted from the community "drag-and-drop" cleaning batch by RMWChaos, Pinkertonius, and Spirithawke.
-
 [b][color=#e8905a]Documentation referenced (no code copied)[/color][/b]
 • [b][url=https://en.uesp.net/]UESP[/url] - [i]Morrowind Mod:Mod File Format[/i].[/b] CC-BY-SA. The community's reference for the TES3 binary layout, and the source of [font=Courier New]wraithguard/tes3fields/schema.py[/font]: 46 record types, their subrecords, whether each is required, its declared width, and the named members inside the struct ones. What is taken is [b]format fact[/b] - a [font=Courier New]NPDT[/font] is 12 or 52 bytes; its first two are a uint16 Level - which describes Bethesda's file format rather than anyone's prose about it, and the generated module carries the attribution.
-
 The schema is what lets the diff window say [i]what a field is[/i] rather than only what its value was, and what backs the [b]Format reference[/b] view beside a record diff. Nothing is guessed: where the tables are ambiguous the schema says so (a field with two documented layouts carries neither), and 56 of the parsed layouts are checked against the byte counts the same tables declare - all 56 agree, which is how we know the parse is right.
-
 Also the source for the LAND, PGRD and script-record field documentation used when writing the binary decoders, alongside the MIT-licensed implementations credited above.
-
 [b][color=#e8905a]yampt - Yet Another Morrowind Plugin Tools[/color][/b]
-
-• [b]yampt[/b] - MIT, Copyright (c) 2016-2026 Rafał Wierzchoś. Licence text vendored
-at [font=Courier New]License/yampt/LICENSE[/font].
-
+• [b]yampt[/b] - MIT, Copyright (c) 2016-2026 Rafał Wierzchoś. Licence text vendored at [font=Courier New]License/yampt/LICENSE[/font].
 Four things are ported from yampt's C++, with its permission by licence:
-
-• [font=Courier New]status.py[/font] - the two-axis conflict model, from
-  [font=Courier New]yampt.core/source/scanner/record_conflict.cpp[/font] and the worst-of roll-up in
-  [font=Courier New]yampt.editor/source/model/nav_tree_model.cpp[/font]. The names (`conflict_all`,
-  [font=Courier New]conflict_this[/font], "identical to master", "override wins") follow yampt, which
-  in turn follows TES5Edit/xEdit's "Conflict Status All" / "Conflict Status
-  This". The absence sentinel is ours: yampt uses a magic byte string because
-  its values are C++ strings, and Python can just use an object.
-
-• [font=Courier New]wraithguard/gui/pluginview.py[/font] - the plugin tree's shape, from
-  [font=Courier New]yampt.editor/source/model/nav_tree_model.hpp[/font]: file node -> record-type
-  group -> records, each level taking the worst status of its children on both
-  axes. yampt follows xEdit here and so do we.
-
-• [font=Courier New]align.py[/font] - matching the entries of a repeated field by content identity
-  rather than by position, from
-  [font=Courier New]yampt.core/source/decoder/content_alignment.cpp[/font]. yampt does this over raw
-  subrecords with per-record anchor and key rules; working from tes3conv's
-  decoded JSON means the entries arrive structured, so what is taken is the
-  principle and the question it answers - what identifies an entry - not the
-  subrecord machinery.
-
-• [font=Courier New]dialogue.py[/font] - resolving a topic into the order the engine reads it, from
-  [font=Courier New]yampt.core/source/scanner/dial_info_align.cpp[/font]. Including the rule that
-  matters most: a response whose [font=Courier New]PNAM[/font] names something not yet seen goes to
-  the [b]end[/b] of the topic.
-
-Verified rather than assumed: the port reproduces the file order of all 4,111
-topics and 36,735 responses in Morrowind.esm, Tribunal.esm and Bloodmoon.esm
-exactly, from the [font=Courier New]prev_id[/font] chain alone.
-
+• [font=Courier New]status.py[/font] - the two-axis conflict model, from [font=Courier New]yampt.core/source/scanner/record_conflict.cpp[/font] and the worst-of roll-up in [font=Courier New]yampt.editor/source/model/nav_tree_model.cpp[/font]. The names ([font=Courier New]conflict_all[/font], [font=Courier New]conflict_this[/font], "identical to master", "override wins") follow yampt, which in turn follows TES5Edit/xEdit's "Conflict Status All" / "Conflict Status This". The absence sentinel is ours: yampt uses a magic byte string because its values are C++ strings, and Python can just use an object.
+• [font=Courier New]wraithguard/gui/pluginview.py[/font] - the plugin tree's shape, from [font=Courier New]yampt.editor/source/model/nav_tree_model.hpp[/font]: file node -> record-type group -> records, each level taking the worst status of its children on both axes. yampt follows xEdit here and so do we.
+• [font=Courier New]align.py[/font] - matching the entries of a repeated field by content identity rather than by position, from [font=Courier New]yampt.core/source/decoder/content_alignment.cpp[/font]. yampt does this over raw subrecords with per-record anchor and key rules; working from tes3conv's decoded JSON means the entries arrive structured, so what is taken is the principle and the question it answers - what identifies an entry - not the subrecord machinery.
+• [font=Courier New]patch/dialogue.py[/font] - resolving a topic into the order the engine reads it, from [font=Courier New]yampt.core/source/scanner/dial_info_align.cpp[/font]. Including the rule that matters most: a response whose [font=Courier New]PNAM[/font] names something not yet seen goes to the [b]end[/b] of the topic. (The [i]readable[/i] rendering of a dialogue record is separate - see Morrowind Dialog Explorer above.)
+Verified rather than assumed: the port reproduces the file order of all 4,111 topics and 36,735 responses in Morrowind.esm, Tribunal.esm and Bloodmoon.esm exactly, from the [font=Courier New]prev_id[/font] chain alone.
 [b][color=#e8905a]Runtime & optional libraries[/color][/b]
 • [b]Python[/b] and [b]Tkinter/ttk[/b] - the language and GUI toolkit.
 • [b][url=https://github.com/pmgagne/tkinterdnd2]tkinterdnd2[/url][/b] - optional drag-and-drop.
 • [b][url=https://pyyaml.org/]PyYAML[/url][/b] - optional, faster [font=Courier New]plugin-order.yml[/font] parsing.
 • [b][url=https://pywebview.flowrl.com/]pywebview[/url][/b] - optional in-app cell-map viewer (OS webview).
 • [b][url=https://github.com/Andereoo/TkinterWeb]tkinterweb[/url][/b] / [b][url=https://github.com/bauripalash/tkhtmlview]tkhtmlview[/url][/b] - optional inline HTML rendering fallbacks.
-
 [b][color=#e8905a]And of course[/color][/b]
 • [b]Bethesda Game Studios[/b] - for [i]The Elder Scrolls III: Morrowind[/i].
 • The wider [b]OpenMW and Morrowind modding community[/b] - for decades of tools, documentation, and reverse-engineering that everything here depends on.
-
 [line]
-
 [i]Wraithguard Toolkit is provided as-is.[/i] [i]Where we reproduce MIT-licensed material (notably tes3lint's evil-GMST table), the original copyright and licence notice travels with it in the source.[/i] [i]We copy no GPL or unlicensed source: MWSE and OpenMW were read for cross-checking only, and the unlicensed community Perl scripts contributed ideas, not code.[/i]
-
 [i]Attribution is something we would rather over-do than get wrong.[/i] [i]If anything here is inaccurate - a name, a licence, a claim about what we derived from whom - please tell us and it will be corrected.[/i]

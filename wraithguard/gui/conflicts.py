@@ -36,7 +36,12 @@ from wraithguard.gui.theme import (
     highlight_plain_text_with_html,
     style_json_syntax_tags,
 )
-from wraithguard.gui.widgets import QueueWriter, add_tooltip, make_scrollable_x
+from wraithguard.gui.widgets import (
+    QueueWriter,
+    add_tooltip,
+    group_separator,
+    make_scrollable_x,
+)
 from wraithguard.i18n import gettext as _, ngettext
 from wraithguard.images.compare import Comparison, Verdict, compare_bytes, difference_image
 from wraithguard.images.image import ImageError
@@ -51,7 +56,23 @@ from wraithguard.nif.reader import NifParseError
 from wraithguard.nif.textures import TextureResolver
 from wraithguard.nif.vfs import archives_in, loose_index, read_mesh
 from wraithguard.nif.viewer import build_viewer_page
-from wraithguard.patch import FieldChoice, Selection
+from wraithguard.patch import (
+    FieldChoice,
+    FieldValue,
+    PatchError,
+    Selection,
+    parse_field_value,
+    parse_typed_value,
+)
+from wraithguard.patch.enums import value_options
+from wraithguard.patch.fieldtypes import (
+    field_kind,
+    flag_options,
+    flags_name,
+    int_bounds,
+    join_flags,
+    split_flags,
+)
 from wraithguard.patch.status import ConflictThis
 from wraithguard.patch.summary import (
     ALL_TAGS,
@@ -105,6 +126,8 @@ UI_READ_WAIT: Final = 2.0
 if TYPE_CHECKING:
     import queue
     from collections.abc import Callable, Mapping, Sequence
+
+    from wraithguard.patch import Choice
 
 # Compiled-script disassembly for the field-diff window. Optional, exactly as
 # in the main module: without it the diff shows the raw base64 blob. Declared
@@ -242,10 +265,11 @@ class ConflictWindowsMixin:
         # Supplied by PluginViewMixin, which owns the plugin tree window.
         def show_plugin_view(self) -> None: ...  # noqa: D102
 
+        # Supplied by JournalViewMixin, which owns the journal chain window.
+        def show_journal_view(self) -> None: ...  # noqa: D102
+
         # Supplied by PatchBuilderMixin, which owns the patch queue.
-        def queue_field(  # noqa: D102
-            self, record_type: str, key: str, choice: FieldChoice
-        ) -> None: ...
+        def queue_field(self, record_type: str, key: str, choice: Choice) -> None: ...  # noqa: D102
         def queue_whole_record(self, selection: Selection) -> None: ...  # noqa: D102
         def refresh_patch_views(self) -> None: ...  # noqa: D102
         def show_patch_builder(self) -> None: ...  # noqa: D102
@@ -1674,30 +1698,20 @@ class ConflictWindowsMixin:
 
         tree.bind("<<TreeviewSelect>>", lambda _e: self._on_conflict_select())
 
-        ttk.Button(btns, text=_("Save report (CSV)..."), command=self._save_conflicts_csv).pack(
-            side="left"
-        )
-        if self._conf_session is not None:
-            ttk.Button(
-                btns, text=_("Dump tes3conv JSON..."), command=self._dump_conflict_json
-            ).pack(side="left", padx=(8, 0))
-        if build_conflict_map is not None:
-            cmap_button = ttk.Button(
-                btns, text=_("Conflict map (direct)..."), command=self._show_conflict_map_direct
-            )
-            cmap_button.pack(side="left", padx=(8, 0))
-            add_tooltip(
-                cmap_button,
-                _(
-                    "Build and open a conflict map directly from the selected conflicts. "
-                    "Shows which mods edit LAND records in each cell, with a breakdown of "
-                    "terrain shape, NPC navigation, and cell record edits."
-                ),
-            )
+        # Three groups, set apart by dividers: build a patch | other ways to
+        # view the same scan | export the report. Close sits on the far right.
         patch_add = ttk.Button(
             btns, text=_("Add record to patch..."), command=self._add_record_to_patch
         )
-        patch_add.pack(side="left", padx=(8, 0))
+        patch_add.pack(side="left")
+        add_tooltip(
+            patch_add,
+            _(
+                "Choose which plugin's version of the selected record should win, and "
+                "add it to a patch. Nothing is written yet, and no mod is ever modified: "
+                "the patch is one new plugin that loads last."
+            ),
+        )
         merge_field = ttk.Button(
             btns, text=_("Merge field..."), command=self._merge_field_into_patch
         )
@@ -1710,12 +1724,15 @@ class ConflictWindowsMixin:
                 "and another mod fixed something else in the same record."
             ),
         )
+        define_field = ttk.Button(btns, text=_("Define value..."), command=self._define_field_value)
+        define_field.pack(side="left", padx=(8, 0))
         add_tooltip(
-            patch_add,
+            define_field,
             _(
-                "Choose which plugin's version of the selected record should win, and "
-                "add it to a patch. Nothing is written yet, and no mod is ever modified: "
-                "the patch is one new plugin that loads last."
+                "Type your own value for the selected field -- a number or string no "
+                "plugin in the conflict uses (a compromise weight, a corrected health). "
+                "It is written to the patch exactly as given, in the field's own type; "
+                "your mods are not modified."
             ),
         )
         self._patch_button = ttk.Button(
@@ -1729,8 +1746,10 @@ class ConflictWindowsMixin:
                 "new plugin. Nothing is written until you say so."
             ),
         )
+
+        group_separator(btns)
         view_button = ttk.Button(btns, text=_("Plugin view..."), command=self.show_plugin_view)
-        view_button.pack(side="left", padx=(8, 0))
+        view_button.pack(side="left")
         add_tooltip(
             view_button,
             _(
@@ -1741,6 +1760,18 @@ class ConflictWindowsMixin:
                 "change, and where does it lose', which is the question you are actually "
                 "asking. The colours fill in on their own once the conflict window's "
                 "background survey finishes. Read-only."
+            ),
+        )
+        journal_button = ttk.Button(
+            btns, text=_("Journal chains..."), command=self.show_journal_view
+        )
+        journal_button.pack(side="left", padx=(8, 0))
+        add_tooltip(
+            journal_button,
+            _(
+                "Every quest's journal stages, sorted by journal index rather than file "
+                "order, with the winning plugin's text for each stage. Reads the whole "
+                "load order once when opened. Read-only."
             ),
         )
         if self._conf_session is not None:
@@ -1761,6 +1792,29 @@ class ConflictWindowsMixin:
                     "moment on a large load order. Read-only."
                 ),
             )
+        if build_conflict_map is not None:
+            cmap_button = ttk.Button(
+                btns, text=_("Conflict map (direct)..."), command=self._show_conflict_map_direct
+            )
+            cmap_button.pack(side="left", padx=(8, 0))
+            add_tooltip(
+                cmap_button,
+                _(
+                    "Build and open a conflict map directly from the selected conflicts. "
+                    "Shows which mods edit LAND records in each cell, with a breakdown of "
+                    "terrain shape, NPC navigation, and cell record edits."
+                ),
+            )
+
+        group_separator(btns)
+        ttk.Button(btns, text=_("Save report (CSV)..."), command=self._save_conflicts_csv).pack(
+            side="left"
+        )
+        if self._conf_session is not None:
+            ttk.Button(
+                btns, text=_("Dump tes3conv JSON..."), command=self._dump_conflict_json
+            ).pack(side="left", padx=(8, 0))
+
         ttk.Button(btns, text=_("Close"), command=win.destroy).pack(side="right")
         self.refresh_patch_views()
         self._refill_conflict_tree()
@@ -2145,6 +2199,25 @@ class ConflictWindowsMixin:
             return
         self._patch_field(self._shown_conflicts[int(sel[0])], str(row[0]))
 
+    def _define_field_value(self) -> None:
+        """Type a custom value for the selected field, and queue it.
+
+        The sibling of :meth:`_merge_field_into_patch`: instead of taking the
+        field from a plugin, the user supplies the value directly -- a number or
+        string no plugin in the conflict uses.
+        """
+        tree = getattr(self, "_conf_tree", None)
+        ftree = getattr(self, "_conf_ftree", None)
+        row = ftree.selection() if ftree else None
+        sel = tree.selection() if tree else None
+        if not sel or not row:
+            messagebox.showinfo(
+                _("Nothing selected"),
+                _("Select a record above, then a field in the comparison below."),
+            )
+            return
+        self._patch_field_value(self._shown_conflicts[int(sel[0])], str(row[0]))
+
     def _add_record_to_patch(self) -> None:
         """Ask which plugin should win for the selected record, and remember it."""
         tree = getattr(self, "_conf_tree", None)
@@ -2291,6 +2364,283 @@ class ConflictWindowsMixin:
         win.grab_set()
         parent.wait_window(win)
         return answer["value"]
+
+    #: Fields that say *which record this is*: a typed value here would make a
+    #: different record, so they are refused before the dialog opens. Mirrors
+    #: wraithguard.patch.merge.IDENTITY, which enforces the same at write time.
+    _IDENTITY_FIELDS: ClassVar[frozenset[str]] = frozenset({"type", "id", "grid", "data.grid"})
+
+    @staticmethod
+    def _value_seed(current: object, present: bool) -> str:
+        """Render a field's current value as the entry's starting text.
+
+        Args:
+            current: The field's current value, or ``None``.
+            present: Whether the field exists in the record.
+
+        Returns:
+            Text the user can edit -- the string itself, a JSON dump for a list
+            or group, ``str()`` for a number or flag, or empty when absent.
+        """
+        if not present or current is None:
+            return ""
+        if isinstance(current, str):
+            return current
+        if isinstance(current, (list, dict)):
+            import json
+
+            return json.dumps(current)
+        return str(current)
+
+    def _patch_field_value(self, conflict: Mapping[str, Any], path: str) -> None:
+        """Ask for a typed value for one field, then queue it as a literal.
+
+        Args:
+            conflict: The selected record, as the scanner reports it.
+            path: The flattened field name to define.
+        """
+        if path in self._IDENTITY_FIELDS:
+            messagebox.showinfo(
+                _("Cannot set this field"),
+                _(
+                    "%(path)s says which record this is -- giving it a typed value "
+                    "would make a different record, not a patched one."
+                )
+                % {"path": path},
+            )
+            return
+        current: object = None
+        present = False
+        observed: list[str] = []
+        read = self.read_fields_now(conflict)
+        if read is not None:
+            _keys, per, _differing = read
+            plugins = list(conflict.get("plugins") or [])
+            winner_values = per.get(plugins[-1], {}) if plugins else {}
+            present = path in winner_values
+            current = winner_values.get(path)
+            # Every string a plugin uses for this field is a valid option -- the
+            # honest core of the dropdown, whatever the curated enum table knows.
+            observed = [pv[path] for pv in per.values() if isinstance(pv.get(path), str)]
+        options = value_options(current, present, observed, path)
+        kind = field_kind(str(conflict.get("type") or ""), path)
+        accepted, value = self._ask_defined_value(
+            dict(conflict), path, current, present, options, kind
+        )
+        if not accepted:
+            return
+        self.queue_field(
+            str(conflict.get("type") or ""),
+            str(conflict.get("id") or ""),
+            FieldValue(path=path, value=value),
+        )
+        self.show_patch_builder()
+
+    def _ask_defined_value(
+        self,
+        conflict: dict,
+        path: str,
+        current: object,
+        present: bool,
+        options: Sequence[str],
+        kind: str | None,
+    ) -> tuple[bool, object]:
+        """Put the typing of a custom field value to the user.
+
+        Args:
+            conflict: The selected conflict.
+            path: The field being given a value.
+            current: Its current value, used to seed the entry and, when the kind
+                is unknown, to decide the type the input is parsed into.
+            present: Whether the field exists in the winning record.
+            options: Dropdown suggestions for a string field -- known enum
+                variants and the values other plugins use. A combobox is shown
+                when there is more than one.
+            kind: The crate-declared field kind (``int:min:max``, ``float``,
+                ``bool``, ``enum``, ``flags:Name``, ``list``, ``str``), or
+                ``None`` when the schema does not cover this field -- then the
+                widget and the parse both fall back to the current value's type.
+
+        Returns:
+            ``(accepted, value)`` -- the parsed value when the user confirmed, or
+            ``(False, None)`` if the dialog was dismissed. The flag is separate
+            because a valid value may itself be ``None`` or ``False``.
+        """
+        parent = getattr(self, "_conflict_win", None)
+        if parent is None or not parent.winfo_exists():
+            parent = self.root
+        win = tk.Toplevel(parent)
+        win.title(_("Define a value"))
+        win.transient(parent)
+        apply_titlebar_theme(win)
+        win.configure(bg=DARK["bg"])
+        frame = ttk.Frame(win, padding=10)
+        frame.pack(fill="both", expand=True)
+
+        ttk.Label(
+            frame,
+            text=_("%(type)s  %(id)s")
+            % {"type": conflict.get("type", ""), "id": conflict.get("id", "")},
+        ).pack(anchor="w")
+        ttk.Label(
+            frame,
+            foreground=DARK["fg_dim"],
+            text=_(
+                "Type a value for %(path)s. It is written to the patch exactly as "
+                "given, in the field's own type.\nYour mods are not modified."
+            )
+            % {"path": path},
+        ).pack(anchor="w", pady=(0, 6))
+        if present:
+            ttk.Label(
+                frame,
+                foreground=DARK["fg_dim"],
+                text=_("currently: %(val)s  (%(kind)s)")
+                % {"val": f"{current!r}", "kind": type(current).__name__},
+            ).pack(anchor="w")
+
+        # An input matched to the field's type. The crate schema (``kind``) leads:
+        # a flags set gets a checkbox per flag, a bounded int a spinbox with that
+        # range, an enum a dropdown, a list a JSON box. Where the schema is silent
+        # the field's current value decides instead -- a bool a checkbox, a number
+        # a spinbox, a list/group a JSON box. When the kind is known the input is
+        # parsed by it; otherwise by the current value's type.
+        flag_set = flags_name(kind) if kind else None
+        bounds = int_bounds(kind) if kind else None
+        is_bool = kind == "bool" or (kind is None and present and isinstance(current, bool))
+        is_container = kind == "list" or (
+            kind is None and present and isinstance(current, (list, dict))
+        )
+        is_number = (
+            bounds is not None
+            or kind == "float"
+            or (kind is None and present and not is_bool and isinstance(current, (int, float)))
+        )
+        focus_target: tk.Widget
+        raw_source: Callable[[], str]
+
+        if flag_set is not None:
+            variants = flag_options(flag_set)
+            current_flags = current if isinstance(current, str) else ""
+            enabled, unknown = split_flags(current_flags, variants)
+            flag_vars = {name: tk.BooleanVar(value=name in enabled) for name in variants}
+            holder = ttk.Frame(frame)
+            holder.pack(fill="x", pady=(6, 2))
+            for name in variants:
+                ttk.Checkbutton(holder, text=name, variable=flag_vars[name]).pack(anchor="w")
+            if unknown:
+                ttk.Label(
+                    frame,
+                    foreground=DARK["fg_dim"],
+                    text=_("keeping unnamed bits: %(bits)s") % {"bits": ", ".join(unknown)},
+                ).pack(anchor="w")
+            focus_target = holder
+
+            def _flags_text() -> str:
+                """The checked flags, plus any unnamed bits, as a `` | `` string."""
+                checked = [name for name in variants if flag_vars[name].get()]
+                return join_flags(checked, unknown)
+
+            raw_source = _flags_text
+        elif is_bool:
+            boolvar = tk.BooleanVar(value=isinstance(current, bool) and current)
+            chk = ttk.Checkbutton(frame, text=_("Enabled (true)"), variable=boolvar)
+            chk.pack(anchor="w", pady=(6, 2))
+            focus_target = chk
+
+            def _bool_text() -> str:
+                """The checkbox state as the word the parser expects."""
+                return "true" if boolvar.get() else "false"
+
+            raw_source = _bool_text
+        elif is_container:
+            import json
+
+            box = tk.Text(
+                frame,
+                height=8,
+                width=52,
+                background=DARK["log_bg"],
+                foreground=DARK["fg"],
+                insertbackground=DARK["fg"],
+                selectbackground=DARK["select"],
+                relief="flat",
+            )
+            if isinstance(current, (list, dict)):
+                box.insert("1.0", json.dumps(current, indent=2))
+            box.pack(fill="both", expand=True, pady=(6, 2))
+            focus_target = box
+
+            def _box_text() -> str:
+                """The multi-line JSON the user edited."""
+                return box.get("1.0", "end")
+
+            raw_source = _box_text
+        elif is_number:
+            var = tk.StringVar(value=self._value_seed(current, present))
+            # A spinbox spans the crate's declared range where there is one; huge
+            # widths are capped for the widget's own stepper, but the real bounds
+            # still gate the parse.
+            low, high = (-1e12, 1e12) if bounds is None else bounds
+            spin = ttk.Spinbox(
+                frame,
+                from_=max(low, -(10**15)),
+                to=min(high, 10**15),
+                textvariable=var,
+                width=52,
+            )
+            spin.pack(fill="x", pady=(6, 2))
+            focus_target = spin
+            raw_source = var.get
+        else:
+            var = tk.StringVar(value=self._value_seed(current, present))
+            widget: ttk.Entry | ttk.Combobox
+            if len(options) > 1:
+                # Editable: pick a known enum variant or a plugin's value, or
+                # type one of your own. Never a dead end.
+                widget = ttk.Combobox(frame, textvariable=var, values=list(options), width=50)
+            else:
+                widget = ttk.Entry(frame, textvariable=var, width=52)
+            widget.pack(fill="x", pady=(6, 2))
+            focus_target = widget
+            raw_source = var.get
+
+        error = ttk.Label(frame, foreground="#e06c75", text="")
+        error.pack(anchor="w")
+
+        result: dict[str, object] = {"ok": False, "value": None}
+
+        def accept() -> None:
+            """Parse the input; on success take the value and close, else explain.
+
+            The crate kind parses when known -- so an absent integer still refuses
+            ``3.5`` and honours its range -- else the current value's type does.
+            """
+            try:
+                if kind is not None:
+                    parsed = parse_typed_value(raw_source(), kind)
+                else:
+                    parsed = parse_field_value(raw_source(), current, present)
+            except PatchError as exc:
+                error.configure(text=str(exc))
+                return
+            result["ok"] = True
+            result["value"] = parsed
+            win.destroy()
+
+        row = ttk.Frame(frame)
+        row.pack(fill="x", pady=(10, 0))
+        ttk.Button(row, text=_("Set value"), command=accept).pack(side="left")
+        ttk.Button(row, text=_("Cancel"), command=win.destroy).pack(side="right")
+
+        win.update_idletasks()
+        win.geometry(f"+{parent.winfo_rootx() + 60}+{parent.winfo_rooty() + 60}")
+        win.lift()
+        focus_target.focus_force()
+        win.protocol("WM_DELETE_WINDOW", win.destroy)
+        win.grab_set()
+        parent.wait_window(win)
+        return bool(result["ok"]), result["value"]
 
     def _show_conflict_map_direct(self) -> None:
         """Build the conflict map off the main thread, then show it.

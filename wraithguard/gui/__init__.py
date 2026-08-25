@@ -136,6 +136,11 @@ def case_insensitive_filetypes(
     those platforms the filters are returned unchanged. Only on X11 are they
     rewritten via :func:`_ci_pattern`.
 
+    Idempotent: a pattern that already carries a ``[..]`` class is assumed
+    rewritten and returned unchanged, so wrapping twice (a call site and a
+    widget both wrapping, say) cannot double it into the malformed
+    ``*.[[cC]]...`` that once made the ``openmw.cfg`` filter select nothing.
+
     Args:
         filetypes: A ``filedialog`` ``filetypes`` sequence of
             ``(label, patterns)`` pairs, where ``patterns`` is a
@@ -147,7 +152,10 @@ def case_insensitive_filetypes(
     """
     if sys.platform in ("win32", "darwin"):
         return filetypes
-    return tuple((label, _ci_pattern(patterns)) for label, patterns in filetypes)
+    return tuple(
+        (label, patterns if "[" in patterns else _ci_pattern(patterns))
+        for label, patterns in filetypes
+    )
 
 
 # Drag-and-drop is optional -- the GUI degrades gracefully to Browse-only.

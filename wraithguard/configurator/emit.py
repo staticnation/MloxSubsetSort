@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 
 from wraithguard.configurator.apply import configurator_remove_matches
 from wraithguard.configurator.cfglines import (
-    cfg_line_value,
     extract_data_path_value,
     normalize_data_path,
     toml_value,
@@ -609,7 +608,6 @@ def generate_customizations_toml(
     #    values instead match the line's value exactly or by /-suffix.)
     haystack = haystack_for_anchors
 
-    _line_value = cfg_line_value
     _remove_matches = configurator_remove_matches
 
     for a in dict.fromkeys(_anchors):  # dedupe, keep order

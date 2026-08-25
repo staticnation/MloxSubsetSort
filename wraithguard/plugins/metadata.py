@@ -17,9 +17,11 @@ behaviour rather than guessing.
 
 from __future__ import annotations
 
+import struct
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+from wraithguard.esp import EspError, Header, read_header
 from wraithguard.versions import (
     RE_FILENAME_VERSION,
     RE_HEADER_VERSION,
@@ -41,6 +43,10 @@ _DESCRIPTION_OFFSET: Final = 64
 
 #: How much of a plugin to read when only the header is wanted.
 _HEADER_READ_BYTES: Final = 4096
+
+#: Defensive cap on the header record's declared body size: the ``TES3`` header
+#: is tiny, so a larger size means a corrupt file, not a real header to read.
+_HEADER_MAX_BYTES: Final = 1 << 20
 
 
 class PluginFileIndex:
@@ -129,6 +135,13 @@ def read_plugin_description(path: str | Path) -> str:
     OpenMW is TES3-only, so anything without the ``TES3`` magic is not a
     plugin this tool can read.
 
+    Prefers the in-process ESP header reader, which parses the ``HEDR``
+    subrecord by the format's own framing and decodes it as cp1252 (so a
+    description with a smart quote or an accented name comes back right, where
+    the old fixed-offset ``latin-1`` scan turned bytes 0x80-0x9F into control
+    characters). The byte scan remains the fallback for a header the strict
+    reader will not parse, so an odd file still yields what it can.
+
     Args:
         path: Path to a plugin file.
 
@@ -137,6 +150,36 @@ def read_plugin_description(path: str | Path) -> str:
         file too short to hold a complete header. Never raises: plugin files
         come from the internet, and an unreadable one must not abort a scan.
     """
+    header = _read_plugin_header(path)
+    if header is not None:
+        return header.description
+    return _read_description_scan(path)
+
+
+def _read_plugin_header(path: str | Path) -> Header | None:
+    """Parse a plugin's ``TES3`` header via the ESP reader, or ``None``.
+
+    Reads only the first record (its declared size, capped defensively), so a
+    large plugin is not read whole and a file whose later records ``tes3conv``
+    would refuse still yields its header. Never raises.
+    """
+    try:
+        with Path(path).open("rb") as handle:
+            prefix = handle.read(16)  # tag + size + padding + flags
+            if len(prefix) < 16 or prefix[:4] != b"TES3":
+                return None
+            (body_size,) = struct.unpack_from("<I", prefix, 4)
+            body = handle.read(min(body_size, _HEADER_MAX_BYTES))
+    except (OSError, struct.error):
+        return None
+    try:
+        return read_header(prefix + body)
+    except EspError:
+        return None
+
+
+def _read_description_scan(path: str | Path) -> str:
+    """Fixed-offset byte scan for the description -- the header-parse fallback."""
     try:
         with Path(path).open("rb") as handle:
             block = handle.read(_HEADER_READ_BYTES)
@@ -146,7 +189,7 @@ def read_plugin_description(path: str | Path) -> str:
         return ""
     end = block.find(b"\x00", _DESCRIPTION_OFFSET)
     raw = block[_DESCRIPTION_OFFSET:end] if end != -1 else block[_DESCRIPTION_OFFSET:]
-    return raw.decode("latin-1", "replace")
+    return raw.decode("cp1252", "replace")
 
 
 def plugin_version(plugin_name: str, index: PluginFileIndex | None) -> str | None:

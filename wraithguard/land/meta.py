@@ -339,23 +339,6 @@ def load_meta(plugin: Path) -> PluginMeta:
     return meta
 
 
-def load_all(folder: Path, plugins: list[str]) -> dict[str, PluginMeta]:
-    """Read every sidecar in a folder.
-
-    Args:
-        folder: The Data Files directory.
-        plugins: Plugin file names.
-
-    Returns:
-        Settings per plugin name. Plugins with no sidecar are still present,
-        carrying the defaults, so a caller never has to test for absence.
-
-    Raises:
-        MetaError: If any sidecar exists and cannot be trusted.
-    """
-    return {name: load_meta(folder / name) for name in plugins}
-
-
 def _strategy_name(strategy: ConflictStrategy) -> str:
     """The file's spelling of a conflict strategy.
 

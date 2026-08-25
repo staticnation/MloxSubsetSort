@@ -21,6 +21,8 @@ import pytest
 from wraithguard.patch import PatchError
 from wraithguard.patch.merge import (
     FieldChoice,
+    FieldValue,
+    Merge,
     describe,
     merge_record,
     set_at,
@@ -287,3 +289,48 @@ class TestWholeAndMergedAreExclusive:
         )
         assert "Castle.esp" in result.masters
         assert "Other.esp" in result.masters
+
+
+class TestDefinedValues:
+    """Typing a value directly -- a number or string no plugin in the conflict uses."""
+
+    def test_a_typed_value_is_written_verbatim(self) -> None:
+        """The literal lands exactly as given, over whatever the base had."""
+        assert merged(FieldValue("data.flags", "MY_FLAG"))["data"]["flags"] == "MY_FLAG"
+
+    def test_a_typed_value_can_fill_a_field_the_base_lacks(self) -> None:
+        """Castle has no region; the user supplies one no plugin wrote."""
+        assert merged(FieldValue("region", "Nowhere"))["region"] == "Nowhere"
+
+    def test_a_literal_and_a_taken_field_coexist_in_one_merge(self) -> None:
+        """Take one field from a plugin, type another, in the same record."""
+        out = merged(FieldChoice("region", "Other.esp"), FieldValue("data.flags", "SET"))
+        assert out["region"] == "Felsaad Coast"
+        assert out["data"]["flags"] == "SET"
+
+    def test_a_literal_reference_list_is_taken_as_typed_not_reindexed(self) -> None:
+        """It belongs to no plugin's master list, so it is written as given."""
+        literal = [{"mast_index": 0, "id": "typed_thing"}]
+        out = merged(FieldValue("references", literal))
+        assert out["references"] == literal
+
+    def test_the_sources_are_not_modified_by_a_literal(self) -> None:
+        """A deep copy is written, so editing the patch cannot reach the mods."""
+        literal: list[dict[str, Any]] = [{"mast_index": 0, "id": "x"}]
+        out = merged(FieldValue("references", literal))
+        out["references"][0]["id"] = "changed"
+        assert literal[0]["id"] == "x"
+
+    def test_a_typed_identity_field_is_refused(self) -> None:
+        """Retyping id/type/grid makes a different record, not a merged one."""
+        with pytest.raises(PatchError, match="says which record this is"):
+            merged(FieldValue("data.grid", [0, 0]))
+
+    def test_describe_names_a_typed_value(self) -> None:
+        """The builder shows what will be written, literals included."""
+        assert describe([FieldValue("data.flags", 7)], "Castle.esp") == ["data.flags: set to 7"]
+
+    def test_a_literal_adds_no_master_to_the_merge(self) -> None:
+        """A typed value sources nothing, so it needs no plugin in the masters."""
+        merge = Merge("Cell", "(7, 22)", "Castle.esp", (FieldValue("data.flags", "X"),))
+        assert merge.plugins == {"Castle.esp"}

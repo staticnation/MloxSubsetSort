@@ -260,7 +260,7 @@ def disassemble(
 
     def flush() -> None:
         """Emit any accumulated undecodable bytes as one span."""
-        nonlocal pending, pending_at
+        nonlocal pending  # pending_at is only read here, so needs no declaration
         if pending:
             listing.items.append(RawBytes(pending_at, bytes(pending)))
             pending = bytearray()

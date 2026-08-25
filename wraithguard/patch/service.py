@@ -9,6 +9,12 @@ and write one new file.
 output is one new file that loads last; deleting it restores the previous
 behaviour exactly. The only destructive act available is overwriting a previous
 patch of the same name, and that is the caller's decision.
+
+**A patch can be built over several sessions.** Pass an earlier build of the
+same output file as ``carried`` and its records ride along into the new one,
+so today's queue only has to hold today's decisions -- last week's are already
+in the file being rewritten. See :func:`wraithguard.patch.records.carry_forward`
+for why that needs different handling than an ordinary source plugin.
 """
 
 from __future__ import annotations
@@ -27,8 +33,10 @@ from wraithguard.patch.merge import Merge, describe, merge_record
 from wraithguard.patch.records import (
     PatchError,
     Selection,
+    carry_forward,
     collect,
     dialogue_position_risk,
+    master_names,
     position_anchors,
     required_masters,
 )
@@ -56,7 +64,10 @@ class PatchResult:
 
     Attributes:
         output: The plugin written, or ``None`` for a dry run.
-        records: How many records it carries.
+        records: How many records it carries in total.
+        carried: How many of those came from an earlier build of this same
+            patch rather than this session's own selections and merges. Zero
+            for a fresh patch or a replace.
         masters: The files it declares, in order.
         remapped: Records whose references had to be renumbered.
         lines: The progress report, for a log panel.
@@ -64,6 +75,7 @@ class PatchResult:
 
     output: Path | None = None
     records: int = 0
+    carried: int = 0
     masters: list[str] = field(default_factory=list)
     remapped: int = 0
     lines: list[str] = field(default_factory=list)
@@ -77,6 +89,7 @@ def build_record_patch(
     converter: str,
     output: Path,
     merges: Sequence[Merge] = (),
+    carried: Sequence[Mapping[str, Any]] = (),
     dry_run: bool = False,
     report: Callable[[str], None] | None = None,
 ) -> PatchResult:
@@ -98,6 +111,14 @@ def build_record_patch(
         sizes: Each master's size in bytes, for the header.
         converter: Path to ``tes3conv``, which does the binary encoding.
         output: Where to write.
+        carried: An earlier build of *this same* patch, decoded, header
+            included -- pass this to append rather than replace. Every record
+            in it is re-emitted into the new build, except any this call's own
+            ``selections``/``merges`` decide too, which take precedence: a
+            record re-decided this session should carry the new answer, not
+            both. Pass the previous version's own records, not some other
+            plugin's -- see :func:`wraithguard.patch.records.carry_forward`
+            for why that distinction matters.
         dry_run: Report without writing.
         report: Called with each progress line, if given.
 
@@ -123,7 +144,7 @@ def build_record_patch(
         if report is not None:
             report(text)
 
-    if not selections and not merges:
+    if not selections and not merges and not carried:
         raise PatchServiceError("nothing was selected, so there is no patch to build")
 
     clashes = {(entry.record_type, entry.key) for entry in selections} & {
@@ -136,11 +157,27 @@ def build_record_patch(
             "leave the patch's own last-wins to decide which you get."
         )
 
-    say(f"records: {len(selections)} whole, {len(merges)} merged")
+    say(
+        f"records: {len(selections)} whole, {len(merges)} merged"
+        + (f", up to {len(carried)} carried forward from the existing patch" if carried else "")
+    )
     try:
-        masters = _masters_for(selections, merges, records_by_plugin, load_order)
+        masters = _masters_for(selections, merges, records_by_plugin, load_order, carried)
         say(f"declaring {len(masters)} master(s): {', '.join(masters)}")
-        records = collect(selections, records_by_plugin, masters)
+
+        # This session's own decisions always win: a record carried forward
+        # that was also re-decided here would otherwise sit next to its own
+        # replacement, leaving the patch's last-wins to pick between them.
+        decided = frozenset(
+            {(entry.record_type, entry.key) for entry in selections}
+            | {(entry.record_type, entry.key) for entry in merges}
+        )
+        records = carry_forward(carried, masters, skip=decided) if carried else []
+        carried_count = len(records)
+        if carried:
+            say(f"{carried_count} record(s) carried forward from the existing patch")
+
+        records.extend(collect(selections, records_by_plugin, masters))
         for entry in merges:
             for line in describe(entry.choices, entry.base_plugin):
                 say(f"  {entry.record_type} {entry.key}: {line}")
@@ -197,7 +234,13 @@ def build_record_patch(
     except EmitError as exc:
         raise PatchServiceError(str(exc)) from exc
 
-    result = PatchResult(records=len(records), masters=masters, remapped=remapped, lines=lines)
+    result = PatchResult(
+        records=len(records),
+        carried=carried_count,
+        masters=masters,
+        remapped=remapped,
+        lines=lines,
+    )
     if dry_run:
         say("dry run: nothing was written")
         return result
@@ -213,6 +256,7 @@ def _masters_for(
     merges: Sequence[Merge],
     records_by_plugin: Mapping[str, Sequence[Mapping[str, Any]]],
     load_order: Sequence[str],
+    carried: Sequence[Mapping[str, Any]] = (),
 ) -> list[str]:
     """Work out what a patch of these records and merges must declare.
 
@@ -225,6 +269,10 @@ def _masters_for(
         merges: Records being built from several plugins.
         records_by_plugin: The source plugins' decoded records.
         load_order: The full load order, which decides the result's order.
+        carried: An earlier build of this same patch, if appending to one.
+            Its own masters join the required set even though nothing here
+            takes a record from it *as* a plugin -- the carried records still
+            reference those masters by position.
 
     Returns:
         The masters to declare, in load order.
@@ -235,7 +283,7 @@ def _masters_for(
             Selection(plugin=name, record_type=entry.record_type, key=entry.key)
             for name in sorted(entry.plugins)
         )
-    return required_masters(stand_ins, records_by_plugin, load_order)
+    return required_masters(stand_ins, records_by_plugin, load_order, extra=master_names(carried))
 
 
 def _write(document: Sequence[Mapping[str, Any]], target: Path, converter: str) -> None:

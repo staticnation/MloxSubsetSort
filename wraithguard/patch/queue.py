@@ -34,7 +34,7 @@ from wraithguard.patch.merge import Merge
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from wraithguard.patch.merge import FieldChoice
+    from wraithguard.patch.merge import Choice
     from wraithguard.patch.records import Selection
 
 
@@ -44,7 +44,7 @@ class PatchQueue:
     def __init__(self) -> None:
         """Start empty."""
         self._whole: list[Selection] = []
-        self._fields: dict[tuple[str, str], list[FieldChoice]] = {}
+        self._fields: dict[tuple[str, str], list[Choice]] = {}
 
     @property
     def selections(self) -> list[Selection]:
@@ -52,8 +52,8 @@ class PatchQueue:
         return self._whole
 
     @property
-    def fields(self) -> dict[tuple[str, str], list[FieldChoice]]:
-        """Field choices, keyed by ``(record type, key)``."""
+    def fields(self) -> dict[tuple[str, str], list[Choice]]:
+        """Field decisions (from a plugin or literal), keyed by ``(record type, key)``."""
         return self._fields
 
     def __len__(self) -> int:
@@ -75,13 +75,15 @@ class PatchQueue:
         self._whole.append(selection)
         self._fields.pop((selection.record_type, selection.key), None)
 
-    def add_field(self, record_type: str, key: str, choice: FieldChoice) -> None:
+    def add_field(self, record_type: str, key: str, choice: Choice) -> None:
         """Queue one field of a record.
 
         Args:
             record_type: The record's type.
             key: Its identifying key.
-            choice: The field, and the plugin to take it from.
+            choice: The field, either taken from a plugin (``FieldChoice``) or
+                given a literal value (``FieldValue``). Re-deciding the same
+                path replaces the earlier answer, whichever kind either was.
         """
         choices = self._fields.setdefault((record_type, key), [])
         choices[:] = [entry for entry in choices if entry.path != choice.path]

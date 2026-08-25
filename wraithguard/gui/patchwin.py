@@ -30,13 +30,14 @@ from wraithguard.gui.theme import DARK, apply_titlebar_theme
 from wraithguard.gui.widgets import add_tooltip
 from wraithguard.i18n import gettext as _
 from wraithguard.logging_setup import get_logger
+from wraithguard.patch.merge import FieldValue
 from wraithguard.patch.queue import PatchQueue, base_from_conflicts
 from wraithguard.patch.service import DEFAULT_NAME, PatchServiceError, build_record_patch
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from wraithguard.patch import FieldChoice, Merge, Selection
+    from wraithguard.patch import Choice, Merge, Selection
 
 LOG: Final = get_logger(__name__)
 
@@ -59,6 +60,10 @@ class PatchBuilderMixin:
         _conf_paths: dict[str, str]
         _conf_scan_args: tuple
         _shown_conflicts: list[dict]
+        order_panel: Any
+
+        def _ensure_conflict_session(self, conv: str | None = ...) -> bool: ...
+        def _apply_exclusions(self, order: Sequence[str]) -> list[str]: ...
 
     # -- state ---------------------------------------------------------
     #
@@ -86,8 +91,8 @@ class PatchBuilderMixin:
         """
         return self.patch_queue().selections
 
-    def patch_merges(self) -> dict[tuple[str, str], list[FieldChoice]]:
-        """Field choices queued, keyed by ``(record type, key)``.
+    def patch_merges(self) -> dict[tuple[str, str], list[Choice]]:
+        """Field decisions queued (from a plugin or literal), keyed by ``(type, key)``.
 
         Returns:
             The mapping.
@@ -111,13 +116,14 @@ class PatchBuilderMixin:
         self.patch_queue().add_whole(selection)
         self.refresh_patch_views()
 
-    def queue_field(self, record_type: str, key: str, choice: FieldChoice) -> None:
+    def queue_field(self, record_type: str, key: str, choice: Choice) -> None:
         """Queue one field of a record, and redraw.
 
         Args:
             record_type: The record's type.
             key: Its identifying key.
-            choice: The field and the plugin to take it from.
+            choice: The field, taken from a plugin (``FieldChoice``) or given a
+                typed value (``FieldValue``).
         """
         self.patch_queue().add_field(record_type, key, choice)
         self.refresh_patch_views()
@@ -259,12 +265,16 @@ class PatchBuilderMixin:
                 open=True,
             )
             for choice in choices:
+                if isinstance(choice, FieldValue):
+                    verb, source = _("set to"), str(choice.value)
+                else:
+                    verb, source = _("from"), choice.plugin
                 tree.insert(
                     parent,
                     "end",
                     iid=f"field::{record_type}::{key}::{choice.path}",
                     text="",
-                    values=(choice.path, _("from"), choice.plugin),
+                    values=(choice.path, verb, source),
                 )
 
         summary = getattr(self, "_patch_summary", None)
@@ -311,10 +321,30 @@ class PatchBuilderMixin:
     # -- writing -------------------------------------------------------
 
     def write_patch(self) -> None:
-        """Confirm, then write the queue as one new plugin."""
+        """Confirm, then write the queue as one new plugin -- or onto an existing one.
+
+        A patch does not have to be finished in one sitting. When the chosen
+        path already exists, this offers Append as well as Replace: Append
+        reads that file's own records back in and carries them into the new
+        build alongside whatever is queued today, so a record chosen last
+        week is not lost just because this session never mentions it again.
+        """
         if not self.patch_count() or self._conf_session is None:
             return
-        order = list(self._conf_scan_args[0]) if getattr(self, "_conf_scan_args", None) else []
+        # Refresh both the session and the plugin -> path map against the
+        # current load order before measuring anything. Neither is done
+        # automatically just because a patch is queued: a plugin enabled (or
+        # a master newly required) after the session was last established --
+        # by opening this window, or by Check Conflicts -- would otherwise
+        # leave self._conf_paths silently missing it, and _plugin_sizes()
+        # reads that map directly rather than re-resolving paths itself.
+        if not self._ensure_conflict_session():
+            messagebox.showerror(
+                _("tes3conv not found"),
+                _("Cannot measure master sizes without tes3conv. Set its path and try again."),
+            )
+            return
+        order = self._apply_exclusions(self.order_panel.get_enabled())
         target = self._ask_patch_path()
         if target is None:
             return
@@ -333,21 +363,48 @@ class PatchBuilderMixin:
             )
             return
 
-        existing = (
-            _("\n\nThis REPLACES the existing %(name)s.") % {"name": target.name}
-            if target.exists()
-            else ""
-        )
-        if not messagebox.askokcancel(
+        carried: list[Any] = []
+        if target.exists():
+            append = messagebox.askyesnocancel(
+                _("Append or replace?"),
+                _(
+                    "%(name)s already exists. This session has %(count)d record(s) "
+                    "queued.\n\n"
+                    "Append keeps everything already written and adds these on top "
+                    "-- the way to build one patch across several sessions.\n\n"
+                    "Replace throws away what is already there and writes only "
+                    "this session's records.\n\n"
+                    "Your mods are NOT modified either way, and deleting the patch "
+                    "restores your previous behaviour completely. Load it LAST, "
+                    "and back up your saves."
+                )
+                % {"name": target.name, "count": self.patch_count()},
+            )
+            if append is None:
+                return
+            if append:
+                carried = self._conf_session.records(target)
+                if not carried:
+                    messagebox.showerror(
+                        _("Could not read the existing patch"),
+                        _(
+                            "%(name)s could not be decoded, so there is nothing to "
+                            "append to. Run Write again and choose Replace, or "
+                            "check the file opens in another tool first."
+                        )
+                        % {"name": target.name},
+                    )
+                    return
+        elif not messagebox.askokcancel(
             _("Write patch?"),
             _(
                 "%(count)d record(s) will be written to:\n%(path)s\n\n"
                 "It carries whole records chosen by you, and loads last. Your mods "
                 "are NOT modified, and deleting the patch restores your previous "
                 "behaviour completely.\n\n"
-                "Load it LAST, and back up your saves.%(existing)s"
+                "Load it LAST, and back up your saves."
             )
-            % {"count": self.patch_count(), "path": target, "existing": existing},
+            % {"count": self.patch_count(), "path": target},
         ):
             return
 
@@ -367,6 +424,7 @@ class PatchBuilderMixin:
                 self._conf_session.exe,
                 target,
                 merges=merges,
+                carried=carried,
                 report=LOG.info,
             )
         except PatchServiceError as exc:
@@ -375,15 +433,21 @@ class PatchBuilderMixin:
 
         self.patch_queue().clear()
         self.refresh_patch_views()
+        carried_note = (
+            _(" (%(carried)d carried forward from before)") % {"carried": result.carried}
+            if result.carried
+            else ""
+        )
         messagebox.showinfo(
             _("Patch written"),
             _(
-                "%(records)d record(s) written to:\n%(path)s\n\n"
+                "%(records)d record(s) written to:\n%(path)s%(carried)s\n\n"
                 "Declares %(masters)d master(s). Add it to your load order LAST."
             )
             % {
                 "records": result.records,
                 "path": result.output,
+                "carried": carried_note,
                 "masters": len(result.masters),
             },
         )

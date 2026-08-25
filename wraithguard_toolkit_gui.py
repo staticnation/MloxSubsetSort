@@ -234,6 +234,7 @@ from wraithguard.gui import (  # noqa: E402
     trace_first_fire,
 )
 from wraithguard.gui.conflicts import ConflictWindowsMixin  # noqa: E402
+from wraithguard.gui.journalview import JournalViewMixin  # noqa: E402
 from wraithguard.gui.patchwin import PatchBuilderMixin  # noqa: E402
 from wraithguard.gui.pluginview import PluginViewMixin  # noqa: E402
 from wraithguard.gui.t3 import Tes3cmdMixin  # noqa: E402
@@ -256,9 +257,11 @@ from wraithguard.gui.widgets import (  # noqa: E402
     QueueWriter,
     add_tooltip,
     attach_typeahead,
+    group_separator,
     make_scrollable_y,
 )
 from wraithguard.net import (  # noqa: E402
+    MANAGED_RULE_FILES,
     PLUGIN_ORDER_URLS,
     RULES_URL_TEMPLATE,
     rule_file_ages,
@@ -446,27 +449,63 @@ class RuleFilesPanel:
                 foreground=DARK["fg_dim"],
             ).pack(side="left", padx=(12, 0))
 
+    def _offer_initial_rule_download(self) -> list[Path]:
+        """First-run: no rules set, so ask where to put the managed ones.
+
+        Downloading needs somewhere to write, and on a fresh setup the list is
+        empty. Rather than refuse, ask for a folder, put the upstream-managed
+        rule files (``mlox_base.txt`` / ``mlox_user.txt``) there, and add them to
+        the panel so the next update just refreshes them. The files are created
+        by the download itself.
+
+        Returns:
+            The two managed rule paths, added to the list, or ``[]`` if the user
+            cancelled the folder prompt.
+        """
+        folder = filedialog.askdirectory(title=_("Choose a folder for the mlox rule files"))
+        if not folder:
+            return []
+        managed = [Path(folder) / name for name in MANAGED_RULE_FILES]
+        existing = {str(p).lower() for p in self.get_paths()}
+        for p in managed:
+            if str(p).lower() not in existing:
+                self.listbox.insert("end", str(p))
+        return managed
+
     def _update_rules(self) -> None:
         paths = self.get_paths()
-        managed = [p for p in paths if Path(p).name.lower() in ("mlox_base.txt", "mlox_user.txt")]
-        if not managed:
-            messagebox.showinfo(
-                _("Update rules"), _("Add mlox_base.txt and/or mlox_user.txt to the list first.")
+        managed = [p for p in paths if Path(p).name.lower() in MANAGED_RULE_FILES]
+        first_run = not managed
+        if first_run:
+            # Nothing set yet: offer to download the managed rules into a chosen
+            # folder rather than refusing until the user adds them by hand.
+            managed = self._offer_initial_rule_download()
+            if not managed:
+                return
+        if first_run:
+            if not messagebox.askyesno(
+                _("Update rules"),
+                _(
+                    "Download the current mlox rules from github.com/%(repo)s?\n\n"
+                    "%(files)s\n\nThey don't exist yet -- they'll be created here."
+                )
+                % {"repo": core.RULES_REPO, "files": "\n".join(f"  {p.name}" for p in managed)},
+            ):
+                return
+        else:
+            ages = rule_file_ages(managed)
+            age_txt = "\n".join(
+                f"  {n}: {'age unknown' if d is None else f'~{d} day(s) old'}" for n, d in ages
             )
-            return
-        ages = rule_file_ages(managed)
-        age_txt = "\n".join(
-            f"  {n}: {'age unknown' if d is None else f'~{d} day(s) old'}" for n, d in ages
-        )
-        if not messagebox.askyesno(
-            _("Update rules"),
-            _(
-                "Download the current rules from github.com/%(repo)s over these "
-                "files?\n\n%(age)s\n\nTimestamped .bak copies of the old files are kept."
-            )
-            % {"repo": core.RULES_REPO, "age": age_txt},
-        ):
-            return
+            if not messagebox.askyesno(
+                _("Update rules"),
+                _(
+                    "Download the current rules from github.com/%(repo)s over these "
+                    "files?\n\n%(age)s\n\nTimestamped .bak copies of the old files are kept."
+                )
+                % {"repo": core.RULES_REPO, "age": age_txt},
+            ):
+                return
 
         custom = (self._get_rules_url() if self._get_rules_url else "") or None
 
@@ -904,7 +943,7 @@ def _action_button(
     return button
 
 
-class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin):
+class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixin, PluginViewMixin):
     """The main application window."""
 
     # Colors for the log panel's tags now come from the selected syntax
@@ -1132,6 +1171,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             "dry_run": self.dry_run_var.get(),
             "write_cfg": self.write_cfg_var.get(),
             "sort_data_paths": self.sort_data_paths_var.get(),
+            "subset_from_cfg": self.subset_from_cfg_var.get(),
             "no_backup": self.no_backup_var.get(),
             "no_predicate_warnings": self.no_predicate_warnings_var.get(),
             "create_subset_doc": self.create_subset_doc_var.get(),
@@ -1168,6 +1208,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             ("dry_run", self.dry_run_var),
             ("write_cfg", self.write_cfg_var),
             ("sort_data_paths", self.sort_data_paths_var),
+            ("subset_from_cfg", self.subset_from_cfg_var),
             ("no_backup", self.no_backup_var),
             ("no_predicate_warnings", self.no_predicate_warnings_var),
             ("create_subset_doc", self.create_subset_doc_var),
@@ -1533,7 +1574,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             "openmw.cfg:",
             start_row,
             self.cfg_var,
-            filetypes=case_insensitive_filetypes((("openmw.cfg", "*.cfg"), ("All files", "*.*"))),
+            filetypes=(("openmw.cfg", "*.cfg"), ("All files", "*.*")),
             tooltip=_(
                 "Required. The openmw.cfg to read the current content= and data= order "
                 "from, and (if 'Write openmw.cfg directly' is checked) to patch."
@@ -1544,7 +1585,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             "customizations.toml:",
             start_row + 1,
             self.customizations_var,
-            filetypes=case_insensitive_filetypes((("TOML files", "*.toml"), ("All files", "*.*"))),
+            filetypes=(("TOML files", "*.toml"), ("All files", "*.*")),
             tooltip=_(
                 "A momw-configurator/umo customizations TOML to pull the plugin/data-path "
                 "subset from automatically. Optional if you provide a subset file instead -- "
@@ -1556,9 +1597,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             "subset file (optional):",
             start_row + 2,
             self.subset_file_var,
-            filetypes=case_insensitive_filetypes(
-                (("Text/TOML", "*.txt *.toml"), ("All files", "*.*"))
-            ),
+            filetypes=(("Text/TOML", "*.txt *.toml"), ("All files", "*.*")),
             tooltip=_(
                 "A plain text file (one plugin filename or data folder path per line, "
                 "'#' comments allowed) or a minimal TOML with subset=[...]/data=[...]. "
@@ -1597,7 +1636,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             start_row,
             self.emit_toml_var,
             browse_kind="save",
-            filetypes=case_insensitive_filetypes((("TOML files", "*.toml"), ("All files", "*.*"))),
+            filetypes=(("TOML files", "*.toml"), ("All files", "*.*")),
             tooltip=_(
                 "Where to write a corrected customizations.toml (sorted insert blocks, "
                 "re-anchored). Disabled when 'write directly back' below is checked."
@@ -1629,9 +1668,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             "plugin-order.yml (optional):",
             start_row + 2,
             self.plugin_order_yml_var,
-            filetypes=case_insensitive_filetypes(
-                (("YAML files", "*.yml *.yaml"), ("All files", "*.*"))
-            ),
+            filetypes=(("YAML files", "*.yml *.yaml"), ("All files", "*.*")),
             tooltip=_(
                 "MOMW's plugin-order.yml (source of truth for which plugins belong to which "
                 "curated list). With the list name above set, curated plugins for that list "
@@ -1692,6 +1729,10 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
         """
         self.write_cfg_var = tk.BooleanVar(value=False)
         self.sort_data_paths_var = tk.BooleanVar(value=False)
+        #: Pull the cfg's own unmanaged (orphan) content=/data= into the subset
+        #: to sort. Off by default: a run should only touch what you named unless
+        #: you ask it to also adopt the loose entries already in openmw.cfg.
+        self.subset_from_cfg_var = tk.BooleanVar(value=False)
         self.no_backup_var = tk.BooleanVar(value=False)
         self.no_predicate_warnings_var = tk.BooleanVar(value=False)
         self.dry_run_var = tk.BooleanVar(value=True)
@@ -1789,6 +1830,27 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
                 "to a .txt subset file you choose, and load it (the file stays on disk for reuse). "
                 "Unchecked: keep the scanned list in memory just for this session and feed it "
                 "straight to the sort -- nothing is written to disk."
+            ),
+        )
+
+        subset_from_cfg_chk = ttk.Checkbutton(
+            opts,
+            text=_("Pull unmanaged (orphan) plugins from openmw.cfg"),
+            variable=self.subset_from_cfg_var,
+        )
+        subset_from_cfg_chk.grid(row=5, column=0, columnspan=3, sticky="w", padx=8, pady=4)
+        add_tooltip(
+            subset_from_cfg_chk,
+            _(
+                "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages "
+                "-- neither the curated list (plugin-order.yml) nor your customizations.toml. "
+                "Their current cfg order is kept as the starting order until the sort "
+                "repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never "
+                "touched. Works on its own (no subset file needed) or alongside one.\n\n"
+                "data= paths are left exactly as openmw.cfg has them: they are already in "
+                "the cfg's own data= order, and there is no reliable way to tell a path the "
+                "list manages from one you added, so pulling them would reorder the whole "
+                "VFS."
             ),
         )
 
@@ -1934,6 +1996,8 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             state="disabled",
             pad=(0, 18),
         )
+        # Run (Sort/Export) | Analyse (the read-only scans).
+        group_separator(row1)
         self.conflicts_button = _action_button(
             row1,
             "Check Conflicts",
@@ -1945,6 +2009,18 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             "-- including compiled scripts, which are disassembled rather than shown as raw "
             "base64. Read-only; needs the plugin files reachable via your cfg's data= folders. "
             "Runs after a Sort.",
+            state="disabled",
+        )
+        # The two conflict scans sit together; the Cell Map (a different kind of
+        # view) follows them.
+        self.resource_button = _action_button(
+            row1,
+            "Resource Conflicts",
+            self.on_resource_conflicts,
+            "Scan the data= folders for loose-file (VFS) conflicts: the same relative path "
+            "(meshes/textures/scripts/...) provided by two or more mod folders. In OpenMW the "
+            "LATER data folder wins, so reorder the data-path panel to change the winner "
+            "(like MO2's Data conflicts). Read-only; can be slow on a big install.",
             state="disabled",
         )
         self.cellmap_button = _action_button(
@@ -1959,16 +2035,6 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             "to a timestamped cell_map file "
             "and shown in an in-app window if pywebview or tkinterweb is installed, otherwise "
             "in your browser. Read-only.",
-            state="disabled",
-        )
-        self.resource_button = _action_button(
-            row1,
-            "Resource Conflicts",
-            self.on_resource_conflicts,
-            "Scan the data= folders for loose-file (VFS) conflicts: the same relative path "
-            "(meshes/textures/scripts/...) provided by two or more mod folders. In OpenMW the "
-            "LATER data folder wins, so reorder the data-path panel to change the winner "
-            "(like MO2's Data conflicts). Read-only; can be slow on a big install.",
             state="disabled",
         )
 
@@ -2014,6 +2080,9 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             "conflict diff (which writes a patch plugin); it only writes this one settings "
             "file and never touches the plugin itself.",
         )
+        # Build (writes a plugin / settings file) | Checks (read-only) | Tools
+        # (external tes3cmd, and backup management).
+        group_separator(row2)
         self.lint_button = _action_button(
             row2,
             "Lint",
@@ -2027,6 +2096,15 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             "take a little while on a big install.",
             state="disabled",
         )
+        self.savecheck_button = _action_button(
+            row2,
+            "Save Check",
+            self.on_save_check,
+            "Pick an OpenMW .omwsave and verify every content file it depends on is "
+            "still in the (sorted, enabled) load order -- OpenMW refuses to load a "
+            "save whose plugins are missing. Read-only.",
+        )
+        group_separator(row2)
         self.tes3cmd_button = _action_button(
             row2,
             "tes3cmd",
@@ -2037,14 +2115,6 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             "tes3cmd.exe; the pure-perl script also works if perl is installed. "
             "Modifying commands keep backups. (No multipatch: OpenMW setups use "
             "delta-plugin for merged lists.)",
-        )
-        self.savecheck_button = _action_button(
-            row2,
-            "Save Check",
-            self.on_save_check,
-            "Pick an OpenMW .omwsave and verify every content file it depends on is "
-            "still in the (sorted, enabled) load order -- OpenMW refuses to load a "
-            "save whose plugins are missing. Read-only.",
         )
         self.backups_button = _action_button(
             row2,
@@ -2442,8 +2512,17 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
         combined_subset_lines = (
             (list(self._scanned_subset_lines or []) if has_mem_scan else []) + manual_lines
         ) or None
-        if not customizations and not subset_file and not has_mem_scan and not manual_lines:
-            errors.append("Provide a customizations.toml, a subset file, or run Scan.")
+        if (
+            not customizations
+            and not subset_file
+            and not has_mem_scan
+            and not manual_lines
+            and not self.subset_from_cfg_var.get()
+        ):
+            errors.append(
+                "Provide a customizations.toml, a subset file, run Scan, or check "
+                "'Pull unmanaged (orphan) plugins from openmw.cfg'."
+            )
 
         write_inplace = self.write_toml_inplace_var.get()
         if write_inplace:
@@ -2470,6 +2549,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             emit_toml=Path(emit_toml) if emit_toml else None,
             write_cfg=self.write_cfg_var.get(),
             sort_data_paths=self.sort_data_paths_var.get(),
+            subset_from_cfg=self.subset_from_cfg_var.get(),
             no_predicate_warnings=self.no_predicate_warnings_var.get(),
             list_name=self.list_name_var.get().strip() or None,
             plugin_order_yml=(
@@ -4704,57 +4784,94 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, PatchBuilderMixin, PluginViewMixin
             % {"file": Path(path).name}
         )
 
-    # -- plugin-order.yml updater --------------------------------------------
+    # -- MOMW order-file updaters --------------------------------------------
+    #
+    # plugin-order.yml and its three siblings (groundcover-, bsa-, data-path-)
+    # download the same way: confirm, fetch on a worker thread so the UI never
+    # freezes, and report into a dialog. One helper, four one-line handlers --
+    # each names its file, its path/URL vars, and the validating updater.
 
-    def on_update_plugin_order_yml(self) -> None:
-        """Download a fresh plugin-order.yml, with confirmation."""
-        p = self.plugin_order_yml_var.get().strip()
+    def _update_order_yml_dialog(
+        self,
+        label: str,
+        path_var: tk.StringVar,
+        url_var: tk.StringVar | None,
+        updater: Callable[..., list[str]],
+    ) -> None:
+        """Confirm, download and report an update of a MOMW order file.
+
+        Args:
+            label: The file's name, shown in every prompt (e.g.
+                ``"plugin-order.yml"``).
+            path_var: The entry holding the destination path.
+            url_var: An optional URL override (the Sources setting); ``None`` or
+                blank uses the updater's built-in candidates.
+            updater: The validating updater to run, e.g.
+                :func:`~wraithguard.net.update_plugin_order_yml`.
+        """
+        p = path_var.get().strip()
+        title = _("Update %(name)s") % {"name": label}
         if not p:
-            messagebox.showinfo(
-                _("Update plugin-order.yml"),
-                _(
-                    "Set the plugin-order.yml path first (or Browse to where you "
-                    "want it created)."
+            # First-run convenience: no path set yet, so ask where to save it
+            # rather than making the user Browse to a file that doesn't exist.
+            # The chosen path is remembered in the field for next time.
+            chosen = filedialog.asksaveasfilename(
+                title=_("Save %(name)s as") % {"name": label},
+                initialfile=label,
+                defaultextension=".yml",
+                filetypes=case_insensitive_filetypes(
+                    (("YAML files", "*.yml *.yaml"), ("All files", "*.*"))
                 ),
             )
-            return
-        ages = rule_file_ages([p])
-        age = ages[0][1]
+            if not chosen:
+                return
+            path_var.set(chosen)
+            p = chosen.strip()
+        age = rule_file_ages([p])[0][1]
         age_txt = (
-            "file doesn't exist yet -- it will be created"
+            _("the file doesn't exist yet -- it will be created")
             if age is None
-            else f"your copy is ~{age} day(s) old"
+            else _("your copy is ~%(days)d day(s) old") % {"days": age}
         )
         if not messagebox.askyesno(
-            _("Update plugin-order.yml"),
+            title,
             _(
-                "Download the current plugin-order.yml from MOMW?\n\n%(age)s.\n\n"
+                "Download the current %(name)s from MOMW?\n\n%(age)s.\n\n"
                 "The download is validated before anything is written; a timestamped "
                 ".bak of the old file is kept."
             )
-            % {"age": age_txt},
+            % {"name": label, "age": age_txt},
         ):
             return
 
-        custom = self.plugin_order_url_var.get().strip()
+        custom = url_var.get().strip() if url_var is not None else ""
         urls = [custom] if custom else None
 
         def work() -> None:
             try:
-                report = update_plugin_order_yml(p, urls=urls)
+                report = updater(p, urls=urls)
             except Exception as e:  # noqa: BLE001
                 # worker thread: must report into the dialog, never vanish silently
                 report = [f"FAILED: {e}"]
             self._schedule_ui(
                 0,
                 lambda: (
-                    messagebox.showinfo(_("Update plugin-order.yml"), "\n".join(report)),
+                    messagebox.showinfo(title, "\n".join(report)),
                     self.status_var.set(report[0] if report else ""),  # type: ignore[func-returns-value]
                 ),
             )
 
-        self.status_var.set(_("Downloading plugin-order.yml..."))
+        self.status_var.set(_("Downloading %(name)s...") % {"name": label})
         threading.Thread(target=work, daemon=True).start()
+
+    def on_update_plugin_order_yml(self) -> None:
+        """Download a fresh plugin-order.yml, with confirmation."""
+        self._update_order_yml_dialog(
+            "plugin-order.yml",
+            self.plugin_order_yml_var,
+            self.plugin_order_url_var,
+            update_plugin_order_yml,
+        )
 
     # -- savegame dependency check -------------------------------------------
 

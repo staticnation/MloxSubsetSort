@@ -57,7 +57,11 @@ python wraithguard_toolkit_gui.py
 - **Plugin view**: after a conflict scan, click **Plugin view** for your load
   order as a tree - open a plugin to see what it changes and a record to compare
   it across every plugin. The colours tell you which of your mods are *losing*
-  work; they fill in on their own (a background pass judges the order once).
+  work; they fill in on their own (a background pass judges the order once). You
+  can also build a patch from here: the same **Add record / Merge field / Define
+  value / Patch Builder** buttons as the conflict window, plus **Merge this
+  plugin's fields...** to take chosen fields from one plugin across every record
+  it defines.
 - **Merge Lands**: build one `Merged Lands.esp` that combines the landscape edits
   of your whole load order and closes the seams between them, instead of the last
   mod winning a whole cell. Needs a `tes3conv` binary; enable the output and load

@@ -17,6 +17,8 @@ build/*/
 dist/
 *.spec
 *.exe
+# Packaged release archives (produced by the build, not source).
+/WraithguardToolkit*.zip
 
 # --- Runtime artefacts written next to the app ---
 # Traces, scan caches and generated reports are per-run, never source.

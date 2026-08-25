@@ -110,6 +110,20 @@ class TestRulesUpdater:
         assert any("updated" in line for line in report)
         assert list(tmp_path.glob("mlox_base.txt.bak-*")), "no timestamped backup kept"
 
+    def test_a_managed_file_that_does_not_exist_yet_is_created(self, tmp_path, http_server):
+        """First-run download: the target need not already exist -- the GUI's
+        'Update Rules' with nothing set writes fresh files into a chosen folder."""
+        base, routes = http_server
+        routes["/mlox_base.txt"] = RULES_BODY
+        target = tmp_path / "mlox_base.txt"  # deliberately absent
+        assert not target.exists()
+
+        report = update_rule_files([target], url_template=f"{base}/{{name}}")
+
+        assert target.read_bytes() == RULES_BODY
+        assert any("updated" in line for line in report)
+        assert not list(tmp_path.glob("*.bak-*"))  # nothing to back up on first write
+
     def test_personal_rule_files_are_never_touched(self, tmp_path, http_server):
         base, routes = http_server
         routes["/my_rules.txt"] = RULES_BODY

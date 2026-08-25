@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from wraithguard.net.updaters import (
     ALLOWED_URL_SCHEMES,
+    MANAGED_RULE_FILES,
     MAX_DOWNLOAD_BYTES,
     PLUGIN_ORDER_URLS,
     RULES_REPO,
@@ -21,6 +22,7 @@ from wraithguard.net.updaters import (
 
 __all__ = [
     "ALLOWED_URL_SCHEMES",
+    "MANAGED_RULE_FILES",
     "MAX_DOWNLOAD_BYTES",
     "PLUGIN_ORDER_URLS",
     "RULES_REPO",

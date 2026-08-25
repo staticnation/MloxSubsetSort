@@ -153,6 +153,13 @@ class TestAppUsesIconphotoNotJustIconbitmap:
         collected even though the window still points at it -- the icon
         would go blank the moment __init__ returned. This is the guard
         against that, checked directly rather than trusting it by inspection.
+
+        The iconphoto path is a FALLBACK: the app tries ``iconbitmap`` first
+        and only decodes a PhotoImage when that raises (X11, where .ico loading
+        is a silent no-op -- the very bug this class is named for). On Windows
+        ``iconbitmap`` succeeds and no PhotoImage is ever made, so to exercise
+        the reference-keeping guarantee on every platform we force ``iconbitmap``
+        to fail here, standing in for X11.
         """
         import wraithguard.gui as gui_pkg
 
@@ -166,6 +173,11 @@ class TestAppUsesIconphotoNotJustIconbitmap:
         ico_path = assets_dir / "wraithguard_toolkit_icon.ico"
         ico_path.write_bytes(build_ico([(20, 20, png)]))
         monkeypatch.setattr(gui_module, "resource_path", lambda _rel: str(ico_path))
+
+        def _iconbitmap_is_a_noop(*_args: Any, **_kwargs: Any) -> None:
+            raise tkinter.TclError("forced: stand in for X11, where .ico is a no-op")
+
+        monkeypatch.setattr(tk_root, "iconbitmap", _iconbitmap_is_a_noop)
 
         app = gui_module.App(tk_root)
 

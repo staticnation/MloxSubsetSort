@@ -136,10 +136,29 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # Sign with minisign (pure-Python) so the download can be verified. Skipped,
+      # not failed, when the signing secret is not configured yet.
+      - name: Sign the .zip (tag builds only)
+        if: ${{ startsWith(github.ref, 'refs/tags/') && secrets.MINISIGN_SECRET_KEY != '' }}
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          python -m pip install py-minisign==0.21.1
+          python tools/sign_release.py "dist/Wraithguard-Toolkit-macos-${{ matrix.arch }}.zip"
+
       - name: Attach to the release (tag builds only)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Wraithguard-Toolkit-macos-${{ matrix.arch }}.zip
-          fail_on_unmatched_files: true
-          generate_release_notes: true
+          # The .minisig line matches nothing when signing was skipped, so
+          # fail_on_unmatched_files is off; the .zip is always produced above.
+          files: |
+            dist/Wraithguard-Toolkit-macos-${{ matrix.arch }}.zip
+            dist/Wraithguard-Toolkit-macos-${{ matrix.arch }}.zip.minisig
+          fail_on_unmatched_files: false
+          # No generate_release_notes here: this step runs once per matrix arch
+          # (x86_64 + arm64), and each softprops call with it set regenerates and
+          # appends a "Full Changelog" block to the shared release. Exactly one job
+          # owns the notes -- the single-run Linux build -- so the release gets one
+          # changelog, not five. This step only uploads its .zip.

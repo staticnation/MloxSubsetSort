@@ -27,6 +27,7 @@ from wraithguard.patch import (
     GREETING,
     PatchError,
     Selection,
+    carry_forward,
     collect,
     defining_plugins,
     dialogue_position_risk,
@@ -254,6 +255,106 @@ class TestRequiredMasters:
             ["Morrowind.esm"],
         )
         assert "Castle.esp" in got
+
+    def test_extra_masters_are_declared_even_without_a_selection(self) -> None:
+        """What carry_forward needs: a name required by nothing in `selections`."""
+        got = required_masters([], {}, ["Morrowind.esm", "Tribunal.esm"], extra=["Tribunal.esm"])
+        assert got == ["Tribunal.esm"]
+
+
+class TestCarryingAnEarlierBuildForward:
+    """Appending to a patch: reading its own previous build back in.
+
+    Unlike :class:`TestCollecting`, the source here is not some other plugin --
+    it is an earlier version of the very file about to be overwritten. That
+    changes what index 0 means: the record already lives in the file being
+    rewritten and stays there, so self-references need no remapping and the
+    old file's name never has to appear in the new master list. Only indices
+    into the *old header's own* masters move.
+    """
+
+    #: Shaped like a small earlier build: one master, one self-reference, one
+    #: reference into that master, plus a record with nothing to remap.
+    OLD_BUILD: Final[list[dict[str, Any]]] = [
+        {"type": "Header", "masters": [["Tribunal.esm", 1]]},
+        {
+            "type": "Cell",
+            "data": {"grid": [1, 1]},
+            "references": [
+                {"mast_index": 0, "refr_index": 1, "id": "patch_own_thing"},
+                {"mast_index": 1, "refr_index": 2, "id": "from_tribunal"},
+            ],
+        },
+        {"type": "GameSetting", "id": "sPatchedName", "value": "Whatever"},
+    ]
+
+    def test_the_header_is_dropped(self) -> None:
+        """The new build makes its own; the old one is not a record to carry."""
+        got = carry_forward(self.OLD_BUILD, ["Morrowind.esm", "Tribunal.esm"])
+        assert "Header" not in [r["type"] for r in got]
+
+    def test_a_self_reference_stays_zero(self) -> None:
+        """The file's own objects are still the file's own objects."""
+        got = carry_forward(self.OLD_BUILD, ["Morrowind.esm", "Tribunal.esm"])
+        cell = next(r for r in got if r["type"] == "Cell")
+        own = next(r for r in cell["references"] if r["id"] == "patch_own_thing")
+        assert own["mast_index"] == 0
+
+    def test_a_reference_into_an_old_master_moves_to_its_new_position(self) -> None:
+        """Tribunal.esm sat at position 1 in the old header; it may not any more."""
+        got = carry_forward(self.OLD_BUILD, ["Morrowind.esm", "Bloodmoon.esm", "Tribunal.esm"])
+        cell = next(r for r in got if r["type"] == "Cell")
+        moved = next(r for r in cell["references"] if r["id"] == "from_tribunal")
+        assert moved["mast_index"] == 3
+
+    def test_the_old_file_never_needs_to_be_in_the_new_master_list(self) -> None:
+        """Declaring a patch as a master of its own replacement is circular."""
+        # Neither "Wraithguard Patch.esp" nor any stand-in for the old file
+        # itself appears here, and that is deliberate -- only what it depended
+        # on does.
+        got = carry_forward(self.OLD_BUILD, ["Morrowind.esm", "Tribunal.esm"])
+        assert len(got) == len(self.OLD_BUILD) - 1  # everything but the header
+
+    def test_a_record_with_no_references_passes_through_unchanged(self) -> None:
+        """Nothing to remap, nothing to touch."""
+        got = carry_forward(self.OLD_BUILD, ["Tribunal.esm"])
+        setting = next(r for r in got if r["type"] == "GameSetting")
+        assert setting == {"type": "GameSetting", "id": "sPatchedName", "value": "Whatever"}
+
+    def test_a_missing_old_master_is_refused(self) -> None:
+        """Silently dropping it would repoint every reference that used it."""
+        with pytest.raises(PatchError, match=r"Tribunal\.esm"):
+            carry_forward(self.OLD_BUILD, ["Morrowind.esm"])
+
+    def test_a_record_this_session_re_decided_is_not_carried_forward(self) -> None:
+        """Re-deciding replaces -- carrying the old answer too would leave the
+        patch's own last-wins to pick between it and the new one.
+        """
+        got = carry_forward(
+            self.OLD_BUILD, ["Tribunal.esm"], skip={("GameSetting", "sPatchedName")}
+        )
+        assert "GameSetting" not in [r["type"] for r in got]
+
+    def test_records_not_skipped_are_unaffected_by_an_unrelated_skip(self) -> None:
+        """Skip is keyed by type and id -- it must not drop everything."""
+        got = carry_forward(self.OLD_BUILD, ["Tribunal.esm"], skip={("Static", "nothing_here")})
+        assert len(got) == 2
+
+    def test_relative_order_survives(self) -> None:
+        """A dialogue response carried forward must still follow its topic --
+        the old build already put it there, so this only has to not reshuffle.
+        """
+        old = [
+            {"type": "Header", "masters": []},
+            {"type": "Dialogue", "id": "Idle"},
+            {"type": "DialogueInfo", "id": "idle_1", "prev_id": "", "next_id": ""},
+        ]
+        got = carry_forward(old, [])
+        assert [r["type"] for r in got] == ["Dialogue", "DialogueInfo"]
+
+    def test_an_empty_carry_forward_is_fine(self) -> None:
+        """A fresh patch, or one with nothing worth keeping from before."""
+        assert carry_forward([], ["Morrowind.esm"]) == []
 
 
 class TestReplacingAChoice:

@@ -141,6 +141,27 @@ def add_tooltip(widget: tk.Misc, text: str) -> Tooltip:
     return Tooltip(widget, text)
 
 
+def group_separator(parent: tk.Misc, *, pad: int = 10) -> ttk.Separator:
+    """Pack a thin vertical divider between two groups of buttons in a row.
+
+    Button rows read as one long strip until their logical groups are set
+    apart; this is the divider that does it, packed ``side="left"`` like the
+    buttons it sits between so the groups fall out left to right. A little more
+    horizontal padding than the gap between buttons within a group is what makes
+    the grouping legible.
+
+    Args:
+        parent: The button row (a ``side="left"`` packing context).
+        pad: Horizontal padding on each side of the divider.
+
+    Returns:
+        The separator, already packed.
+    """
+    sep = ttk.Separator(parent, orient="vertical")
+    sep.pack(side="left", fill="y", padx=pad, pady=2)
+    return sep
+
+
 # ---------------------------------------------------------------------------
 # scrollable containers -- for a form or toolbar row that can outgrow a small
 # window. Plain ttk has no scrollable frame, so both wrap a plain tk.Canvas

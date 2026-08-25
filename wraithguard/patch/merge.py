@@ -72,6 +72,33 @@ class FieldChoice:
 
 
 @dataclass(frozen=True, slots=True)
+class FieldValue:
+    """One field of a record, and a literal value the user typed for it.
+
+    The third way to settle a field, besides carrying a whole record or taking
+    the field from another plugin (:class:`FieldChoice`): supply the value
+    directly, so a patch can hold a number or string that *no* plugin in the
+    conflict uses -- a compromise weight, a corrected health, a name of your
+    own. The value is written verbatim, exactly as given; unlike a
+    :class:`FieldChoice` it belongs to no plugin's master list, so it is never
+    reindexed (a literal reference list is taken as typed -- the user owns its
+    correctness).
+
+    Attributes:
+        path: The dotted path, exactly as the diff panel labels it.
+        value: The value to write there, already parsed to the field's type.
+    """
+
+    path: str
+    value: object
+
+
+#: The two ways to settle one field of a record: take it from a plugin, or type
+#: it. Both carry a ``path``, so the queue keys and de-dupes them the same way.
+Choice = FieldChoice | FieldValue
+
+
+@dataclass(frozen=True, slots=True)
 class Merge:
     """One record to build from several, and how.
 
@@ -81,18 +108,25 @@ class Merge:
         base_plugin: Supplies every field not chosen. Usually the plugin that
             currently wins, so a merge reads as departures from what the load
             order already does.
-        choices: The fields to take from elsewhere.
+        choices: The fields to settle -- each taken from a plugin
+            (:class:`FieldChoice`) or given a literal value (:class:`FieldValue`).
     """
 
     record_type: str
     key: str
     base_plugin: str
-    choices: tuple[FieldChoice, ...]
+    choices: tuple[Choice, ...]
 
     @property
     def plugins(self) -> set[str]:
-        """Every plugin this merge reads from, base included."""
-        return {self.base_plugin} | {choice.plugin for choice in self.choices}
+        """Every plugin this merge reads from, base included.
+
+        Literal :class:`FieldValue` fields belong to no plugin, so they add
+        nothing here -- the patch needs a master only for fields it *sources*.
+        """
+        return {self.base_plugin} | {
+            choice.plugin for choice in self.choices if isinstance(choice, FieldChoice)
+        }
 
 
 def value_at(record: Mapping[str, Any], path: str) -> tuple[Any, bool]:
@@ -147,7 +181,7 @@ def merge_record(
     base_plugin: str,
     record_type: str,
     key: str,
-    choices: Sequence[FieldChoice],
+    choices: Sequence[Choice],
     records_by_plugin: Mapping[str, Sequence[Mapping[str, Any]]],
     patch_masters: Sequence[str],
 ) -> dict[str, Any]:
@@ -203,6 +237,17 @@ def merge_record(
         merged["references"] = remap_reference_list(merged["references"], mapping_for(base_plugin))
 
     for choice in choices:
+        if isinstance(choice, FieldValue):
+            if choice.path in IDENTITY:
+                raise PatchError(
+                    f"{choice.path} says which record this is. Giving it a typed "
+                    "value would not merge this record, it would make a different one."
+                )
+            # Written exactly as given: a literal belongs to no plugin's master
+            # list, so it is never reindexed.
+            set_at(merged, choice.path, copy.deepcopy(choice.value))
+            continue
+
         if choice.plugin == base_plugin:
             continue
         if choice.path in IDENTITY:
@@ -265,17 +310,22 @@ def _find(
     return found
 
 
-def describe(choices: Sequence[FieldChoice], base_plugin: str) -> list[str]:
+def describe(choices: Sequence[Choice], base_plugin: str) -> list[str]:
     """Summarise a merge for a log or a confirmation.
 
     Args:
-        choices: The field choices.
+        choices: The field choices -- from a plugin, or given a literal value.
         base_plugin: The plugin everything else comes from.
 
     Returns:
-        One line per field actually taken from elsewhere, so a user can see
-        what they are about to write rather than a count.
+        One line per field actually changed (taken from another plugin, or set
+        to a typed value), so a user can see what they are about to write rather
+        than a count.
     """
-    return [
-        f"{choice.path}: from {choice.plugin}" for choice in choices if choice.plugin != base_plugin
-    ] or [f"nothing taken from elsewhere; this is {base_plugin}'s record whole"]
+    lines: list[str] = []
+    for choice in choices:
+        if isinstance(choice, FieldValue):
+            lines.append(f"{choice.path}: set to {choice.value!r}")
+        elif choice.plugin != base_plugin:
+            lines.append(f"{choice.path}: from {choice.plugin}")
+    return lines or [f"nothing taken from elsewhere; this is {base_plugin}'s record whole"]

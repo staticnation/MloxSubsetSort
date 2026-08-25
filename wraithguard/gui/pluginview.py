@@ -41,16 +41,17 @@ from __future__ import annotations
 
 import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING, Any, Final
 
 import wraithguard_toolkit as core
 from wraithguard.gui.conflict_colors import THIS_TEXT, all_colors, this_text
 from wraithguard.gui.theme import DARK, apply_titlebar_theme
-from wraithguard.gui.widgets import add_tooltip
+from wraithguard.gui.widgets import add_tooltip, group_separator
 from wraithguard.i18n import gettext as _
 from wraithguard.logging_setup import get_logger
 from wraithguard.patch.align import align, alignable, label_for
+from wraithguard.patch.bulk import BulkRecord, bulk_field_choices
 from wraithguard.patch.status import ABSENT, ConflictThis, worst_this
 from wraithguard.patch.summary import (
     ALL_TAGS,
@@ -100,9 +101,16 @@ CONFLICT_TAG: Final = "conflicts-with-selection"
 #: plugin) and the dim grey (an ignored one) both clear 4:1, the rest 6-7:1.
 CONFLICT_BG: Final = "#512e5a"
 
-#: Separator inside a tree row's id. ``\x00`` cannot occur in a plugin name, a
-#: record type or a record id, so splitting on it cannot go wrong.
-SEP: Final = "\x00"
+#: Separator inside a tree row's id. ``\x00`` would also be guaranteed not to
+#: occur in a plugin name, record type, or record id, but Tk's item ids are
+#: null-terminated C strings under the hood: an embedded NUL silently
+#: truncates the id there rather than raising, so a plugin's own row and its
+#: first child both end up addressed as just the plugin name and the second
+#: insert raises "Item {plugin} already exists". Confirmed against this
+#: environment's Tcl 8.6.14. Unit Separator has no such special meaning to
+#: Tcl, is just as impossible to find in real TES3 data, and round-trips
+#: cleanly through Treeview.insert/exists/get_children.
+SEP: Final = "\x1f"
 
 #: Marks a node whose children have not been built yet.
 PENDING: Final = "pending"
@@ -135,8 +143,16 @@ class PluginViewMixin:
         _conf_paths: dict[str, str]
         _shown_conflicts: list[dict]
         _conf_survey: Survey | None
+        worker_running: bool
 
         def _is_custom(self, name: str) -> bool: ...
+        def queue_field(  # noqa: D102
+            self, record_type: str, key: str, choice: Any  # noqa: ANN401
+        ) -> None: ...
+        def show_patch_builder(self) -> None: ...  # noqa: D102
+        def _patch_whole_record(self, conflict: Mapping[str, Any]) -> None: ...
+        def _patch_field(self, conflict: Mapping[str, Any], path: str) -> None: ...
+        def _patch_field_value(self, conflict: Mapping[str, Any], path: str) -> None: ...
         def _schedule_ui(
             self, delay_ms: int, func: Callable[..., Any], *args: Any  # noqa: ANN401
         ) -> None: ...
@@ -272,17 +288,87 @@ class PluginViewMixin:
         # this view is for. Only started when idle and nothing has judged yet.
         self._start_background_colouring()
 
-        ttk.Button(win, text=_("Close"), command=win.destroy).pack(side="right", padx=8, pady=8)
+        # The patch actions, the same set the Conflicts window offers -- this
+        # view is the other place you build a patch, so it carries the same
+        # buttons and calls the very same shared methods on the app. They act on
+        # the record selected in the tree (and, for field ops, the field selected
+        # in the detail pane on the right).
+        actions = ttk.Frame(win)
+        actions.pack(side="bottom", fill="x", padx=8, pady=6)
+        ttk.Button(actions, text=_("Close"), command=win.destroy).pack(side="right")
+
+        add_record = ttk.Button(
+            actions, text=_("Add record to patch..."), command=self._pv_add_record_to_patch
+        )
+        add_record.pack(side="left")
+        add_tooltip(
+            add_record,
+            _(
+                "Select a record in the tree, then choose which plugin's whole version of "
+                "it should win. Added to a patch that loads last; no mod is ever modified."
+            ),
+        )
+        merge_field = ttk.Button(actions, text=_("Merge field..."), command=self._pv_merge_field)
+        merge_field.pack(side="left", padx=(6, 0))
+        add_tooltip(
+            merge_field,
+            _(
+                "Select a record, then a field in the comparison on the right, and take "
+                "just that field from a plugin of your choosing -- keeping the rest of the "
+                "record as it is now."
+            ),
+        )
+        define_value = ttk.Button(actions, text=_("Define value..."), command=self._pv_define_value)
+        define_value.pack(side="left", padx=(6, 0))
+        add_tooltip(
+            define_value,
+            _(
+                "Select a record and a field on the right, then type your own value for it "
+                "-- a number or string no plugin in the conflict uses. Written verbatim in "
+                "the field's own type; your mods are not modified."
+            ),
+        )
+        # Per-field patch (above) | the whole-plugin bulk merge | the builder.
+        group_separator(actions)
+        merge_btn = ttk.Button(
+            actions,
+            text=_("Merge this plugin's fields..."),
+            command=self._bulk_merge_selected_plugin,
+        )
+        merge_btn.pack(side="left", padx=(6, 0))
+        add_tooltip(
+            merge_btn,
+            _(
+                "Select a plugin above, then pick which of its fields should win across "
+                "every record it defines -- one decision instead of hundreds. Reads the "
+                "plugin in the background (the window stays responsive), then queues those "
+                "fields into a patch. Records where this plugin already wins, or where the "
+                "value already matches, are skipped; your mods are not modified."
+            ),
+        )
+        group_separator(actions)
+        builder = ttk.Button(actions, text=_("Patch Builder..."), command=self.show_patch_builder)
+        builder.pack(side="left", padx=(6, 0))
+        add_tooltip(
+            builder,
+            _(
+                "Review and edit everything queued so far, then write it as one new plugin. "
+                "Nothing is written until you say so."
+            ),
+        )
+
         self._plugin_lost_only = tk.BooleanVar(value=True)
         self._highlighted_plugins: set[str] = set()
         self._conflict_adjacency_cache: dict[bool, dict[str, set[str]]] = {}
+        mode_bar = ttk.Frame(win)
+        mode_bar.pack(side="bottom", fill="x", padx=8)
         highlight_chk = ttk.Checkbutton(
-            win,
+            mode_bar,
             text=_("Highlight only conflicts that lose work"),
             variable=self._plugin_lost_only,
             command=self._on_highlight_mode_changed,
         )
-        highlight_chk.pack(side="left", padx=8, pady=8)
+        highlight_chk.pack(side="left", pady=(0, 2))
         add_tooltip(
             highlight_chk,
             _(
@@ -826,6 +912,382 @@ class PluginViewMixin:
                 tags=(ALL_TAGS[row.overall][0],),
                 values=[_entry_text(value) for value in row.values],
             )
+
+    # -- patch actions (the Conflicts window's set, over this view's selection) --
+
+    def _selected_record_conflict(self) -> Mapping[str, Any] | None:
+        """The conflict dict for the record row selected in the tree, or ``None``.
+
+        A record row's id is ``plugin`` + separator + ``type`` + separator +
+        ``key``; anything with fewer than two separators is a plugin or group
+        row, not a record.
+        """
+        nav = getattr(self, "_plugin_nav", None)
+        if nav is None or not nav.winfo_exists():
+            return None
+        chosen = nav.selection()
+        if not chosen or chosen[0].count(SEP) != 2:
+            return None
+        _plugin, kind, key = chosen[0].split(SEP, 2)
+        return next(
+            (
+                entry
+                for entry in getattr(self, "_shown_conflicts", None) or []
+                if str(entry.get("type") or "") == kind and str(entry.get("id") or "") == key
+            ),
+            None,
+        )
+
+    def _selected_detail_field(self) -> str | None:
+        """The field path selected in the detail pane, or ``None``.
+
+        An expanded entry row resolves to its parent field, since a patch acts on
+        the whole field, exactly as the detail double-click does.
+        """
+        detail = getattr(self, "_plugin_detail", None)
+        if detail is None or not detail.winfo_exists():
+            return None
+        selection = detail.selection()
+        if not selection:
+            return None
+        field_row = detail.parent(selection[0]) or selection[0]
+        return str(detail.item(field_row, "text")).strip() or None
+
+    def _pv_add_record_to_patch(self) -> None:
+        """Queue the selected record's whole version from a chosen plugin."""
+        conflict = self._selected_record_conflict()
+        if conflict is None:
+            messagebox.showinfo(_("Nothing selected"), _("Select a record in the tree first."))
+            return
+        self._patch_whole_record(conflict)
+
+    def _pv_merge_field(self) -> None:
+        """Take the selected field of the selected record from a chosen plugin."""
+        conflict = self._selected_record_conflict()
+        field = self._selected_detail_field()
+        if conflict is None or field is None:
+            messagebox.showinfo(
+                _("Nothing selected"),
+                _("Select a record in the tree, then a field in the comparison on the right."),
+            )
+            return
+        self._patch_field(conflict, field)
+
+    def _pv_define_value(self) -> None:
+        """Type a custom value for the selected field of the selected record."""
+        conflict = self._selected_record_conflict()
+        field = self._selected_detail_field()
+        if conflict is None or field is None:
+            messagebox.showinfo(
+                _("Nothing selected"),
+                _("Select a record in the tree, then a field in the comparison on the right."),
+            )
+            return
+        self._patch_field_value(conflict, field)
+
+    # -- merge a whole plugin's fields into a patch ---------------------
+
+    def _selected_plugin(self) -> str | None:
+        """The plugin the nav selection belongs to, or ``None``.
+
+        A plugin row's id is the plugin name; a group or record row's id begins
+        with it. Either way the plugin is the part before the first separator.
+        """
+        nav = getattr(self, "_plugin_nav", None)
+        if nav is None or not nav.winfo_exists():
+            return None
+        chosen = nav.selection()
+        if not chosen:
+            return None
+        plugin = chosen[0].split(SEP, 1)[0]
+        return plugin if plugin in getattr(self, "_plugin_branches", {}) else None
+
+    def _bulk_merge_selected_plugin(self) -> None:
+        """Read the selected plugin's records, then ask which fields it wins.
+
+        The heavy part -- reading every record the plugin defines -- runs on a
+        worker thread (the same batched, per-plugin-locked read the colouring
+        uses), so the window never freezes. When it finishes, a dialog lists the
+        fields this plugin could actually change and the user picks which to take.
+        """
+        plugin = self._selected_plugin()
+        if plugin is None:
+            messagebox.showinfo(
+                _("Select a plugin"),
+                _("Select a plugin in the tree first, then try again."),
+            )
+            return
+        if getattr(self, "worker_running", False):
+            self.status_var.set(_("Busy reading plugins -- try that again in a moment."))
+            return
+        if self._conf_session is None:
+            self._ensure_conflict_session()
+        if self._conf_session is None:
+            messagebox.showinfo(_("No field data"), _("Set a tes3conv binary to compare fields."))
+            return
+        branch = self._plugin_branches.get(plugin)
+        markers = (
+            {marker for markers in branch.groups.values() for marker in markers}
+            if branch
+            else set()
+        )
+        by_marker = {
+            (str(e.get("type") or ""), str(e.get("id") or "")): e
+            for e in getattr(self, "_shown_conflicts", None) or []
+        }
+        wanted = [
+            by_marker[m]
+            for m in markers
+            if m in by_marker and len(by_marker[m].get("plugins") or []) >= 2
+        ]
+        if not wanted:
+            messagebox.showinfo(
+                _("Nothing to merge"),
+                _("%(name)s shares no record with another plugin, so there is nothing to take.")
+                % {"name": plugin},
+            )
+            return
+        self.worker_running = True
+        self.status_var.set(
+            _("Reading %(name)s (%(n)d record(s))...") % {"name": plugin, "n": len(wanted)}
+        )
+        threading.Thread(target=self._bulk_read_worker, args=(plugin, wanted), daemon=True).start()
+
+    def _bulk_read_worker(self, plugin: str, wanted: list[dict]) -> None:
+        """Read the plugin's conflicting records off the UI thread.
+
+        Args:
+            plugin: The source plugin.
+            wanted: The conflicts it takes part in.
+        """
+        records: list[BulkRecord] = []
+        error = ""
+        try:
+            read = core.batch_record_fields(
+                self._conf_session,
+                wanted,
+                self._conf_paths,
+                # Real values, not digests: the picker previews what each field
+                # holds, and equality still works on them. Bounded because this
+                # is one plugin's conflicting records, not the whole load order.
+                digest=False,
+                lock=self._session_lock(),
+            )
+            for conflict in wanted:
+                marker = (str(conflict["type"]), str(conflict["id"]))
+                _keys, per = read.get(marker, ([], {}))
+                records.append(
+                    BulkRecord(
+                        record_type=str(conflict.get("type") or ""),
+                        key=str(conflict.get("id") or ""),
+                        plugins=tuple(str(p) for p in conflict["plugins"]),
+                        values=per,
+                    )
+                )
+        except Exception as exc:  # reported into the window, not raised
+            error = str(exc)
+            LOG.exception("bulk read of %s failed", plugin)
+        self._schedule_ui(0, self._bulk_read_done, plugin, records, error)
+
+    def _bulk_read_done(self, plugin: str, records: list[BulkRecord], error: str) -> None:
+        """Work out which fields the plugin can change, then open the picker.
+
+        Args:
+            plugin: The source plugin.
+            records: Its conflicting records, with per-plugin field digests.
+            error: Any read error, reported rather than raised.
+        """
+        self.worker_running = False
+        if error:
+            self.status_var.set(
+                _("Could not read %(name)s: %(err)s") % {"name": plugin, "err": error}
+            )
+            return
+        # Offer only fields this plugin would actually change: for each field it
+        # defines, count the records taking it would patch, and drop the ones
+        # that change nothing (identity fields, ties, records it already wins).
+        # Preview the plugin's own value for the field, from the first record
+        # where taking it would change something -- so the picker shows what it
+        # is you would be forcing, not just its name.
+        decisions = bulk_field_choices(records, plugin, self._all_field_paths(records, plugin))
+        counts: dict[str, int] = {}
+        for decision in decisions:
+            counts[decision.choice.path] = counts.get(decision.choice.path, 0) + 1
+        previews = self._field_previews(records, plugin, set(counts))
+        candidates = [(path, counts[path], previews.get(path, "")) for path in counts]
+        if not candidates:
+            self.status_var.set(
+                _("%(name)s already wins every field it could change here.") % {"name": plugin}
+            )
+            messagebox.showinfo(
+                _("Nothing to merge"),
+                _(
+                    "%(name)s either already wins, or matches the winner, for every field "
+                    "-- so there is nothing to take."
+                )
+                % {"name": plugin},
+            )
+            return
+        candidates.sort(key=lambda pc: pc[0].lower())
+        self._ask_bulk_fields(plugin, records, candidates)
+
+    @staticmethod
+    def _all_field_paths(records: list[BulkRecord], plugin: str) -> list[str]:
+        """Every field path ``plugin`` defines across ``records``, deduped in order."""
+        seen: dict[str, None] = {}
+        for record in records:
+            for path in record.values.get(plugin, {}):
+                seen.setdefault(path, None)
+        return list(seen)
+
+    def _field_previews(
+        self, records: list[BulkRecord], plugin: str, paths: set[str]
+    ) -> dict[str, str]:
+        """A short preview of the plugin's value for each field, for the picker.
+
+        Taken from the first record where the plugin's value actually differs
+        from the current winner's -- the value the merge would force there --
+        rendered with the same formatter the detail pane uses and truncated so
+        one field is one readable row.
+
+        Args:
+            records: The plugin's conflicting records, with real field values.
+            plugin: The source plugin.
+            paths: The field paths to preview.
+
+        Returns:
+            ``path -> preview text`` for the paths that had a differing value.
+        """
+        previews: dict[str, str] = {}
+        for record in records:
+            values = record.values.get(plugin, {})
+            winner = record.plugins[-1] if record.plugins else ""
+            winner_values = record.values.get(winner, {})
+            for path in paths:
+                if path in previews or path not in values:
+                    continue
+                if values[path] != winner_values.get(path):
+                    text = self._fmt_val(values[path])
+                    previews[path] = text if len(text) <= 120 else text[:117] + "..."
+            if len(previews) == len(paths):
+                break
+        return previews
+
+    def _ask_bulk_fields(
+        self, plugin: str, records: list[BulkRecord], candidates: list[tuple[str, int, str]]
+    ) -> None:
+        """Let the user pick which of the plugin's fields to take, then queue them.
+
+        Args:
+            plugin: The source plugin.
+            records: Its conflicting records (already read).
+            candidates: ``(field path, records it would change)``, sorted.
+        """
+        parent = getattr(self, "_plugin_win", None) or self.root
+        win = tk.Toplevel(parent)
+        win.title(_("Merge fields from %(name)s") % {"name": plugin})
+        win.transient(parent)
+        apply_titlebar_theme(win)
+        win.configure(bg=DARK["bg"])
+        frame = ttk.Frame(win, padding=10)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(
+            frame,
+            text=_("Pick the fields %(name)s should win, across every record it defines.")
+            % {"name": plugin},
+        ).pack(anchor="w")
+        ttk.Label(
+            frame,
+            foreground=DARK["fg_dim"],
+            text=_(
+                "The number is how many records each field would change.\n"
+                "Your mods are not modified."
+            ),
+        ).pack(anchor="w", pady=(0, 8))
+        # A themed Treeview rather than a tk.Listbox: it inherits the dark
+        # "Conf.Treeview" style the rest of this window uses (a bare Listbox
+        # stays white), and its columns show the record count and a preview of
+        # the plugin's value beside each field name.
+        table_wrap = ttk.Frame(frame)
+        table_wrap.pack(fill="both", expand=True)
+        table = ttk.Treeview(
+            table_wrap,
+            columns=("count", "value"),
+            show="tree headings",
+            selectmode="extended",
+            style="Conf.Treeview",
+            height=min(16, max(4, len(candidates))),
+        )
+        table.heading("#0", text=_("Field"))
+        table.column("#0", width=180, stretch=False)
+        table.heading("count", text=_("Records"))
+        table.column("count", width=70, anchor="e", stretch=False)
+        table.heading("value", text=_("This plugin's value"))
+        table.column("value", width=340, stretch=True)
+        table_scroll = ttk.Scrollbar(table_wrap, orient="vertical", command=table.yview)
+        table.configure(yscrollcommand=table_scroll.set)
+        table.grid(row=0, column=0, sticky="nsew")
+        table_scroll.grid(row=0, column=1, sticky="ns")
+        table_wrap.rowconfigure(0, weight=1)
+        table_wrap.columnconfigure(0, weight=1)
+        for path, count, preview in candidates:
+            table.insert("", "end", iid=path, text=path, values=(count, preview))
+        total_var = tk.StringVar()
+        ttk.Label(frame, textvariable=total_var, foreground=DARK["fg_dim"]).pack(
+            anchor="w", pady=(8, 0)
+        )
+
+        def chosen_paths() -> list[str]:
+            """The field paths currently selected in the table (their row ids)."""
+            return list(table.selection())
+
+        def refresh(*_a: object) -> None:
+            """Recount, in memory, how many records the selection would change."""
+            picked = chosen_paths()
+            changes = len(bulk_field_choices(records, plugin, picked)) if picked else 0
+            total_var.set(
+                _("%(fields)d field(s) selected, %(n)d record change(s) queued.")
+                % {"fields": len(picked), "n": changes}
+            )
+
+        table.bind("<<TreeviewSelect>>", refresh)
+        refresh()
+
+        def select_all() -> None:
+            """Select every candidate field, then update the count."""
+            table.selection_set(table.get_children())
+            refresh()
+
+        def apply_choices() -> None:
+            """Queue the chosen fields from the plugin, then open the builder."""
+            picked = chosen_paths()
+            if not picked:
+                return
+            decisions = bulk_field_choices(records, plugin, picked)
+            for decision in decisions:
+                self.queue_field(decision.record_type, decision.key, decision.choice)
+            self.status_var.set(
+                _("Queued %(n)d field take(s) from %(name)s.")
+                % {"n": len(decisions), "name": plugin}
+            )
+            win.destroy()
+            if decisions:
+                self.show_patch_builder()
+
+        buttons = ttk.Frame(frame)
+        buttons.pack(fill="x", pady=(10, 0))
+        ttk.Button(buttons, text=_("Select all"), command=select_all).pack(side="left")
+        ttk.Button(buttons, text=_("Merge selected"), command=apply_choices).pack(
+            side="left", padx=(8, 0)
+        )
+        ttk.Button(buttons, text=_("Cancel"), command=win.destroy).pack(side="right")
+
+        win.update_idletasks()
+        win.geometry(f"+{parent.winfo_rootx() + 60}+{parent.winfo_rooty() + 60}")
+        win.lift()
+        win.focus_force()
+        win.protocol("WM_DELETE_WINDOW", win.destroy)
+        win.grab_set()
 
     def _on_plugin_detail_double(self) -> None:
         """Open the double-clicked field's full value across every plugin.

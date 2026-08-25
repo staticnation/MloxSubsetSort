@@ -1,18 +1,18 @@
 """Locating plugin files and reading their metadata -- the [VER]/[DESC] backing.
 
-Exercises ``read_plugin_description`` (its whole body was untested),
-``plugin_version``'s header path, and ``list_plugins_in_dir``'s guard clauses,
-using tiny synthetic TES3 headers and real temp directories. A TES3 header is
-just ``b"TES3"`` followed by a null-terminated description at a fixed offset, so
-a valid one is cheap to fabricate.
+Exercises ``read_plugin_description`` (now backed by the in-process ESP header
+reader), ``plugin_version``'s header path, and ``list_plugins_in_dir``'s guard
+clauses, using real (if minimal) TES3 header records and real temp directories.
+A header is one ``TES3`` record whose ``HEDR`` subrecord carries the
+description, so :func:`_tes3` fabricates exactly that framing.
 """
 
 from __future__ import annotations
 
+import struct
 from typing import TYPE_CHECKING
 
 from wraithguard.plugins.metadata import (
-    TES3_MIN_PLUGIN_SIZE,
     PluginFileIndex,
     list_plugins_in_dir,
     plugin_version,
@@ -23,17 +23,30 @@ from wraithguard.versions import format_version
 if TYPE_CHECKING:
     from pathlib import Path
 
-_DESCRIPTION_OFFSET = 64
+#: Size of the fixed ``HEDR`` block: version, file type, author, description,
+#: object count -- the exact layout the ESP reader and the engine expect.
+_HEDR_SIZE = 300
+
+#: Byte offset of the description within the ``HEDR`` block: past the f32
+#: version (4), the u32 file type (4), and the 32-byte author field.
+_DESC_IN_HEDR = 40
 
 
 def _tes3(tmp_path: Path, name: str, description: bytes) -> Path:
-    """Write a minimal TES3 plugin carrying the given header description."""
-    header = bytearray(TES3_MIN_PLUGIN_SIZE + 8)
-    header[0:4] = b"TES3"
-    header[_DESCRIPTION_OFFSET : _DESCRIPTION_OFFSET + len(description)] = description
-    header[_DESCRIPTION_OFFSET + len(description)] = 0  # null-terminate it
+    """Write a minimal but *valid* TES3 plugin carrying the given description.
+
+    One ``TES3`` record: the 16-byte record header, then a proper ``HEDR``
+    subrecord with the description null-padded into its fixed field -- the real
+    framing the header reader parses, not a description dropped at a raw offset.
+    """
+    hedr = bytearray(_HEDR_SIZE)
+    struct.pack_into("<f", hedr, 0, 1.3)  # format version
+    struct.pack_into("<I", hedr, 4, 0)  # file type: esp
+    hedr[_DESC_IN_HEDR : _DESC_IN_HEDR + len(description)] = description  # rest stays null
+    body = b"HEDR" + struct.pack("<I", _HEDR_SIZE) + bytes(hedr)
+    record = b"TES3" + struct.pack("<I", len(body)) + b"\x00" * 8 + body  # size, padding+flags
     path = tmp_path / name
-    path.write_bytes(bytes(header))
+    path.write_bytes(record)
     return path
 
 

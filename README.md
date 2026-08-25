@@ -121,6 +121,34 @@ Run the GUI:
 python wraithguard_toolkit_gui.py
 ```
 
+### Verifying a download (minisign)
+
+Release builds are signed with [minisign](https://jedisct1.github.io/minisign/).
+Each artifact on a Release has a matching `.minisig` beside it. To check a
+download is authentic and intact, install `minisign` (or the Rust `rsign2`) and
+verify against this project's public key:
+
+```
+minisign -Vm wraithguard-toolkit-windows-x86_64.exe -p minisign.pub
+```
+
+where `minisign.pub` is the public key shipped in this repository. (The
+signatures are standard minisign, so you do **not** need Python or this project's
+tooling to verify them.)
+
+**Maintainer setup (one-time).** The signing is done in CI by
+`tools/sign_release.py` (pure-Python via the `py-minisign` package -- no C or Rust
+toolchain on the runner). To enable it:
+
+1. Generate a key pair locally: `minisign -G` -> `minisign.key` (secret) and
+   `minisign.pub` (public). Commit `minisign.pub`.
+2. In the repository's **Settings -> Secrets and variables -> Actions**, add
+   `MINISIGN_SECRET_KEY` (paste the whole `minisign.key` file) and
+   `MINISIGN_PASSWORD` (the password you chose).
+3. Push a `v*` tag. Each OS build signs its own artifact and attaches the
+   `.minisig` to the Release. If the secret is absent the signing step is
+   skipped rather than failing, so a release can still go out during setup.
+
 ---
 
 ## GUI walkthrough
@@ -339,6 +367,9 @@ Works with or without PyYAML.
 to download MOMW's latest. The download must parse as plugin-order data with
 hundreds of entries before a single byte is written (an error page or moved URL
 can never clobber your file), and the old copy is kept as a timestamped `.bak`.
+On a fresh setup you can click **Update...** with the field blank: it asks where
+to save the file, remembers the choice, and downloads it - no need to Browse to a
+file that does not exist yet.
 
 ---
 
@@ -408,7 +439,9 @@ rule-files panel keep you current and let you extend it:
 
 - **Update Rules...** downloads the current `mlox_base.txt`/`mlox_user.txt` over
   the matching files in your list (timestamped `.bak` kept; files with other
-  names are never touched).
+  names are never touched). With no rule files set yet it asks for a folder, puts
+  `mlox_base.txt` and `mlox_user.txt` there, adds them to the list, and downloads
+  them - so a fresh install can fetch its rules without hunting one down first.
 - **New Rule...** writes your own rule without knowing the syntax. It covers the
   whole vocabulary - `[Order]`, `[NearStart]`, `[NearEnd]`, `[Note]`,
   `[Requires]`, `[Conflict]` and `[Patch]`, the `ALL`/`ANY`/`NOT` expression
@@ -493,7 +526,15 @@ type + editor id), the last one in the load order wins.
   colours itself: opening it judges the order once in the background (carefully,
   so a large order does not run out of memory) and the colours fill in without
   you opening a group. The same visualisers, image/mesh viewers and patch maker
-  the flat diff has are wired into it. Selecting a plugin row also highlights, in
+  the flat diff has are wired into it: it carries the full set of patch buttons
+  (**Add record to patch**, **Merge field**, **Define value**, **Patch
+  Builder**), so it is a second place to build and review a patch, not just to
+  look. It also adds **Merge this plugin's fields...** -- pick a plugin, then pick
+  which of its fields should win across *every* record it defines, in one step
+  instead of hundreds. The picker lists only the fields that plugin would
+  actually change, each with how many records it would touch and a preview of the
+  plugin's value; the plugin is read in the background so the window stays
+  responsive. Selecting a plugin row also highlights, in
   purple, every plugin it conflicts with -- a *lost/broad* toggle chooses between
   only the records where an edit is discarded (the default) and any shared record.
 - Read-only and opt-in: it never changes the sort or your files, and it needs the
@@ -791,6 +832,7 @@ Key flags:
 | `--customizations` | Derive the subset from a `momw-customizations.toml`. |
 | `--subset` / `--subset-file` | Name plugins/paths directly, or from a file. |
 | `--scan-dir` | Scan a mods folder into `--subset-file`, then sort. |
+| `--subset-from-cfg` | Pull the cfg's own unmanaged (orphan) `content=` plugins -- those neither on the list nor in your customizations -- and sort them, in cfg order. Base masters and groundcover are skipped. `data=` paths are left as the cfg has them (they are already in the cfg's data= order, and nothing reliably tells a list-managed path from a hand-added one). |
 | `--list-name` | The MOMW list name for the emitted TOML / yml features. |
 | `--plugin-order-yml` | Enable curated-vs-custom split and yml warnings. |
 | `--emit-toml` | Write the corrected `momw-customizations.toml` (the durable fix). |

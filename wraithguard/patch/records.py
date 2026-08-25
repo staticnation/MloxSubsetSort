@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
 #: The record type that carries the plugin header.
 HEADER_TYPE: Final = "Header"
@@ -539,10 +539,86 @@ def collect(
     return out
 
 
+def carry_forward(
+    records: Sequence[Mapping[str, Any]],
+    patch_masters: Sequence[str],
+    skip: frozenset[tuple[str, str]] = frozenset(),
+) -> list[dict[str, Any]]:
+    """Re-emit an earlier build of *this same* patch into a new one.
+
+    This is what makes a patch buildable over several sessions: read back the
+    file this call is about to overwrite, and carry its records into the new
+    build, so a record queued last week is not lost just because this
+    session's queue never mentions it again.
+
+    **Index 0 needs no remapping here, and that is the whole difference from**
+    :func:`collect`. A record already lives in the file being rewritten, and
+    stays there -- the file's own identity does not change just because it is
+    being rebuilt, so a ``mast_index`` of ``0`` still means "this file" on
+    both sides of the rewrite. Only indices into the *old* header's own master
+    list change, because the new build may declare a different one. Nothing
+    here requires the old file's name to appear in ``patch_masters``, and it
+    must not: declaring a patch as a master of its own replacement is
+    circular, and tes3conv will not write it.
+
+    Args:
+        records: The previous build's decoded records, header included.
+        patch_masters: The master list the new patch will declare.
+        skip: ``(record type, key)`` pairs this session already decided.
+            Carrying the old answer forward as well would leave the patch's
+            own last-wins to pick between it and the new one -- the same
+            reason :class:`~wraithguard.patch.queue.PatchQueue` overwrites
+            rather than accumulates when a record is re-decided.
+
+    Returns:
+        The old records worth keeping, in their original relative order, with
+        references renumbered for the new master list. Order matters for a
+        dialogue response: it must still follow the topic that owns it, and
+        the previous build already put it there.
+
+    Raises:
+        PatchError: If an old record references a master the new build does
+            not declare. Rescan with that plugin present, or replace the
+            patch instead of appending to it.
+    """
+    old_masters = master_names(records)
+    lowered = {name.lower(): position for position, name in enumerate(patch_masters, start=1)}
+    mapping: dict[int, int] | None = None
+
+    def old_index_map() -> dict[int, int]:
+        """Old master position to new, built once and only if actually needed."""
+        built = {0: 0}
+        for old, name in enumerate(old_masters, start=1):
+            found = lowered.get(name.lower())
+            if found is None:
+                raise PatchError(
+                    f"the existing patch references {name}, which the new build "
+                    "does not declare. Rescan with it present, or replace the "
+                    "patch instead of appending to it."
+                )
+            built[old] = found
+        return built
+
+    out: list[dict[str, Any]] = []
+    for record in records:
+        if record.get("type") == HEADER_TYPE:
+            continue
+        if (str(record.get("type")), record_key(record)) in skip:
+            continue
+        if not needs_remapping(record):
+            out.append(copy.deepcopy(dict(record)))
+            continue
+        if mapping is None:
+            mapping = old_index_map()
+        out.append(remap_references(record, mapping))
+    return out
+
+
 def required_masters(
     selections: Sequence[Selection],
     records_by_plugin: Mapping[str, Sequence[Mapping[str, Any]]],
     load_order: Sequence[str],
+    extra: Iterable[str] = (),
 ) -> list[str]:
     """Work out what a patch of these records must declare.
 
@@ -554,6 +630,11 @@ def required_masters(
         selections: What the patch will carry.
         records_by_plugin: The source plugins' decoded records.
         load_order: The full load order, which decides the result's order.
+        extra: Master names required regardless of any selection. What an
+            earlier build of this same patch declared, when appending to one
+            -- its records still reference those masters by position even
+            though nothing here takes a record from it *as* a plugin (see
+            :func:`carry_forward`).
 
     Returns:
         The masters to declare, in load order.
@@ -562,6 +643,7 @@ def required_masters(
     for selection in selections:
         needed.add(selection.plugin)
         needed.update(master_names(records_by_plugin.get(selection.plugin) or []))
+    needed.update(extra)
 
     lowered = {name.lower(): name for name in needed}
     ordered = [name for name in load_order if name.lower() in lowered]

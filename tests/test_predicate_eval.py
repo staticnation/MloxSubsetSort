@@ -8,6 +8,7 @@ size-controlled files, index them, and exercise each comparison directly.
 
 from __future__ import annotations
 
+import struct
 from typing import TYPE_CHECKING
 
 from wraithguard.plugins import PluginFileIndex
@@ -17,18 +18,29 @@ from wraithguard.versions import format_version
 if TYPE_CHECKING:
     from pathlib import Path
 
-_TES3_MIN = 362
-_DESC_OFFSET = 64
+#: The fixed ``HEDR`` block: version, file type, author, description, count.
+_HEDR_SIZE = 300
+
+#: Description offset within ``HEDR``: past the f32 version and u32 file type
+#: (8 bytes) and the 32-byte author field.
+_DESC_IN_HEDR = 40
 
 
 def _tes3(tmp_path: Path, name: str, description: bytes) -> Path:
-    """Write a minimal TES3 plugin carrying the given header description."""
-    header = bytearray(_TES3_MIN + 8)
-    header[0:4] = b"TES3"
-    header[_DESC_OFFSET : _DESC_OFFSET + len(description)] = description
-    header[_DESC_OFFSET + len(description)] = 0
+    """Write a minimal but valid TES3 plugin carrying the given description.
+
+    A real ``TES3`` record with a proper ``HEDR`` subrecord -- the framing the
+    in-process header reader parses -- rather than a description dropped at a
+    raw file offset.
+    """
+    hedr = bytearray(_HEDR_SIZE)
+    struct.pack_into("<f", hedr, 0, 1.3)  # format version
+    struct.pack_into("<I", hedr, 4, 0)  # file type: esp
+    hedr[_DESC_IN_HEDR : _DESC_IN_HEDR + len(description)] = description  # rest stays null
+    body = b"HEDR" + struct.pack("<I", _HEDR_SIZE) + bytes(hedr)
+    record = b"TES3" + struct.pack("<I", len(body)) + b"\x00" * 8 + body  # size, padding+flags
     path = tmp_path / name
-    path.write_bytes(bytes(header))
+    path.write_bytes(record)
     return path
 
 

@@ -139,6 +139,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 # pinned by tests/test_differential.py. Only the names this module actually
 # calls are imported -- callers import from wraithguard/ themselves (§23).
 from wraithguard import _, get_logger, ngettext, setup_logging
+from wraithguard.esp import EspError, Header, read_header
 from wraithguard.nif.analysis import MeshAnalyser, MeshFinding
 from wraithguard.nif.report import Structure, compare as compare_structures
 from wraithguard.rules import authoring, pattern_has_meta
@@ -193,34 +194,55 @@ if TYPE_CHECKING:
 # atomic function forms, matched against a single token produced by the tokenizer
 
 
+#: Defensive cap on how much of a plugin to read for its header: the TES3
+#: header record is tiny, so a larger declared size means a corrupt file, and
+#: reading a gigabyte to look for masters helps nobody.
+_HEADER_READ_CAP = 1 << 20
+
+
+def _read_header_record(path: str | Path) -> Header | None:
+    """Read a plugin's ``TES3`` header via the in-process ESP reader, or ``None``.
+
+    Reads only the first record -- its declared size then that many bytes -- so a
+    huge plugin is not slurped to find its masters, and (because nothing past the
+    header is parsed) a file whose later records ``tes3conv`` would refuse still
+    yields its header. Never raises: any read or parse problem returns ``None``,
+    and the byte-level callers fall back to their own tolerant scan.
+
+    Returns:
+        The parsed :class:`~wraithguard.esp.records.Header`, or ``None`` for a
+        non-TES3 file, a truncated header, or any decode/parse failure.
+    """
+    try:
+        with Path(path).open("rb") as fh:
+            prefix = fh.read(16)  # tag + size + padding + flags
+            if len(prefix) < 16 or prefix[:4] != b"TES3":
+                return None
+            (data_size,) = struct.unpack_from("<I", prefix, 4)
+            body = fh.read(min(data_size, _HEADER_READ_CAP))
+    except (OSError, struct.error):
+        return None
+    try:
+        return read_header(prefix + body)
+    except EspError:
+        return None
+
+
 def read_plugin_masters(path: str | Path) -> list[str]:
     """Return the master files a plugin depends on, from its TES3 header.
 
     These are the ground-truth load-order dependencies: a plugin must load AFTER every
     master it lists. Returns [] for non-TES3 files (.omwscripts) or any read problem.
     Works for .esm/.esp/.omwaddon/.omwgame.
+
+    Reads the header with the in-process ESP reader (correct cp1252 decoding, the
+    format's own MAST/DATA framing); a header the strict reader cannot parse falls
+    back to the tolerant byte scan so nothing regresses on an odd file.
     """
-    try:
-        with Path(path).open("rb") as fh:
-            if fh.read(4) != b"TES3":
-                return []
-            data_size = struct.unpack("<I", fh.read(4))[0]
-            fh.read(8)  # header1 + flags
-            data = fh.read(min(data_size, 1 << 20))  # header is tiny; cap defensively
-    except (OSError, struct.error):
-        return []
-    masters, i = [], 0
-    while i + 8 <= len(data):
-        tag = data[i : i + 4]
-        sz = struct.unpack_from("<I", data, i + 4)[0]
-        i += 8
-        chunk = data[i : i + sz]
-        i += sz
-        if tag == b"MAST":
-            nm = chunk.split(b"\x00", 1)[0].decode("latin-1", "replace").strip()
-            if nm:
-                masters.append(nm)
-    return masters
+    header = _read_header_record(path)
+    if header is not None:
+        return [name for name, _size in header.masters if name.strip()]
+    return _read_plugin_masters_scan(path)
 
 
 def read_plugin_masters_with_sizes(path: str | Path) -> list[tuple[str, int | None]]:
@@ -231,14 +253,51 @@ def read_plugin_masters_with_sizes(path: str | Path) -> list[tuple[str, int | No
     subrecord holding the master's file size (8 bytes) at the time the plugin
     was saved. tes3cmd uses the same pairing for its master-sync check.
     recorded_size is None when the DATA subrecord is absent/malformed.
+
+    Read via the in-process ESP header, which pairs each MAST with its DATA; a
+    header too malformed for the strict reader (a MAST with no DATA, say) falls
+    back to the byte scan, which tolerates it and reports that size as ``None``.
     """
+    header = _read_header_record(path)
+    if header is not None:
+        return [(name, size) for name, size in header.masters if name.strip()]
+    return _read_plugin_masters_with_sizes_scan(path)
+
+
+def _read_plugin_masters_scan(path: str | Path) -> list[str]:
+    """Byte-level MAST scan -- the fallback when the ESP header will not parse."""
     try:
         with Path(path).open("rb") as fh:
             if fh.read(4) != b"TES3":
                 return []
             data_size = struct.unpack("<I", fh.read(4))[0]
             fh.read(8)  # header1 + flags
-            data = fh.read(min(data_size, 1 << 20))
+            data = fh.read(min(data_size, _HEADER_READ_CAP))  # header is tiny; cap defensively
+    except (OSError, struct.error):
+        return []
+    masters, i = [], 0
+    while i + 8 <= len(data):
+        tag = data[i : i + 4]
+        sz = struct.unpack_from("<I", data, i + 4)[0]
+        i += 8
+        chunk = data[i : i + sz]
+        i += sz
+        if tag == b"MAST":
+            nm = chunk.split(b"\x00", 1)[0].decode("cp1252", "replace").strip()
+            if nm:
+                masters.append(nm)
+    return masters
+
+
+def _read_plugin_masters_with_sizes_scan(path: str | Path) -> list[tuple[str, int | None]]:
+    """Byte-level MAST/DATA scan -- the tolerant fallback for a malformed header."""
+    try:
+        with Path(path).open("rb") as fh:
+            if fh.read(4) != b"TES3":
+                return []
+            data_size = struct.unpack("<I", fh.read(4))[0]
+            fh.read(8)  # header1 + flags
+            data = fh.read(min(data_size, _HEADER_READ_CAP))
     except (OSError, struct.error):
         return []
     out, i = [], 0
@@ -252,7 +311,7 @@ def read_plugin_masters_with_sizes(path: str | Path) -> list[tuple[str, int | No
         if tag == b"MAST":
             if pending is not None:
                 out.append((pending, None))
-            nm = chunk.split(b"\x00", 1)[0].decode("latin-1", "replace").strip()
+            nm = chunk.split(b"\x00", 1)[0].decode("cp1252", "replace").strip()
             pending = nm or None
         elif tag == b"DATA" and pending is not None:
             size = struct.unpack_from("<Q", chunk, 0)[0] if len(chunk) >= 8 else None
@@ -3409,11 +3468,13 @@ def write_cfg(
 # Rule-file parsing now lives in wraithguard/rules/parser.py. Behaviour pinned
 # by tests/test_differential.py; callers import it from there directly.
 from wraithguard.configurator import (
+    curated_covers,
     extract_data_path_value,
     generate_customizations_toml,
     infer_data_path_anchors,
     insert_data_paths,
     normalize_data_path,
+    orphan_cfg_entries,
     preview_configurator_result,
 )
 from wraithguard.momw import (
@@ -4150,6 +4211,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "becomes a data= entry (plus its plugins as content=), and matched branches "
         "aren't descended further.",
     )
+    ap.add_argument(
+        "--subset-from-cfg",
+        action="store_true",
+        help="Pull UNMANAGED (orphan) entries out of the --cfg itself and sort them: "
+        "every content= plugin and data= path already in openmw.cfg that is neither on "
+        "the curated list (--plugin-order-yml + --list-name) nor declared in your "
+        "--customizations. Their existing cfg order is kept as the frozen starting "
+        "order (until the sort repositions them). Base masters (Morrowind/Tribunal/"
+        "Bloodmoon.esm) and the base game's Data Files folder are never pulled. Can be "
+        "the only subset source, or combined with --customizations/--subset/--subset-file "
+        "to sort those plus the orphans. data= orphans are only positioned with "
+        "--sort-data-paths; otherwise they are just listed.",
+    )
     ap.add_argument("--dry-run", action="store_true", help="Print the plan, write nothing")
     ap.add_argument(
         "--no-backup",
@@ -4447,9 +4521,11 @@ def _read_subset_inputs(
         and not args.subset
         and not args.subset_file
         and not getattr(args, "subset_lines", None)
+        and not getattr(args, "subset_from_cfg", False)
     ):
         raise SystemExit(
-            "Provide --customizations, --subset, --subset-file, or --scan-dir so there's something to sort."
+            "Provide --customizations, --subset, --subset-file, --scan-dir, or "
+            "--subset-from-cfg so there's something to sort."
         )
 
     _section("READING INPUT")
@@ -4565,7 +4641,15 @@ def _read_subset_inputs(
     subset = [
         s for s in subset if not (s.lower() in _seen or _seen.add(s.lower()))  # type: ignore[func-returns-value]
     ]
-    if not subset and not data_inserts and not raw_toml_data_inserts:
+    if (
+        not subset
+        and not data_inserts
+        and not raw_toml_data_inserts
+        and not getattr(args, "subset_from_cfg", False)
+    ):
+        # With --subset-from-cfg the subset is filled later, in compute_plan, from
+        # the cfg's own orphaned entries -- so an otherwise-empty set is not "nothing
+        # to do" here.
         raise SystemExit("No subset plugins or data paths found -- nothing to do.")
 
     return (
@@ -4873,7 +4957,7 @@ def _yml_post_sort_warnings(
                 f"not in your customizations -- an unmanaged custom plugin (fine if "
                 f"intentional)."
                 for n in base_order_names
-                if n.lower() not in curated_set and n.lower() not in declared_lower
+                if not curated_covers(n, curated_set, nc_set) and n.lower() not in declared_lower
             )
             yml_warnings.extend(base_order_matches_yml(base_order_names, curated_order))
         if yml_warnings:
@@ -5237,6 +5321,112 @@ def _plan_data_paths(
     return data_result
 
 
+def _pull_cfg_orphans(
+    args: argparse.Namespace,
+    subset: list[str],
+    data_inserts: list[dict[str, Any]],
+    raw_toml_data_inserts: list[dict[str, Any]],
+    original_content_values: dict[str, str],
+    subset_origins: dict[str, str],
+    base_order_names: Sequence[str],
+    data_order: Sequence[str],
+    curated_set: Collection[str],
+    needs_cleaning_lower: Collection[str],
+    declared_lower: Collection[str],
+    groundcover_lower: Collection[str],
+) -> list[str]:
+    """Add the cfg's own orphaned ``content=`` plugins to the subset.
+
+    No-op unless ``--subset-from-cfg`` is set. Otherwise pulls every ``content=``
+    plugin already in openmw.cfg that is neither curated (``plugin-order.yml``)
+    nor declared in the customizations, in cfg order, and hands them to the
+    sorter as ``already_present`` entries it repositions within the frozen order.
+    Base masters and any plugin the cfg declares as groundcover are excluded.
+
+    ``data=`` paths are deliberately *not* pulled. A data path is already in the
+    cfg's own ``data=`` order (which OpenMW / momw-configurator arranges), and
+    there is no reliable signal for which of those a curated list manages versus
+    which the user added by hand. Re-feeding them as inserts repositioned the
+    whole VFS and marked every path as touched, so this stage now leaves ``data=``
+    exactly as the cfg has it.
+
+    Args:
+        args: The parsed CLI/GUI arguments.
+        subset: The subset so far. **Appended to** with the orphan plugins.
+        data_inserts: Unused (kept for the call signature); ``data=`` is not
+            pulled -- see above.
+        raw_toml_data_inserts: Unused (kept for the call signature).
+        original_content_values: ``{name: cfg spelling}``. **Updated** for the
+            orphan plugins.
+        subset_origins: ``{plugin_lower: source}``. **Updated** for the orphans.
+        base_order_names: The cfg's ``content=`` order.
+        data_order: The cfg's raw ``data=`` lines (read only, to classify).
+        curated_set: Lower-cased plugins the curated list owns (may be empty).
+        needs_cleaning_lower: Lower-cased plugins the list flags for cleaning,
+            for the ``clean_`` alias match (see :func:`curated_covers`).
+        declared_lower: Lower-cased plugins already declared this run.
+        groundcover_lower: Lower-cased plugins the cfg declares as groundcover.
+
+    Returns:
+        The subset with the orphan plugins appended, in cfg order.
+    """
+    if not getattr(args, "subset_from_cfg", False):
+        return subset
+
+    _section(_("UNMANAGED (ORPHAN) ENTRIES FROM openmw.cfg"))
+
+    # Only content= plugins are pulled. A data= path is a different case: it is
+    # already in the cfg's own data= order, which OpenMW (via momw-configurator)
+    # arranges, and there is no reliable signal for which of those a curated list
+    # manages versus which the user added by hand -- plugin-order.yml has no
+    # data-path concept. Treating them as orphans re-fed every path already in
+    # data= back in as a *new* insert, so the whole VFS was repositioned and
+    # every row marked "touched by this sort". Content plugins are safe: the
+    # curated set tells a loose plugin from a listed one.
+    orphan_plugins, _orphan_data = orphan_cfg_entries(
+        base_order_names,
+        data_order,
+        curated_lower={str(c).lower() for c in curated_set},
+        needs_cleaning_lower={str(c).lower() for c in needs_cleaning_lower},
+        declared_plugins_lower={str(d).lower() for d in declared_lower},
+        declared_data_norms=set(),  # data paths are never pulled; see above
+    )
+
+    # A plugin the cfg also declares as groundcover belongs on a groundcover=
+    # line; adding it to content= too would load the grass twice.
+    if groundcover_lower:
+        orphan_plugins = [p for p in orphan_plugins if p.lower() not in groundcover_lower]
+
+    # Skip anything already declared explicitly this run (the later de-dupe would
+    # drop it anyway; not counting it keeps the report honest).
+    already = {s.lower() for s in subset}
+    new_plugins = [p for p in orphan_plugins if p.lower() not in already]
+    for name in new_plugins:
+        subset.append(name)
+        original_content_values.setdefault(name, name)
+        subset_origins.setdefault(name.lower(), "openmw.cfg (orphan)")
+
+    print(
+        ngettext(
+            "  %(count)d orphan plugin pulled from openmw.cfg",
+            "  %(count)d orphan plugins pulled from openmw.cfg",
+            len(new_plugins),
+        )
+        % {"count": len(new_plugins)}
+    )
+    for name in new_plugins:
+        print(f"    content={name}")
+
+    if not new_plugins:
+        print(
+            _(
+                "  No unmanaged plugins found -- every content= plugin in the cfg is on "
+                "the list or in your customizations."
+            )
+        )
+    return subset
+
+
 def compute_plan(args: argparse.Namespace) -> dict:
     """Run the "read input, sort, evaluate warnings" half of a run.
 
@@ -5315,6 +5505,25 @@ def compute_plan(args: argparse.Namespace) -> dict:
 
     subset, yml_entries, curated_set, curated_order, yml_warnings, declared_lower, list_name = (
         _apply_plugin_order_yml(args, subset)
+    )
+
+    # Optionally pull the cfg's own unmanaged (orphan) content=/data= into the
+    # subset, in cfg order, so they get sorted too. Runs after the yml stage so
+    # the curated set is known and after groundcover detection so a grass plugin
+    # is never pulled into content=.
+    subset = _pull_cfg_orphans(
+        args,
+        subset,
+        data_inserts,
+        raw_toml_data_inserts,
+        original_content_values,
+        subset_origins,
+        base_order_names,
+        data_order,
+        curated_set,
+        needs_cleaning_set(yml_entries),
+        declared_lower,
+        {name.lower() for name in cfg_groundcover},
     )
 
     final_order, predicate_warnings = _sort_subset(

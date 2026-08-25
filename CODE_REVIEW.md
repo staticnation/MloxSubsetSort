@@ -26,6 +26,7 @@
 > | §43 (colour, escapes, and the coverage floor) | **3,442** (3,438 passed, 4 skipped; coverage 80.5%) |
 > | §44 (two icon systems, a case-sensitive filesystem, and a Linux build that finally ships) | **3,648** (3,646 passed, 2 skipped: `test_differential` deliberate baseline skip, `test_viz_pages` symlinks not permitted; coverage 86.77%, floor 77%) |
 > | §45 (dialogue rendered readable, xEdit conflict colours, a macOS app build, and an `abspath`/`resolve` audit) | **4,519** (4,514 passed, 5 skipped; coverage 93.44%, floor raised 77% -> 90%; the four `test_service_merge` POSIX-converter skips were then made cross-platform) |
+> | §46 (3.1.6: a cfg orphan-pull subset source, and the `clean_` alias reconciliation) | **4,428** (4,412 passed, 16 skipped on the hermetic basis with no `tes3conv` on PATH, so the converter-gated tests skip; coverage 93.52% with one present, floor 90%; +22 tests in `test_subset_from_cfg.py`) |
 >
 > The same applies to tooling versions, file layouts, message counts and line
 > counts. For the current state of anything, check the code, `CHANGELOG.md`, or

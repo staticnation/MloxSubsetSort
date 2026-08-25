@@ -72,6 +72,22 @@ SOURCES: Final[dict[str, list[dict[str, Any]]]] = {"Castle.esp": CASTLE, "Other.
 PATCH: Final[list[str]] = ["Morrowind.esm", "Castle.esp", "Other.esp"]
 SIZES: Final[dict[str, int]] = dict.fromkeys(PATCH, 1)
 
+#: A previous session's build of the same patch: one record with nothing left
+#: to override, and a master (Other.esp) that this session's own selections
+#: never touch -- so the only way it gets declared is via `carried`.
+OLD_BUILD: Final[list[dict[str, Any]]] = [
+    {"type": "Header", "masters": [["Morrowind.esm", 1], ["Other.esp", 1]]},
+    {"type": "GameSetting", "id": "sFromLastSession", "value": "Kept"},
+]
+
+#: A previous build that also carries the *same* record this session is about
+#: to re-decide, to prove the fresh answer wins rather than sitting next to
+#: the stale one.
+OLD_BUILD_WITH_OVERRIDE: Final[list[dict[str, Any]]] = [
+    {"type": "Header", "masters": [["Morrowind.esm", 1]]},
+    {"type": "GameSetting", "id": "sCastleName", "value": "Old Value"},
+]
+
 #: A dialogue chain where Override.esp repositions r2 to the end, and the
 #: patch carries Base.esp's *original* placement of r2 instead -- the one
 #: fixture that triggers all three post-sort notes (dialogue_position_risk,
@@ -133,6 +149,97 @@ class TestDialogueNotes:
         assert anchors, "position_anchors note never appeared"
         assert "r2" in risk[0]
         assert all("r2" in line or "r3" in line for line in moves)
+
+
+class TestAppendingToAnExistingPatch:
+    """`carried` is what lets a patch be built over several sessions.
+
+    Each case here passes an earlier build's own decoded records back in,
+    which is a fundamentally different kind of source than SOURCES: those are
+    other plugins being read *from*, this is a previous version of the file
+    about to be *overwritten*.
+    """
+
+    def test_a_carried_record_alone_is_a_valid_build(self, tmp_path: Path) -> None:
+        """Nothing selected or merged this session is fine when something is
+        carried -- that is what "nothing changed today, just checking in on
+        the patch" looks like.
+        """
+        result = build_record_patch(
+            [],
+            SOURCES,
+            PATCH,
+            SIZES,
+            "tes3conv",
+            tmp_path / "out.esp",
+            carried=OLD_BUILD,
+            dry_run=True,
+        )
+        assert result.records == 1
+        assert result.carried == 1
+
+    def test_a_carried_masters_own_dependency_is_declared(self, tmp_path: Path) -> None:
+        """Other.esp is required by OLD_BUILD's header, not by anything this
+        session selected -- so it only ends up declared if `carried` feeds
+        into the master calculation, not just the record list.
+        """
+        result = build_record_patch(
+            [],
+            SOURCES,
+            PATCH,
+            SIZES,
+            "tes3conv",
+            tmp_path / "out.esp",
+            carried=OLD_BUILD,
+            dry_run=True,
+        )
+        assert "Other.esp" in result.masters
+
+    def test_a_fresh_decision_supersedes_the_carried_one(self, tmp_path: Path) -> None:
+        """Re-deciding a record this session must replace the old answer, not
+        sit beside it and leave the patch's own last-wins to pick.
+        """
+        selections = [Selection("Castle.esp", "GameSetting", "sCastleName")]
+
+        result = build_record_patch(
+            selections,
+            SOURCES,
+            PATCH,
+            SIZES,
+            "tes3conv",
+            tmp_path / "out.esp",
+            carried=OLD_BUILD_WITH_OVERRIDE,
+            dry_run=True,
+        )
+
+        assert result.records == 1  # the new answer only, not both
+        assert result.carried == 0
+
+    def test_carrying_forward_is_reported_in_the_progress_lines(self, tmp_path: Path) -> None:
+        result = build_record_patch(
+            [],
+            SOURCES,
+            PATCH,
+            SIZES,
+            "tes3conv",
+            tmp_path / "out.esp",
+            carried=OLD_BUILD,
+            dry_run=True,
+        )
+        assert any("carried forward" in line for line in result.lines)
+
+    def test_no_carried_records_means_a_zero_count_not_an_error(self, tmp_path: Path) -> None:
+        """The ordinary fresh-patch or replace path -- `carried` defaults to
+        empty, and nothing about that case should change.
+        """
+        selections = [Selection("Castle.esp", "GameSetting", "sCastleName")]
+
+        result = build_record_patch(
+            selections, SOURCES, PATCH, SIZES, "tes3conv", tmp_path / "out.esp", dry_run=True
+        )
+
+        assert result.carried == 0
+        assert not any("carried forward" in line for line in result.lines)
 
 
 class TestGuardRails:

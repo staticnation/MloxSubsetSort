@@ -208,7 +208,7 @@ def _context_line(record: Mapping[str, Any]) -> str:
     return "<Journal>" if dialogue_type == _JOURNAL else "<Anyone>"
 
 
-def _condition_lines(record: Mapping[str, Any]) -> list[str]:
+def condition_lines(record: Mapping[str, Any]) -> list[str]:
     """The "If ..." lines from the packed DATA block and the SCVR filters."""
     conditions: list[str] = []
     raw_data = record.get("data")
@@ -267,7 +267,7 @@ def describe_info(record: Mapping[str, Any]) -> str:
     if not isinstance(record, dict) or record.get("type") != INFO_TYPE:
         return ""
     lines = [_context_line(record)]
-    lines.extend(f"- If {clause}" for clause in _condition_lines(record))
+    lines.extend(f"- If {clause}" for clause in condition_lines(record))
     text = record.get("text")
     if text:
         lines.append(f'Response: "{text}"')
@@ -368,6 +368,7 @@ def script_tokens(text: str) -> list[tuple[str, str]]:
 __all__ = [
     "DIAL_TYPE",
     "INFO_TYPE",
+    "condition_lines",
     "describe_dialogue",
     "describe_filter",
     "describe_info",

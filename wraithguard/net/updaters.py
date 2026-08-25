@@ -53,6 +53,12 @@ MAX_DOWNLOAD_BYTES: Final = 32 * 1024 * 1024
 #: Repository the mlox rule databases are fetched from.
 RULES_REPO: Final = "DanaePlays/mlox-rules"
 
+#: The rule filenames the upstream repository manages -- the only ones
+#: :func:`update_rule_files` will download or overwrite, so a personal rules
+#: file is never touched. The GUI uses the same list to know what to offer on a
+#: first-run download.
+MANAGED_RULE_FILES: Final = ("mlox_base.txt", "mlox_user.txt")
+
 #: Template for one rule file. ``{name}`` is the filename.
 RULES_URL_TEMPLATE: Final = "https://raw.githubusercontent.com/" + RULES_REPO + "/main/{name}"
 
@@ -254,7 +260,7 @@ def update_rule_files(
     report = []
     for rule_path in rule_paths:
         p = Path(rule_path)
-        if p.name.lower() not in ("mlox_base.txt", "mlox_user.txt"):
+        if p.name.lower() not in MANAGED_RULE_FILES:
             report.append(f"skipped {p.name}: not an upstream-managed filename")
             continue
         # A user-supplied template may contain other braces ('{branch}', or an

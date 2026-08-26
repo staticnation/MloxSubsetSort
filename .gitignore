@@ -20,6 +20,13 @@ dist/
 # Packaged release archives (produced by the build, not source).
 /WraithguardToolkit*.zip
 
+# --- Signing keys (NEVER commit the secret key) ---
+# The minisign secret key goes in the MINISIGN_SECRET_KEY Actions secret, never
+# the repo. Ignore all *.key files as a guard. minisign.pub is NOT ignored --
+# the public key is meant to be published for verification.
+*.key
+minisign.key
+
 # --- Runtime artefacts written next to the app ---
 # Traces, scan caches and generated reports are per-run, never source.
 *.log

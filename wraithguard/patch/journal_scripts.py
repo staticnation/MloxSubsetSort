@@ -6,8 +6,10 @@ means.** That function is a highlighting lexer: it turns source into
 like ``Journal`` comes out as an ordinary ``"text"`` span indistinguishable
 from any variable name. There is no call-site boundary to read off directly.
 :func:`calls_in_text` adds a second pass over that same token stream, looking
-for the shape ``Journal "id", N`` (or ``SetJournalIndex``) -- a small scanner
-built on the existing lexer, not a second one.
+for the shape ``Journal <id>, N`` (or ``SetJournalIndex``) -- where ``<id>`` is
+the quest, quoted or not, since MWScript accepts ``Journal "Q" 40`` and
+``Journal Q 40`` alike and real mods use both -- a small scanner built on the
+existing lexer, not a second one.
 
 **Why this needs the compiled-bytecode fallback path too.** An INFO's result
 script (``script_text``) is always source -- Bethesda never gives it a
@@ -89,6 +91,28 @@ if TYPE_CHECKING:
 _JOURNAL_FUNCTIONS: Final = frozenset({"journal", "setjournalindex"})
 
 
+def _is_bare_id(word: str) -> bool:
+    """Whether an unquoted token is usable as a quest id.
+
+    MWScript lets the ``Journal``/``SetJournalIndex`` quest id be written
+    unquoted -- ``Journal TDM_CM_Telvanni 40`` is as valid as
+    ``Journal "TDM_CM_Telvanni" 40``, and whole mods (Caldera Mine Expanded
+    among them) write every one of theirs that way. The lexer hands such an id
+    back as an ordinary identifier token, so a bareword is accepted when it
+    opens like an identifier -- a letter or underscore -- which rejects the
+    whitespace, commas and other punctuation that also arrive as ``"text"``
+    tokens. A purely numeric argument never reaches here: the lexer classifies
+    it as ``"number"``, not ``"text"``.
+
+    Args:
+        word: The token's text.
+
+    Returns:
+        ``True`` when ``word`` can be a quest id written without quotes.
+    """
+    return bool(word) and (word[0].isalpha() or word[0] == "_")
+
+
 def _canonical(name: str) -> str:
     """The call's proper spelling, regardless of the case it was written in.
 
@@ -155,7 +179,7 @@ class JournalCall:
 def _scan_calls(tokens: list[tuple[str, str]]) -> list[tuple[int, str, str, int]]:
     """The token-stream scan shared by ``calls_in_text`` and the context-aware version.
 
-    One pass, matching ``Journal "id", N``.
+    One pass, matching ``Journal <id>, N`` -- ``<id>`` quoted or a bareword.
 
     Args:
         tokens: From :func:`~wraithguard.tes3fields.dialogue.script_tokens`.
@@ -179,10 +203,17 @@ def _scan_calls(tokens: list[tuple[str, str]]) -> list[tuple[int, str, str, int]
         j = i + 1
         while j < n and tokens[j][0] == "text" and tokens[j][1].isspace():
             j += 1
-        if j >= n or tokens[j][0] != "string":
+        if j >= n:
             i += 1
             continue
-        quest = tokens[j][1].strip('"')
+        id_kind, id_word = tokens[j]
+        if id_kind == "string":
+            quest = id_word.strip('"')
+        elif id_kind == "text" and _is_bare_id(id_word):
+            quest = id_word
+        else:
+            i += 1
+            continue
 
         j += 1
         while j < n and tokens[j][0] == "text" and (tokens[j][1].isspace() or tokens[j][1] == ","):

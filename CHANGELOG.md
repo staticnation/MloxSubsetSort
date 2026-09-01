@@ -73,6 +73,19 @@ validating them against the real tools byte-for-byte rather than trusting them.
   bug was invisible until the native writer took it literally and desynchronised
   the record. The height data field is now the heights alone.
 
+- **Journal Chains missed every unquoted `Journal` call.** MWScript accepts the
+  quest id with or without quotes -- `Journal TDM_CM_Telvanni 40` is as valid as
+  `Journal "TDM_CM_Telvanni" 40` -- but the scan only matched a quoted id, so a
+  mod that writes them unquoted (Caldera Mine Expanded writes all of its that
+  way, in both dialogue and scripts) showed no "what sets this stage" record for
+  almost any of its quests. A bareword id is now accepted alongside a quoted one;
+  a purely numeric argument in the id slot is still rejected. In the one mod
+  above this recovers 76 previously-dropped calls.
+
+- **Journal Chains detail values can be copied.** A right-click "Copy" on any
+  value in the detail pane puts it on the clipboard -- the stage id, quest id or
+  response text a person wants to paste into the Construction Set's search.
+
 
 ## 3.1.6
 

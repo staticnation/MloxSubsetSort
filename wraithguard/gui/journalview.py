@@ -602,6 +602,17 @@ class JournalViewMixin:
         )
         value_label.pack(anchor="w", fill="x")
 
+        # A ttk.Label cannot be drag-selected, but the ids and response text in
+        # this pane are exactly what a person wants to lift out and paste into
+        # the Construction Set's search. A right-click "Copy" on the value gives
+        # them that without turning every row into an editable widget.
+        def _on_right_click(event: tk.Event[Any], copied: str = value) -> None:
+            """Pop the value's copy menu -- `copied` is bound at row-build time."""
+            self._show_journal_copy_menu(event, copied)
+
+        value_label.bind("<Button-3>", _on_right_click)  # right-click on most platforms
+        value_label.bind("<Button-2>", _on_right_click)  # right-click on macOS
+
         if jump_target is not None:
             value_label.configure(cursor="hand2")
 
@@ -610,6 +621,31 @@ class JournalViewMixin:
                 self._jump_to_stage_node(target)
 
             value_label.bind("<Double-1>", _on_double_click)
+
+    def _show_journal_copy_menu(self, event: tk.Event[Any], value: str) -> None:
+        """Pop a one-item "Copy" menu for a detail-pane value at the click point.
+
+        Args:
+            event: The right-click event, for where to place the menu.
+            value: The row's value text, put on the clipboard if "Copy" is chosen.
+        """
+        menu = tk.Menu(self._journal_detail_body, tearoff=0)
+        menu.add_command(label=_("Copy"), command=lambda: self._copy_to_clipboard(value))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _copy_to_clipboard(self, value: str) -> None:
+        """Put ``value`` on the system clipboard.
+
+        Args:
+            value: The text to copy -- a stage id, quest id, or response text a
+                person is lifting out to search for elsewhere.
+        """
+        widget = self._journal_detail_body
+        widget.clipboard_clear()
+        widget.clipboard_append(value)
 
     def _jump_to_stage_node(self, target: str) -> None:
         """Select a stage node in the nav tree and refresh the detail pane for it.

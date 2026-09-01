@@ -79,6 +79,29 @@ class TestCallsInText:
     def test_a_bare_function_name_at_end_of_script_is_skipped(self) -> None:
         assert calls_in_text("Journal") == []
 
+    def test_an_unquoted_quest_id_is_found(self) -> None:
+        # MWScript accepts the quest id without quotes, and whole mods (Caldera
+        # Mine Expanded among them) write every one of theirs that way. The
+        # quoted-only scan silently dropped all of them.
+        assert calls_in_text("Journal TDM_CM_Telvanni 40") == [("Journal", "TDM_CM_Telvanni", 40)]
+
+    def test_an_unquoted_id_with_a_comma_is_found(self) -> None:
+        assert calls_in_text("Journal TDM_CM_Telvanni, 40") == [("Journal", "TDM_CM_Telvanni", 40)]
+
+    def test_an_unquoted_setjournalindex_is_found(self) -> None:
+        assert calls_in_text("SetJournalIndex DD_HR_CalderaMine 60") == [
+            ("SetJournalIndex", "DD_HR_CalderaMine", 60)
+        ]
+
+    def test_an_unquoted_id_is_found_case_insensitively(self) -> None:
+        # The mod mixes "Journal" and "journal", "TDM_CC_Hlaalu" and lowercased.
+        assert calls_in_text("journal tdm_cc_hlaalu 5") == [("Journal", "tdm_cc_hlaalu", 5)]
+
+    def test_a_number_in_the_id_slot_is_not_read_as_an_id(self) -> None:
+        # A bareword id must open like an identifier; a stray number there
+        # (e.g. a comment fragment mis-scanned) is not a quest id.
+        assert calls_in_text("Journal 40 when they arrive") == []
+
     def test_a_call_embedded_in_a_real_multiline_script(self) -> None:
         script = (
             "Begin FargothScript\n"

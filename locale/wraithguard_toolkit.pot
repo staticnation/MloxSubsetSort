@@ -13,7 +13,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Wraithguard Toolkit 3.1.7\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-31 23:44\n"
+"POT-Creation-Date: 2026-09-01 03:47\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -383,7 +383,7 @@ msgid "How each mod fares across the conflicts listed. 'Loses' counts records it
 msgstr ""
 
 #: wraithguard/gui/conflicts.py:2115
-#: wraithguard/gui/journalview.py:745
+#: wraithguard/gui/journalview.py:781
 msgid "Plugin"
 msgstr ""
 
@@ -784,14 +784,14 @@ msgid " [bytecode]"
 msgstr ""
 
 #: wraithguard/gui/journalview.py:448
-#: wraithguard/gui/journalview.py:668
+#: wraithguard/gui/journalview.py:704
 #: wraithguard/gui/journalview.py:376
 msgid "(no text)"
 msgstr ""
 
 #: wraithguard/gui/journalview.py:526
-#: wraithguard/gui/journalview.py:689
-#: wraithguard/gui/journalview.py:729
+#: wraithguard/gui/journalview.py:725
+#: wraithguard/gui/journalview.py:765
 msgid "if"
 msgstr ""
 
@@ -799,112 +799,116 @@ msgstr ""
 msgid "Also happens"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:664
+#: wraithguard/gui/journalview.py:633
+msgid "Copy"
+msgstr ""
+
+#: wraithguard/gui/journalview.py:700
 msgid "Stage id"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:665
+#: wraithguard/gui/journalview.py:701
 msgid "Journal index"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:666
+#: wraithguard/gui/journalview.py:702
 msgid "Quest state"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:666
+#: wraithguard/gui/journalview.py:702
 msgid "(none)"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:667
+#: wraithguard/gui/journalview.py:703
 msgid "Defined by"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:667
-#: wraithguard/gui/journalview.py:745
+#: wraithguard/gui/journalview.py:703
+#: wraithguard/gui/journalview.py:781
 #: wraithguard/viz/heightdelta.py:293
 #: wraithguard/viz/pathgrid.py:288
 #: wraithguard/viz/terrain3d.py:758
 msgid "(unknown)"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:668
+#: wraithguard/gui/journalview.py:704
 msgid "Text"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:674
+#: wraithguard/gui/journalview.py:710
 msgid "Requirements"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:711
-#: wraithguard/gui/journalview.py:682
+#: wraithguard/gui/journalview.py:747
+#: wraithguard/gui/journalview.py:718
 msgid "Set by"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:711
+#: wraithguard/gui/journalview.py:747
 msgid "(no script call found)"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:719
-#: wraithguard/gui/journalview.py:725
+#: wraithguard/gui/journalview.py:755
+#: wraithguard/gui/journalview.py:761
 msgid "Also sets"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:726
+#: wraithguard/gui/journalview.py:762
 msgid "%(quest)s [%(index)d] -- no matching stage found"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:733
+#: wraithguard/gui/journalview.py:769
 msgid "Full script"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:741
+#: wraithguard/gui/journalview.py:777
 msgid "Function"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:742
+#: wraithguard/gui/journalview.py:778
 msgid "Sets quest"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:743
+#: wraithguard/gui/journalview.py:779
 msgid "Sets index"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:744
+#: wraithguard/gui/journalview.py:780
 msgid "Found in"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:748
+#: wraithguard/gui/journalview.py:784
 msgid "Source"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:748
+#: wraithguard/gui/journalview.py:784
 msgid "compiled bytecode -- no source text was shipped"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:751
+#: wraithguard/gui/journalview.py:787
 msgid "Condition"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:752
+#: wraithguard/gui/journalview.py:788
 msgid "(unconditional)"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:761
-#: wraithguard/gui/journalview.py:701
+#: wraithguard/gui/journalview.py:797
+#: wraithguard/gui/journalview.py:737
 msgid "Response"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:765
-#: wraithguard/gui/journalview.py:705
+#: wraithguard/gui/journalview.py:801
+#: wraithguard/gui/journalview.py:741
 msgid "Requires"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:783
-#: wraithguard/gui/journalview.py:788
+#: wraithguard/gui/journalview.py:819
+#: wraithguard/gui/journalview.py:824
 msgid "Target stage"
 msgstr ""
 
-#: wraithguard/gui/journalview.py:788
+#: wraithguard/gui/journalview.py:824
 msgid "(no matching stage found)"
 msgstr ""
 

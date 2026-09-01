@@ -170,7 +170,9 @@ class BsaArchive:
                     )
         except OSError as exc:
             raise BsaError(f"cannot read {self.path}: {exc}") from exc
-        except struct.error as exc:
+        except struct.error as exc:  # pragma: no cover - _read_exact guarantees each
+            # unpack gets exactly the byte count its format needs, so struct never
+            # raises here; kept as a defensive belt against future refactors.
             raise BsaError(f"{self.path.name} is malformed: {exc}") from exc
         LOG.debug("indexed %d file(s) in %s", len(self._entries), self.path.name)
 

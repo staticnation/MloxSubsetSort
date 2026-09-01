@@ -1,0 +1,2431 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: wraithguard_toolkit\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: ja\n"
+"Language-Team: Japanese\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "  Inferred anchor for '%(value)s': %(mode)s '%(anchor)s' (via plugin %(via)s)"
+msgstr "  「%(value)s」の推定アンカー: %(mode)s 「%(anchor)s」(プラグイン %(via)s 経由)"
+
+msgid "NOTE: '%(value)s' already present in data= list -- skipping duplicate insert."
+msgstr "注記: 「%(value)s」はすでに data= リストに存在します -- 重複挿入をスキップします。"
+
+msgid "NOTE: '%(value)s' has no after/before anchor -- appending at end of data= list."
+msgstr "注記: 「%(value)s」には after/before アンカーがありません -- data= リストの末尾に追加します。"
+
+msgid "WARNING: anchor '%(anchor)s' not found among existing data= paths for '%(value)s' -- appending at end instead."
+msgstr "警告: アンカー「%(anchor)s」は「%(value)s」の既存の data= パスの中に見つかりませんでした -- 代わりに末尾に追加しました。"
+
+msgid "WARNING: anchor '%(anchor)s' in the emitted TOML matches %(count)d openmw.cfg lines -- momw-configurator errors on ambiguous matches. Colliding lines: %(lines)s%(more)s"
+msgstr "警告: 生成された TOML のアンカー「%(anchor)s」は openmw.cfg の %(count)d 行に一致します -- momw-configurator は曖昧な一致でエラーになります。競合する行: %(lines)s%(more)s"
+
+msgid "WARNING: remove entry '%(entry)s' matches %(count)d openmw.cfg lines -- momw-configurator removes ALL of them, silently. Colliding lines: %(lines)s%(more)s"
+msgstr "警告: 削除エントリ「%(entry)s」は openmw.cfg の %(count)d 行に一致します -- momw-configurator はそれらを黙って「すべて」削除します。競合する行: %(lines)s%(more)s"
+
+msgid "Scanning for conflicts..."
+msgstr "競合をスキャン中…"
+
+msgid " TES3 RECORD CONFLICTS (read-only)"
+msgstr " TES3 レコードの競合 (読み取り専用)"
+
+msgid "  Engine: tes3conv (%(path)s) -- field-level diffs available."
+msgstr "  エンジン: tes3conv (%(path)s) -- フィールドレベルの差分が利用可能。"
+
+msgid "Conflicts: %(count)d record(s), %(involved)d involving your mods. See the Conflicts window."
+msgstr "競合: レコード %(count)d 件、あなたの Mod に関係するもの %(involved)d 件。競合ウィンドウを参照してください。"
+
+msgid "No data= folders to scan."
+msgstr "スキャンする data= フォルダがありません。"
+
+msgid "Scanning data folders for file conflicts..."
+msgstr "ファイル競合についてデータフォルダをスキャン中…"
+
+msgid " DATA-PATH RESOURCE (VFS) CONFLICTS"
+msgstr " データパスリソース (VFS) の競合"
+
+msgid "Resource conflicts: %(count)d file(s). See the window."
+msgstr "リソース競合: ファイル %(count)d 件。ウィンドウを参照してください。"
+
+msgid "%(conflicts)d loose-file conflict(s) across %(dirs)d folder(s), %(files)d file(s) - %(involved)d involve your custom data paths (â). Later folder wins - reorder the data-path panel to change it."
+msgstr "%(dirs)d 個のフォルダにわたる個別ファイル競合 %(conflicts)d 件、ファイル %(files)d 件 -- %(involved)d 件があなたのカスタムデータパスに関係 (→)。後のフォルダが勝ちます -- 変更するにはデータパスパネルを並べ替えてください。"
+
+msgid "Only my paths"
+msgstr "自分のパスのみ"
+
+msgid "Search:"
+msgstr "検索:"
+
+msgid "Filter by file path or winning folder. Enter jumps to the next match (Shift+Enter: previous) and scrolls it into view."
+msgstr "ファイルパスまたは勝者フォルダで絞り込み。Enter で次の一致へジャンプ (Shift+Enter: 前へ) し、そこへスクロールします。"
+
+msgid "Select a file to see every folder that provides it, in load order.\nSelecting a mesh (.nif) also reads it and describes what each provider contains -- shapes, textures, collision, animation -- and what the winning mesh loses. Rows marked ! in the second column already have a finding."
+msgstr "ファイルを選択すると、それを提供するすべてのフォルダをロード順で確認できます。\nメッシュ (.nif) を選択すると、それを読み取り、各提供元が何を含むか -- 形状、テクスチャ、コリジョン、アニメーション -- と、勝者メッシュが何を失うかを説明します。2 列目に ! が付いた行にはすでに注記があります。"
+
+msgid "Save report (CSV)..."
+msgstr "レポートを保存 (CSV)…"
+
+msgid "View in 3D"
+msgstr "3D で表示"
+
+msgid "Export 3D file..."
+msgstr "3D ファイルをエクスポート…"
+
+msgid "Edit mesh..."
+msgstr "メッシュを編集…"
+
+msgid "Compare Textures"
+msgstr "テクスチャを比較"
+
+msgid "Export comparison..."
+msgstr "比較をエクスポート…"
+
+msgid "Close"
+msgstr "閉じる"
+
+msgid "Could not read the meshes: %(error)s"
+msgstr "メッシュを読み取れませんでした: %(error)s"
+
+msgid "Cannot show this mesh"
+msgstr "このメッシュは表示できません"
+
+msgid "Opened the 3D view for %(path)s"
+msgstr "%(path)s の 3D ビューを開きました"
+
+msgid "Mesh view"
+msgstr "メッシュビュー"
+
+msgid "No mesh to show"
+msgstr "表示するメッシュがありません"
+
+msgid "None of the referenced meshes could be found in the data folders (a missing mod, or the file lives in a .bsa that is not present)."
+msgstr "参照されているメッシュはどれもデータフォルダに見つかりませんでした (欠落した Mod、または欠落した .bsa 内のファイル)。"
+
+msgid "No image to show"
+msgstr "表示する画像がありません"
+
+msgid "None of the referenced images could be found in the data folders (a missing mod, or the file lives in a .bsa that is not present)."
+msgstr "参照されている画像はどれもデータフォルダに見つかりませんでした (欠落した Mod、または欠落した .bsa 内のファイル)。"
+
+msgid "Cannot show this image"
+msgstr "この画像は表示できません"
+
+msgid "Export the 3D view"
+msgstr "3D ビューをエクスポート"
+
+msgid "Export failed"
+msgstr "エクスポートに失敗しました"
+
+msgid "Exported: %(path)s"
+msgstr "エクスポートしました: %(path)s"
+
+msgid "Cannot edit this mesh"
+msgstr "このメッシュは編集できません"
+
+msgid "Its file could not be read."
+msgstr "そのファイルを読み取れませんでした。"
+
+msgid "This mesh does not parse completely, so an edit cannot be written back safely."
+msgstr "このメッシュは完全には解析されないため、編集を書き戻すことができません。"
+
+msgid "Editing %(path)s"
+msgstr "%(path)s を編集中"
+
+msgid "Cannot show this texture"
+msgstr "このテクスチャは表示できません"
+
+msgid "Opened the texture comparison for %(path)s"
+msgstr "%(path)s のテクスチャ比較を開きました"
+
+msgid "Texture comparison"
+msgstr "テクスチャ比較"
+
+msgid "Export the texture comparison"
+msgstr "テクスチャ比較をエクスポート"
+
+msgid "Save resource conflicts"
+msgstr "リソース競合を保存"
+
+msgid "Saved: %(path)s"
+msgstr "保存しました: %(path)s"
+
+msgid "Save failed"
+msgstr "保存に失敗しました"
+
+msgid "%(conflicts)d conflicting record(s) across %(scanned)d plugin(s) - %(involved)d involve your custom mods (â). Winner = last loaded."
+msgstr "%(scanned)d 件のプラグインにわたる競合レコード %(conflicts)d 件 -- %(involved)d 件があなたのカスタム Mod に関係 (→)。勝者 = 最後に読み込まれたもの。"
+
+msgid "Only my mods"
+msgstr "自分の Mod のみ"
+
+msgid "Filter by record type, id, or winning plugin. Enter jumps to the next match (Shift+Enter: previous) and scrolls it into view."
+msgstr "レコードタイプ、id、または勝者プラグインで絞り込み。Enter で次の一致へジャンプ (Shift+Enter: 前へ) し、そこへスクロールします。"
+
+msgid "Include my mods' non-conflicting records"
+msgstr "自分の Mod の競合しないレコードを含める"
+
+msgid "Include other mods' non-conflicting records"
+msgstr "他の Mod の競合しないレコードを含める"
+
+msgid "Set tes3conv..."
+msgstr "tes3conv を設定…"
+
+msgid "Field comparison for the selected record - RED = a plugin's edit is discarded Â· AMBER = overridden but nothing lost Â· â = your custom mod Â· last column wins Â· double-click a field for the full value:"
+msgstr "選択したレコードのフィールド比較 -- 赤 = プラグインの編集が破棄された · 橙 = 上書きされたが何も失われていない · → = あなたのカスタム Mod · 最後の列が勝ち · フィールドをダブルクリックで完全な値:"
+
+msgid "Field-by-field diff of the selected record. Red = the plugins disagree; the last one in the load order wins.\n\nDouble-click any row for the full value, one tab per plugin. Fields stored as binary are decoded rather than shown raw, so an edit reads as a change instead of a wall of base64:\n  â¢ bytecode -- disassembled to named script instructions. Spans the disassembler cannot decode are printed as offset/hex/ASCII rather than guessed at, and a 'decoded: N%' header says how much was understood.\n  â¢ variables -- the script's local variable names, in declaration order.\n  â¢ landscape (vertex heights, normals, colors, textures, world map) -- decoded to one terrain row per line, so the diff shows which rows of the cell moved. Heights are reconstructed to absolute world units.\n  â¢ path grid connections -- decoded to a per-point adjacency list (point -> its neighbours), so you can see which nodes were rewired."
+msgstr "選択したレコードのフィールドごとの差分。赤 = プラグインが不一致。ロード順の最後が勝ちます。\n\n行をダブルクリックで完全な値、タブでプラグインごと。バイナリで保存されるフィールドは、編集が base64 の壁ではなく変更として読めるよう、生ではなくデコードして表示されます:\n  • bytecode -- 名前付きのスクリプト命令に逆アセンブルされます。逆アセンブラがデコードできない範囲は推測されず offset/hex/ASCII として印字され、「decoded: N%」ヘッダーがどれだけ理解されたかを示します。\n  • variables -- 宣言順のスクリプトローカル変数名。\n  • landscape (頂点の高さ、法線、カラー、テクスチャ、ワールドマップ) -- 差分がセルのどの行が移動したかを示すよう、1 行に 1 つの地形行にデコードされます。高さは絶対的なゲームユニットで復元されます。\n  • path grid connections -- どのノードが再配線されたか分かるよう、ポイントごとの隣接リスト (ポイント -> その隣接) にデコードされます。"
+
+msgid "Add record to patch..."
+msgstr "レコードをパッチに追加…"
+
+msgid "Choose which plugin's version of the selected record should win, and add it to a patch. Nothing is written yet, and no mod is ever modified: the patch is one new plugin that loads last."
+msgstr "選択したレコードのどのプラグインのバージョンを勝ちにするか選択し、それをパッチに追加します。まだ何も書き込まれず、どの Mod も決して変更されません: パッチは最後に読み込まれる 1 つの新しいプラグインです。"
+
+msgid "Merge field..."
+msgstr "フィールドをマージ…"
+
+msgid "Take the selected field from a plugin of your choosing and keep the rest of the record as it is now -- for when one mod fixed one thing and another mod fixed something else in the same record."
+msgstr "選択したプラグインから選択したフィールドを取得し、レコードの残りはそのまま保持します -- ある Mod が 1 つを修正し、別の Mod が同じレコードの別のものを修正した場合向けです。"
+
+msgid "Define value..."
+msgstr "値を定義…"
+
+msgid "Type your own value for the selected field -- a number or string no plugin in the conflict uses (a compromise weight, a corrected health). It is written to the patch exactly as given, in the field's own type; your mods are not modified."
+msgstr "選択したフィールドに独自の値を入力してください -- 競合中のどのプラグインも使っていない数値または文字列 (妥協的な重み、修正した値)。指定したとおりに、フィールドの型でパッチに書き込まれます。あなたの Mod は変更されません。"
+
+msgid "Patch Builder..."
+msgstr "パッチビルダー…"
+
+msgid "Review and edit the records queued so far, then write them as one new plugin. Nothing is written until you say so."
+msgstr "これまでにキューに追加したレコードを確認・編集してから、1 つの新しいプラグインとして書き込みます。あなたが指示するまで何も書き込まれません。"
+
+msgid "Plugin view..."
+msgstr "プラグインビュー…"
+
+msgid "The same scan with the load order's own shape restored: plugin, then kind of record, then record, with the record compared across every plugin that defines it.\n\nA flat list answers 'what conflicts'. This answers 'what does this mod change, and where does it lose', which is the question you are actually asking. The colours fill in on their own once the conflict window's background survey finishes. Read-only."
+msgstr "ロード順自身の形を復元した同じスキャン: プラグイン、次にレコードの種類、次にそれを定義する各プラグインと比較したレコード。\n\nフラットなリストは「何が競合するか」に答えます。これは「この Mod が何を変え、どこで負けるか」 -- あなたが実際に尋ねている問い -- に答えます。競合ウィンドウのバックグラウンド調査が完了すると、色は自動で埋まります。読み取り専用。"
+
+msgid "Journal chains..."
+msgstr "ジャーナルの連鎖…"
+
+msgid "Every quest's journal stages, sorted by journal index rather than file order, with the winning plugin's text for each stage. Reads the whole load order once when opened. Read-only."
+msgstr "各クエストのジャーナル段階を、ファイル順ではなくジャーナルインデックスで並べ替え、各段階について勝者プラグインのテキストと共に表示します。開くときにロード順全体を一度読み取ります。読み取り専用。"
+
+msgid "Plugin summary..."
+msgstr "プラグインの要約…"
+
+msgid "Judge every conflict in the list and count the result per mod, rather than per record.\n\nA flat list of conflicts cannot answer the question that decides load order: which of my mods is losing work? This compares each record field by field and counts, for every plugin, how many records it edits and does not get its way on.\n\nReads every conflicting record with tes3conv, so it takes a moment on a large load order. Read-only."
+msgstr "リスト内のすべての競合を判定し、結果をレコードごとではなく Mod ごとに数えます。\n\nフラットな競合リストは、ロード順を決める問いに答えられません: 私の Mod のどれが作業を失うのか? これは各レコードをフィールドごとに比較し、各プラグインについて、編集を加えながら思いどおりにならなかったレコード数を数えます。\n\n各競合レコードを tes3conv 経由で読み取るため、大きなロード順では時間がかかります。読み取り専用。"
+
+msgid "Conflict map (direct)..."
+msgstr "競合マップ (直接)…"
+
+msgid "Build and open a conflict map directly from the selected conflicts. Shows which mods edit LAND records in each cell, with a breakdown of terrain shape, NPC navigation, and cell record edits."
+msgstr "選択した競合から競合マップを直接作成して開きます。各セルでどの Mod が LAND レコードを編集するかを、地形の形状、NPC ナビゲーション、セルレコードの編集に分けて表示します。"
+
+msgid "Dump tes3conv JSON..."
+msgstr "tes3conv の JSON をダンプ…"
+
+msgid "Busy reading plugins -- try that again in a moment."
+msgstr "プラグインの読み取り中です -- 少し待ってからもう一度お試しください。"
+
+msgid "Nothing to summarise."
+msgstr "要約するものがありません。"
+
+msgid "Judge every conflict?"
+msgstr "すべての競合を判定しますか?"
+
+msgid "This reads every plugin that defines any of these %(count)d records -- once each, not once per record -- and will take a few minutes. The checkboxes and filters above narrow the list first if you would rather summarise part of it.\n\nGo ahead?"
+msgstr "これはこれらの %(count)d 件のレコードのいずれかを定義するすべてのプラグインを読み取ります -- レコードごとに 1 回ではなく、それぞれ 1 回ずつ -- そのため数分かかります。一部だけを要約したい場合は、上のチェックボックスとフィルタで先にリストを絞り込めます。\n\n続行しますか?"
+
+msgid "Colouring the load order (%(count)d record(s))..."
+msgstr "ロード順を色付け中 (レコード %(count)d 件)…"
+
+msgid "Judging %(count)d conflict(s)..."
+msgstr "%(count)d 件の競合を判定中…"
+
+msgid "Reading plugin %(done)d of %(total)d..."
+msgstr "プラグインを読み取り中 %(total)d 件中 %(done)d 件…"
+
+msgid "Could not summarise the conflicts."
+msgstr "競合を要約できませんでした。"
+
+msgid "Summary failed"
+msgstr "要約に失敗しました"
+
+msgid "Unknown error."
+msgstr "不明なエラー。"
+
+msgid "Coloured %(count)d record(s) across the load order."
+msgstr "ロード順全体で %(count)d 件のレコードを色付けしました。"
+
+msgid "Judged %(count)d record(s); %(losers)d plugin(s) losing work."
+msgstr "%(count)d 件のレコードを判定。作業を失うプラグイン %(losers)d 件。"
+
+msgid "Plugin conflict summary"
+msgstr "プラグイン競合の要約"
+
+msgid "How each mod fares across the conflicts listed. 'Loses' counts records it edits where a later plugin overwrote the change with something different -- work that never reaches the game. 'Same as original' counts records it redefines without changing anything, which is usually removable but not always: an unchanged dialogue response may be there to hold a line's position in its topic."
+msgstr "列挙された競合で各 Mod がどうなるか。「失う」は、後のプラグインが変更を別のもので上書きした、それが編集するレコードを数えます -- ゲームに決して届かない作業です。「元と同じ」は、何も変えずに上書きするレコードを数えます。通常は削除されますが、常にではありません: 変更されていない会話の応答が、そのトピック内で行の位置を保つためにそこにあることもあります。"
+
+msgid "Plugin"
+msgstr "プラグイン"
+
+msgid "Records"
+msgstr "レコード"
+
+msgid "Loses"
+msgstr "失う"
+
+msgid "Wins"
+msgstr "勝ち"
+
+msgid "Same as original"
+msgstr "元と同じ"
+
+msgid "Defines first"
+msgstr "最初に定義"
+
+msgid "%(records)d record(s) judged, %(plugins)d plugin(s) involved%(unreadable)s. The conflict list behind this window is now coloured to match: red where an edit is discarded, amber where a record is overridden but nothing is lost."
+msgstr "レコード %(records)d 件を判定、関与プラグイン %(plugins)d 件%(unreadable)s。このウィンドウの背後の競合リストは、それに応じて色付けされました: 編集が破棄された場所は赤、レコードが損失なく上書きされた場所は橙。"
+
+msgid ", %(n)d could not be read"
+msgstr ", %(n)d 件を読み取れませんでした"
+
+msgid "Nothing selected"
+msgstr "何も選択されていません"
+
+msgid "Select a record above, then a field in the comparison below."
+msgstr "上でレコードを選択してから、下の比較でフィールドを選択してください。"
+
+msgid "Select a conflicting record first."
+msgstr "まず競合するレコードを選択してください。"
+
+msgid "Nothing to choose"
+msgstr "選択するものがありません"
+
+msgid "Only one plugin defines this record, so there is nothing to patch."
+msgstr "このレコードを定義するプラグインは 1 つだけなので、パッチするものがありません。"
+
+msgid "Which version should win?"
+msgstr "どのバージョンを勝ちにしますか?"
+
+msgid "%(type)s  %(id)s"
+msgstr "%(type)s  %(id)s"
+
+msgid "Take %(field)s from this plugin, keeping the rest of the record as it is now.\nYour mods are not modified."
+msgstr "このプラグインから %(field)s を取得し、レコードの残りは現状のまま保持します。\nあなたの Mod は変更されません。"
+
+msgid "The patch will carry this plugin's whole record and load last.\nYour mods are not modified."
+msgstr "パッチはこのプラグインのレコード全体を運び、最後に読み込まれます。\nあなたの Mod は変更されません。"
+
+msgid "currently wins"
+msgstr "現在は勝ち"
+
+msgid "Use this field"
+msgstr "このフィールドを使用"
+
+msgid "Add to patch"
+msgstr "パッチに追加"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "Cannot set this field"
+msgstr "このフィールドは設定できません"
+
+msgid "%(path)s says which record this is -- giving it a typed value would make a different record, not a patched one."
+msgstr "%(path)s はこれがどのレコードかを示します -- 型付きの値を与えると、パッチではなく別のレコードになってしまいます。"
+
+msgid "Define a value"
+msgstr "値を定義"
+
+msgid "Type a value for %(path)s. It is written to the patch exactly as given, in the field's own type.\nYour mods are not modified."
+msgstr "%(path)s の値を入力してください。指定したとおりに、フィールドの型でパッチに書き込まれます。\nあなたの Mod は変更されません。"
+
+msgid "currently: %(val)s  (%(kind)s)"
+msgstr "現在: %(val)s  (%(kind)s)"
+
+msgid "keeping unnamed bits: %(bits)s"
+msgstr "名前のないビットを保持: %(bits)s"
+
+msgid "Enabled (true)"
+msgstr "有効 (true)"
+
+msgid "Set value"
+msgstr "値を設定"
+
+msgid "Building the conflict map..."
+msgstr "競合マップを作成中…"
+
+msgid "The conflict map could not be built."
+msgstr "競合マップを作成できませんでした。"
+
+msgid "Could not build conflict map"
+msgstr "競合マップを作成できませんでした"
+
+msgid "%(error)s"
+msgstr "%(error)s"
+
+msgid "Conflict map ready (%(cells)d cell(s))."
+msgstr "競合マップの準備ができました (セル %(cells)d 件)。"
+
+msgid "Conflict Map"
+msgstr "競合マップ"
+
+msgid "Could not write the page"
+msgstr "ページを書き込めませんでした"
+
+msgid "Writing %(path)s failed: %(error)s"
+msgstr "%(path)s の書き込みに失敗しました: %(error)s"
+
+msgid "Saved, but could not open a viewer"
+msgstr "保存しましたが、ビューアを開けませんでした"
+
+msgid "The page was written to %(path)s (%(error)s)"
+msgstr "ページを %(path)s に書き込みました (%(error)s)"
+
+msgid "Could not build the view"
+msgstr "ビューを作成できませんでした"
+
+msgid "Nothing to compare"
+msgstr "比較するものがありません"
+
+msgid "Only one plugin edits this cell's terrain, so every strategy gives the same result. Strategy choice only matters where two or more plugins change the same ground."
+msgstr "このセルの地形を編集するプラグインは 1 つだけなので、どの戦略でも同じ結果になります。戦略の選択が重要になるのは、2 つ以上のプラグインが同じ地面を変更する場合だけです。"
+
+msgid "Merged: %(s)s"
+msgstr "マージしました: %(s)s"
+
+msgid "Format reference..."
+msgstr "フォーマットのリファレンス…"
+
+msgid "Show what this kind of record is supposed to contain: every subrecord, whether the game requires it, how wide it is, and -- where the layout is documented -- the named fields inside it.\n\nA diff tells you what changed; this tells you what it was."
+msgstr "この種類のレコードが何を含むべきかを表示します: 各サブレコード、ゲームがそれを必要とするか、その幅、そして -- 構造が文書化されている場所では -- その中の名前付きフィールド。\n\n差分は何が変わったかを示します。これは何だったかを示します。"
+
+msgid "Read as dialogue..."
+msgstr "会話として読む…"
+
+msgid "Show this record as the line an NPC says -- to whom, and under what conditions -- instead of raw subrecords. Each plugin's version is rendered in turn, so you can read what a conflict actually changes."
+msgstr "このレコードを、NPC が言うセリフ -- 誰に、どんな条件で -- として、生のサブレコードの代わりに表示します。各プラグインのバージョンが順にレンダリングされ、競合が実際に何を変えるか読めます。"
+
+msgid "Dialogue"
+msgstr "会話"
+
+msgid "(no dialogue content)"
+msgstr "(会話の内容なし)"
+
+msgid "Format reference: %(type)s"
+msgstr "フォーマットのリファレンス: %(type)s"
+
+msgid "Show graph..."
+msgstr "グラフを表示…"
+
+msgid "Draw the path grid as a navigation graph, with the edges this plugin added in green and the ones it removed in red.\n\nA mod that only REMOVES edges has probably rebuilt its path grid by accident -- that breaks NPC movement and nothing else reports it."
+msgstr "パスグリッドをナビゲーショングラフとして描画し、このプラグインが追加した辺を緑、削除した辺を赤で表示します。\n\n辺を「削除」するだけの Mod は、おそらく誤ってパスグリッドを再構築しています -- これは NPC の移動を壊し、他に何もこれを報告しません。"
+
+msgid "Show difference..."
+msgstr "差分を表示…"
+
+msgid "Decode both versions to absolute heights and subtract them: red where the winner raised the ground, blue where it lowered it.\n\nComparing the raw values above is misleading. Heights are stored as cumulative deltas, so moving ONE vertex changes every byte after it and two nearly-identical cells look completely different."
+msgstr "両バージョンを絶対的な高さにデコードして減算します: 勝者が地面を上げた場所は赤、下げた場所は青。\n\n上の生の値を比較するのは誤解を招きます。高さは累積デルタとして保存されるため、「1 つ」の頂点を移動すると以降のすべてのバイトが変わり、ほぼ同一の 2 つのセルがまったく異なって見えます。"
+
+msgid "Show in 3D..."
+msgstr "3D で表示…"
+
+msgid "Draw the cell's terrain as a surface you can rotate, with each plugin's version switchable in place. Drag to turn it.\n\nShading follows slope rather than height, which reads as terrain."
+msgstr "セルの地形を回転できるサーフェスとして描画し、各プラグインのバージョンをその場で切り替えます。ドラッグで回転します。\n\nシェーディングは高さではなく傾斜に従うため、地形として読みやすくなります。"
+
+msgid "Compare strategies..."
+msgstr "戦略を比較…"
+
+msgid "Show what each conflict strategy would do to this cell -- the merged terrain under Overwrite, Resolve, Ignore and Curvature, switchable in the same 3D view alongside each plugin's own version.\n\nPreview it here, then set the strategy you want in the plugin's .mergedlands.toml with Merge Settings. Only differs where two or more plugins actually contest a vertex."
+msgstr "各競合戦略がこのセルに何をするかを表示します -- Overwrite、Resolve、Ignore、Curvature での結合地形を、各プラグインのバージョンの隣で同じ 3D ビューで切り替えます。\n\nここでプレビューしてから、マージ設定を通じてプラグインの .mergedlands.toml で希望の戦略を設定してください。違いが出るのは、2 つ以上のプラグインが実際に頂点を争う場所だけです。"
+
+msgid "View mesh..."
+msgstr "メッシュを表示…"
+
+msgid "Open the mesh this record points at in the 3D viewer, resolved through your data folders and .bsa archives. One per plugin, so a record whose plugins point at different meshes shows them side by side -- the same viewer the Resource Conflicts window uses."
+msgstr "このレコードが指すメッシュを 3D ビューアで開き、データフォルダと .bsa アーカイブを通じて解決します。プラグインごとに 1 つずつなので、プラグインが異なるメッシュを指すレコードはそれらを並べて表示します -- リソース競合ウィンドウと同じビューアです。"
+
+msgid "View image..."
+msgstr "画像を表示…"
+
+msgid "Open the texture/icon this record points at, resolved through your data folders and .bsa archives, and compared across the plugins that define it -- the same image viewer the Resource Conflicts window uses."
+msgstr "このレコードが指すテクスチャ/アイコンを、データフォルダと .bsa アーカイブを通じて解決し、それを定義するプラグイン間で比較して開きます -- リソース競合ウィンドウと同じ画像ビューアです。"
+
+msgid "Queue the whole record from a plugin you pick, then open the patch builder."
+msgstr "選択したプラグインからレコード全体をキューに追加してから、パッチビルダーを開きます。"
+
+msgid "Take this field..."
+msgstr "このフィールドを取得…"
+
+msgid "Queue just this field from a plugin you pick -- the rest of the record keeps the load-order winner. For when one mod fixed the script and another retextured the mesh."
+msgstr "選択したプラグインからこのフィールドだけをキューに追加します -- レコードの残りはロード順の勝者を保持します。ある Mod がスクリプトを修正し、別の Mod がメッシュを再テクスチャした場合向けです。"
+
+msgid "Dump tes3conv JSON to folder"
+msgstr "tes3conv の JSON をフォルダにダンプ"
+
+msgid "Wrote %(count)d JSON file to %(folder)s"
+msgid_plural "Wrote %(count)d JSON files to %(folder)s"
+msgstr[0] "JSON ファイル %(count)d 件を %(folder)s に書き込みました"
+
+msgid "JSON dumped"
+msgstr "JSON をダンプしました"
+
+msgid "Wrote %(count)d tes3conv JSON file to:\n%(folder)s"
+msgid_plural "Wrote %(count)d tes3conv JSON files to:\n%(folder)s"
+msgstr[0] "tes3conv JSON ファイル %(count)d 件を次に書き込みました:\n%(folder)s"
+
+msgid "Nothing written"
+msgstr "何も書き込まれていません"
+
+msgid "No JSON was written. The tes3conv session may have been cleared - re-run Check Conflicts, then dump again."
+msgstr "JSON は書き込まれていません。tes3conv セッションがクリアされた可能性があります -- 「競合をチェック」を再実行してから、もう一度エクスポートしてください。"
+
+msgid "Dump failed"
+msgstr "ダンプに失敗しました"
+
+msgid "Word wrap"
+msgstr "折り返し"
+
+msgid "Syntax highlighting: %(theme)s"
+msgstr "構文強調: %(theme)s"
+
+msgid "your mods'"
+msgstr "あなたの Mod の"
+
+msgid "other mods'"
+msgstr "他の Mod の"
+
+msgid "No custom mods"
+msgstr "カスタム Mod がありません"
+
+msgid "You have no custom/subset mods configured, so there is nothing to list here."
+msgstr "カスタム/サブセット Mod が設定されていないため、ここに列挙するものがありません。"
+
+msgid "Finding %(label)s non-conflicting records..."
+msgstr "%(label)s の競合しないレコードを検索中…"
+
+msgid "Could not list records."
+msgstr "レコードを一覧表示できませんでした。"
+
+msgid "Could not list records"
+msgstr "レコードを一覧表示できませんでした"
+
+msgid "Found %(count)d non-conflicting record(s) from %(label)s."
+msgstr "%(label)s から競合しないレコード %(count)d 件が見つかりました。"
+
+msgid "Save conflict report"
+msgstr "競合レポートを保存"
+
+msgid "Conflict report saved: %(path)s"
+msgstr "競合レポートを保存しました: %(path)s"
+
+msgid "tes3conv needed"
+msgstr "tes3conv が必要"
+
+msgid "Reading journal stages needs tes3conv, which does the binary decoding.\n\nUse 'Set tes3conv...' in the Conflicts window to point at it."
+msgstr "ジャーナル段階の読み取りには、バイナリのデコードを行う tes3conv が必要です。\n\n競合ウィンドウの「tes3conv を設定…」を使ってそれを指定してください。"
+
+msgid "Journal chains"
+msgstr "ジャーナルの連鎖"
+
+msgid "Every quest's journal stages, sorted by journal index rather than file order, with the winning plugin's text, dialogue requirements, full result script, and everything else that script does -- item grants, disposition changes, other scripts starting, whatever a mod actually does at that stage. Read-only: nothing here writes."
+msgstr "各クエストのジャーナル段階を、ファイル順ではなくジャーナルインデックスで並べ替え、勝者プラグインのテキスト、会話条件、完全な結果スクリプト、そしてそのスクリプトが行うその他すべて -- アイテムの付与、好感度の変更、他のスクリプトの起動、その段階で Mod が行うことは何でも -- と共に表示します。読み取り専用: ここでは何も書き込みません。"
+
+msgid "Quest / stage / call"
+msgstr "クエスト / 段階 / 呼び出し"
+
+msgid "Index"
+msgstr "インデックス"
+
+msgid "Reading the load order..."
+msgstr "ロード順を読み取り中…"
+
+msgid "Could not read the load order -- see the log."
+msgstr "ロード順を読み取れませんでした -- ログを参照してください。"
+
+msgid "%(text)s (finished)"
+msgstr "%(text)s (完了)"
+
+msgid "%(quests)d quest(s), %(stages)d stage(s), %(calls)d call site(s) found."
+msgstr "クエスト %(quests)d 件、段階 %(stages)d 件、呼び出し箇所 %(calls)d 件が見つかりました"
+
+msgid " [bytecode]"
+msgstr " [バイトコード]"
+
+msgid "(no text)"
+msgstr "(テキストなし)"
+
+msgid "if"
+msgstr "条件"
+
+msgid "Also happens"
+msgstr "次でも発生"
+
+msgid "Copy"
+msgstr "コピー"
+
+msgid "Stage id"
+msgstr "段階 ID"
+
+msgid "Journal index"
+msgstr "ジャーナルインデックス"
+
+msgid "Quest state"
+msgstr "クエストの状態"
+
+msgid "(none)"
+msgstr "(なし)"
+
+msgid "Defined by"
+msgstr "定義元"
+
+msgid "(unknown)"
+msgstr "(不明)"
+
+msgid "Text"
+msgstr "テキスト"
+
+msgid "Requirements"
+msgstr "必要条件"
+
+msgid "Set by"
+msgstr "設定元"
+
+msgid "(no script call found)"
+msgstr "(スクリプト呼び出しが見つかりません)"
+
+msgid "Also sets"
+msgstr "次も設定"
+
+msgid "%(quest)s [%(index)d] -- no matching stage found"
+msgstr "%(quest)s [%(index)d] -- 一致する段階が見つかりません"
+
+msgid "Full script"
+msgstr "完全なスクリプト"
+
+msgid "Function"
+msgstr "関数"
+
+msgid "Sets quest"
+msgstr "クエストを設定"
+
+msgid "Sets index"
+msgstr "インデックスを設定"
+
+msgid "Found in"
+msgstr "見つかった場所"
+
+msgid "Source"
+msgstr "ソース"
+
+msgid "compiled bytecode -- no source text was shipped"
+msgstr "コンパイル済みバイトコード -- ソーステキストは同梱されていません"
+
+msgid "Condition"
+msgstr "条件"
+
+msgid "(unconditional)"
+msgstr "(無条件)"
+
+msgid "Response"
+msgstr "応答"
+
+msgid "Requires"
+msgstr "必要"
+
+msgid "Target stage"
+msgstr "対象段階"
+
+msgid "(no matching stage found)"
+msgstr "(一致する段階が見つかりません)"
+
+msgid "Patch Builder"
+msgstr "パッチビルダー"
+
+msgid "Records queued for the patch. Nothing is written until you press Write. Your mods are never modified."
+msgstr "パッチ用にレコードをキューに追加しました。「書き込む」を押すまで何も書き込まれません。あなたの Mod は決して変更されません。"
+
+msgid "Record"
+msgstr "レコード"
+
+msgid "Field"
+msgstr "フィールド"
+
+msgid "How"
+msgstr "方法"
+
+msgid "From"
+msgstr "差出"
+
+msgid "Remove"
+msgstr "削除"
+
+msgid "Drop the selected record, or just the selected field. Removing a record's last field drops the record too."
+msgstr "選択したレコード、または選択したフィールドだけを破棄します。レコードの最後のフィールドを削除すると、レコード自体も破棄されます。"
+
+msgid "Clear all"
+msgstr "すべてクリア"
+
+msgid "Write patch..."
+msgstr "パッチを書き込む…"
+
+msgid "Patch Builder... (%(count)d)"
+msgstr "パッチビルダー… (%(count)d)"
+
+msgid "base: %(base)s"
+msgstr "ベース: %(base)s"
+
+msgid "unknown"
+msgstr "不明"
+
+msgid "set to"
+msgstr "次に設定"
+
+msgid "from"
+msgstr "差出"
+
+msgid "%(count)d record(s) queued."
+msgstr "%(count)d 件のレコードをキューに追加しました。"
+
+msgid "Nothing queued yet. Add records from the conflict list."
+msgstr "まだ何もキューにありません。競合リストからレコードを追加してください。"
+
+msgid "Clear the patch?"
+msgstr "パッチをクリアしますか?"
+
+msgid "This drops every queued record. Nothing has been written, so nothing is lost."
+msgstr "これはキューにあるすべてのレコードを破棄します。何も書き込まれていないため、何も失われません。"
+
+msgid "tes3conv not found"
+msgstr "tes3conv が見つかりません"
+
+msgid "Cannot measure master sizes without tes3conv. Set its path and try again."
+msgstr "tes3conv なしではマスターサイズを測定できません。そのパスを設定してもう一度お試しください。"
+
+msgid "Rescan needed"
+msgstr "再スキャンが必要"
+
+msgid "%(what)s is no longer in the scan, so there is no way to tell which plugin its unchosen fields should come from. Rescan and queue it again."
+msgstr "%(what)s はもうスキャンにないため、選択されなかったフィールドをどのプラグインから取得すべきか判断できません。再スキャンして、もう一度キューに追加してください。"
+
+msgid "Append or replace?"
+msgstr "追加しますか、置き換えますか?"
+
+msgid "%(name)s already exists. This session has %(count)d record(s) queued.\n\nAppend keeps everything already written and adds these on top -- the way to build one patch across several sessions.\n\nReplace throws away what is already there and writes only this session's records.\n\nYour mods are NOT modified either way, and deleting the patch restores your previous behaviour completely. Load it LAST, and back up your saves."
+msgstr "%(name)s はすでに存在します。このセッションではレコード %(count)d 件がキューにあります。\n\n「追加」はすでに書き込まれているすべてを保持し、これらを上に加えます -- 複数のセッションで 1 つのパッチを構築する方法です。\n\n「置き換え」は既存のものを破棄し、このセッションのレコードだけを書き込みます。\n\nどちらの場合もあなたの Mod は変更「されず」、パッチを削除すれば以前の動作が完全に復元されます。それを「最後」に読み込み、セーブのバックアップを取ってください。"
+
+msgid "Could not read the existing patch"
+msgstr "既存のパッチを読み取れませんでした"
+
+msgid "%(name)s could not be decoded, so there is nothing to append to. Run Write again and choose Replace, or check the file opens in another tool first."
+msgstr "%(name)s をデコードできなかったため、追加する対象がありません。「書き込む」を再実行して「置き換え」を選択するか、まずファイルが別のツールで開けるか確認してください。"
+
+msgid "Write patch?"
+msgstr "パッチを書き込みますか?"
+
+msgid "%(count)d record(s) will be written to:\n%(path)s\n\nIt carries whole records chosen by you, and loads last. Your mods are NOT modified, and deleting the patch restores your previous behaviour completely.\n\nLoad it LAST, and back up your saves."
+msgstr "レコード %(count)d 件が次に書き込まれます:\n%(path)s\n\nあなたが選択したレコード全体を運び、最後に読み込まれます。あなたの Mod は変更「されず」、パッチを削除すれば以前の動作が完全に復元されます。\n\nそれを「最後」に読み込み、セーブのバックアップを取ってください。"
+
+msgid "Patch failed"
+msgstr "パッチに失敗しました"
+
+msgid " (%(carried)d carried forward from before)"
+msgstr " (以前から %(carried)d 件を引き継ぎ)"
+
+msgid "Patch written"
+msgstr "パッチを書き込みました"
+
+msgid "%(records)d record(s) written to:\n%(path)s%(carried)s\n\nDeclares %(masters)d master(s). Add it to your load order LAST."
+msgstr "レコード %(records)d 件を書き込みました:\n%(path)s%(carried)s\n\nマスターを宣言: %(masters)d 件。ロード順の最後に追加してください。"
+
+msgid "Write the patch as"
+msgstr "パッチを名前を付けて書き込む"
+
+msgid "Morrowind plugin"
+msgstr "Morrowind プラグイン"
+
+msgid "All files"
+msgstr "すべてのファイル"
+
+msgid "Plugin view"
+msgstr "プラグインビュー"
+
+msgid "Your load order as a tree. Open a plugin to see what it changes, and a record to compare it across every plugin that defines it. Records are read and judged as you open them. Read-only: nothing here writes."
+msgstr "あなたのロード順をツリーとして表示します。プラグインを開いて変更内容を確認し、レコードを開いてそれを定義する各プラグインと比較します。レコードは開くにつれて読み取られ判定されます。読み取り専用: ここでは何も書き込みません。"
+
+msgid "Plugin / type / record"
+msgstr "プラグイン / タイプ / レコード"
+
+msgid "#"
+msgstr "#"
+
+msgid "Double-click a field for its full value across every plugin."
+msgstr "すべてのプラグインでの完全な値を見るにはフィールドをダブルクリックしてください。"
+
+msgid "Colour says what this plugin is doing to the records beneath it:\n  blue = it defines them first\n  green = it changes them and nothing later disagrees\n  amber = it changes them, others disagreed, and it still wins\n  RED = it changes them and something later overrides the change\n  grey = it redefines them without changing anything\n\nRecords are read as you expand them, so colour fills in a moment after a group opens. A plugin takes the worst of whatever has been judged beneath it."
+msgstr "色は、このプラグインがその下のレコードに何をしているかを示します:\n  青 = 最初に定義する\n  緑 = 変更し、後で何も反対しない\n  橙 = 変更し、他が反対したが、それでも勝つ\n  赤 = 変更し、後で何かが変更を上書きする\n  灰 = 何も変えずに上書きする\n\nレコードは展開するにつれて読み取られるため、グループを開いた少し後に色が埋まります。プラグインはその下で判定された最悪のものを受け取ります。"
+
+msgid "Select a record in the tree, then choose which plugin's whole version of it should win. Added to a patch that loads last; no mod is ever modified."
+msgstr "ツリーでレコードを選択してから、どのプラグインの全体バージョンを勝ちにするか選択してください。最後に読み込まれるパッチに追加されます。Mod は決して変更されません。"
+
+msgid "Select a record, then a field in the comparison on the right, and take just that field from a plugin of your choosing -- keeping the rest of the record as it is now."
+msgstr "レコードを選択してから、右の比較でフィールドを選択し、選択したプラグインからそのフィールドだけを取得します -- レコードの残りはそのまま保持します。"
+
+msgid "Select a record and a field on the right, then type your own value for it -- a number or string no plugin in the conflict uses. Written verbatim in the field's own type; your mods are not modified."
+msgstr "レコードと右のフィールドを選択してから、独自の値 -- 競合中のどのプラグインも使っていない数値または文字列 -- を入力してください。フィールドの型でそのまま書き込まれます。あなたの Mod は変更されません。"
+
+msgid "Merge this plugin's fields..."
+msgstr "このプラグインのフィールドをマージ…"
+
+msgid "Select a plugin above, then pick which of its fields should win across every record it defines -- one decision instead of hundreds. Reads the plugin in the background (the window stays responsive), then queues those fields into a patch. Records where this plugin already wins, or where the value already matches, are skipped; your mods are not modified."
+msgstr "上でプラグインを選択してから、それが定義する各レコードで、そのどのフィールドが勝つべきかを選択します -- 数百ではなく 1 つの決定。プラグインをバックグラウンドで読み取り (ウィンドウは応答性を保ちます)、それらのフィールドをパッチにキューします。このプラグインがすでに勝っているレコードや、値がすでに一致するレコードはスキップされます。あなたの Mod は変更されません。"
+
+msgid "Review and edit everything queued so far, then write it as one new plugin. Nothing is written until you say so."
+msgstr "これまでにキューに追加したすべてを確認・編集してから、1 つの新しいプラグインとして書き込みます。あなたが指示するまで何も書き込まれません。"
+
+msgid "Highlight only conflicts that lose work"
+msgstr "作業が失われる競合のみを強調"
+
+msgid "Click a plugin to highlight the plugins it conflicts with, in purple.\n\nChecked (lost): only records where an edit is actually discarded -- the conflicts worth acting on. Needs a plugin summary, which opening this view starts on its own.\n\nUnchecked (broad): any record two plugins both touch, whether or not anything is lost."
+msgstr "プラグインをクリックすると、それが競合するプラグインを紫で強調します。\n\nチェック (損失): 編集が本当に破棄されるレコードのみ -- 取り組む価値のある競合です。このビューを開くと自動で実行される、プラグインごとの要約が必要です。\n\nチェックなし (広く): 2 つのプラグインが触れるすべてのレコード。何かを失うかどうかにかかわらず。"
+
+msgid "(opening...)"
+msgstr "(開いています…)"
+
+msgid "Plugin view: %(n)d plugin(s). Open one to see what it changes."
+msgstr "プラグインビュー: プラグイン %(n)d 件。変更内容を見るには 1 つ開いてください。"
+
+msgid "Nothing to show -- run a conflict scan first."
+msgstr "表示するものがありません -- まず競合スキャンを実行してください。"
+
+msgid "Judging the first %(n)d of %(total)d record(s) in this group."
+msgstr "このグループのレコード %(total)d 件中、最初の %(n)d 件を判定中。"
+
+msgid "%(name)s conflicts with %(n)d plugin(s) (highlighted)."
+msgstr "%(name)s は %(n)d 件のプラグインと競合しています (強調表示)。"
+
+msgid "Judging the load order -- conflicts that lose work highlight when it finishes."
+msgstr "ロード順を判定中 -- 作業を失う競合は完了時に強調表示されます。"
+
+msgid "%(name)s conflicts with nothing here."
+msgstr "%(name)s はここで何とも競合していません。"
+
+msgid "  (wins)"
+msgstr "  (勝ち)"
+
+msgid "(set a tes3conv binary to compare fields)"
+msgstr "(フィールドを比較するには tes3conv バイナリを設定)"
+
+msgid "(busy, or this record could not be read)"
+msgstr "(処理中、またはこのレコードを読み取れませんでした)"
+
+msgid "Select a record in the tree first."
+msgstr "まずツリーでレコードを選択してください。"
+
+msgid "Select a record in the tree, then a field in the comparison on the right."
+msgstr "ツリーでレコードを選択してから、右の比較でフィールドを選択してください。"
+
+msgid "Select a plugin"
+msgstr "プラグインを選択"
+
+msgid "Select a plugin in the tree first, then try again."
+msgstr "まずツリーでプラグインを選択してから、もう一度お試しください。"
+
+msgid "No field data"
+msgstr "フィールドデータがありません"
+
+msgid "Set a tes3conv binary to compare fields."
+msgstr "フィールドを比較するには tes3conv バイナリを設定してください。"
+
+msgid "Nothing to merge"
+msgstr "マージするものがありません"
+
+msgid "%(name)s shares no record with another plugin, so there is nothing to take."
+msgstr "%(name)s は他のプラグインとレコードを共有していないため、パッチするものがありません。"
+
+msgid "Reading %(name)s (%(n)d record(s))..."
+msgstr "%(name)s を読み取り中 (レコード %(n)d 件)…"
+
+msgid "Could not read %(name)s: %(err)s"
+msgstr "%(name)s を読み取れませんでした: %(err)s"
+
+msgid "%(name)s already wins every field it could change here."
+msgstr "%(name)s はここで変更できるすべてのフィールドですでに勝っています。"
+
+msgid "%(name)s either already wins, or matches the winner, for every field -- so there is nothing to take."
+msgstr "%(name)s はすべてのフィールドですでに勝っているか、勝者と一致しているため、取得するものがありません。"
+
+msgid "Merge fields from %(name)s"
+msgstr "%(name)s からフィールドをマージ"
+
+msgid "Pick the fields %(name)s should win, across every record it defines."
+msgstr "%(name)s が定義するすべてのレコードで、それが勝つべきフィールドを選択してください。"
+
+msgid "The number is how many records each field would change.\nYour mods are not modified."
+msgstr "この数字は各フィールドが変更するレコード数です。\nあなたの Mod は → で示されます。"
+
+msgid "This plugin's value"
+msgstr "このプラグインの値"
+
+msgid "%(fields)d field(s) selected, %(n)d record change(s) queued."
+msgstr "フィールド %(fields)d 件を選択、レコード変更 %(n)d 件をキューに追加しました。"
+
+msgid "Queued %(n)d field take(s) from %(name)s."
+msgstr "%(name)s からフィールド取得 %(n)d 件をキューに追加しました。"
+
+msgid "Select all"
+msgstr "すべて選択"
+
+msgid "Merge selected"
+msgstr "選択項目をマージ"
+
+msgid "tes3cmd:"
+msgstr "tes3cmd:"
+
+msgid "Path to tes3cmd. Leave empty to auto-detect (PATH, next to this app, next to openmw.cfg). End users normally have the compiled tes3cmd.exe from the MOMW Tools Pack; the pure-perl script works too if perl is installed."
+msgstr "tes3cmd へのパス。自動検出するには空欄のままにします (PATH、このアプリの隣、openmw.cfg の隣)。エンドユーザーは通常、MOMW Tools Pack のコンパイル済み tes3cmd.exe を持っています。Perl がインストールされていれば純粋な Perl スクリプトも動作します。"
+
+msgid "Locate tes3cmd"
+msgstr "tes3cmd の場所を指定"
+
+msgid "Browse..."
+msgstr "参照…"
+
+msgid "Plugins to run on"
+msgstr "対象プラグイン"
+
+msgid "My mods (last sort)"
+msgstr "自分の Mod (前回の並べ替え)"
+
+msgid "Add every custom mod from the last Sort whose file could be located (curated plugins are the list's job, not yours)."
+msgstr "前回の並べ替えから、ファイルの場所を特定できたすべてのカスタム Mod を追加します (キュレート済みプラグインはリストの問題であり、あなたの問題ではありません)。"
+
+msgid "List mods (last sort)"
+msgstr "Mod を一覧表示 (前回の並べ替え)"
+
+msgid "Add every curated-list plugin from the last Sort whose file could be located -- the complement of 'My mods': everything ACTIVE that is NOT one of your custom additions."
+msgstr "前回の並べ替えから、ファイルの場所を特定できたキュレートリストのプラグインをすべて追加します -- 「自分の Mod」の補完: あなた自身の追加でない、すべての「アクティブ」なもの。"
+
+msgid "MOMW needs-cleaning"
+msgstr "MOMW クリーニングが必要"
+
+msgid "Add every ACTIVE plugin that plugin-order.yml flags as needs_cleaning (MOMW's own 'clean this one' list), resolved across the data folders. Requires the plugin-order.yml path on the main tab."
+msgstr "plugin-order.yml が needs_cleaning (MOMW 独自の「これをクリーンにする」リスト) として印を付けた、すべての「アクティブ」なプラグインを、データフォルダで解決して追加します。メインタブに plugin-order.yml のパスが必要です。"
+
+msgid "Add file(s)..."
+msgstr "ファイルを追加…"
+
+msgid "Remove selected"
+msgstr "選択項目を削除"
+
+msgid "Clear"
+msgstr "クリア"
+
+msgid "Command"
+msgstr "コマンド"
+
+msgid "extra arguments:"
+msgstr "追加の引数:"
+
+msgid "Optional extra tes3cmd switches, e.g. --instances for clean, --author/--description for header. Passed through verbatim."
+msgstr "任意の追加 tes3cmd スイッチ。例: clean 用の --instances、ヘッダー用の --author/--description。そのまま渡されます。"
+
+msgid "Run"
+msgstr "実行"
+
+msgid "Output streams to the main Log. Modifying commands ask for confirmation first; tes3cmd makes its own backups."
+msgstr "出力はメインのログに流れます。変更を伴うコマンドは最初に確認を求めます。tes3cmd は独自のバックアップを作成します。"
+
+msgid "Run '1. Sort' first so I know which mods are yours."
+msgstr "どの Mod があなたのものか把握するため、まず「1. 並べ替え」を実行してください。"
+
+msgid "tes3cmd: added %(count)d of your mods"
+msgstr "tes3cmd: あなたの Mod %(count)d 件を追加しました"
+
+msgid " (%(count)d file not found in the data folders)"
+msgid_plural " (%(count)d files not found in the data folders)"
+msgstr[0] " (%(count)d 件のファイルがデータフォルダに見つかりません)"
+
+msgid "Run '1. Sort' first so I know the active load order."
+msgstr "有効なロード順を把握するため、まず「1. 並べ替え」を実行してください。"
+
+msgid "tes3cmd: added %(count)d list mod(s)"
+msgstr "tes3cmd: リスト Mod %(count)d 件を追加しました"
+
+msgid "Set the plugin-order.yml path on the main tab first."
+msgstr "まずメインタブで plugin-order.yml のパスを設定してください。"
+
+msgid "Couldn't read plugin-order.yml: %(error)s"
+msgstr "plugin-order.yml を読み取れませんでした: %(error)s"
+
+msgid "tes3cmd: added %(count)d needs-cleaning plugin"
+msgid_plural "tes3cmd: added %(count)d needs-cleaning plugins"
+msgstr[0] "tes3cmd: クリーニングが必要なプラグイン %(count)d 件を追加しました"
+
+msgid "Choose plugin file(s)"
+msgstr "プラグインファイルを選択"
+
+msgid "Resync master sizes"
+msgstr "マスターサイズを再同期"
+
+msgid "Rewrite the recorded master sizes in %(count)d plugin file to match the installed masters?\n\nOnly the 8-byte size fields change; a one-time .masterfix.bak copy of each file is kept."
+msgid_plural "Rewrite the recorded master sizes in %(count)d plugin files to match the installed masters?\n\nOnly the 8-byte size fields change; a one-time .masterfix.bak copy of each file is kept."
+msgstr[0] "%(count)d 件のプラグインファイルに記録されたマスターサイズを、インストール済みのマスターに合わせて書き換えますか?\n\n変更されるのは 8 バイトのサイズフィールドのみです。各ファイルの一度きりの .masterfix.bak コピーが保持されます。"
+
+msgid "Resyncing master sizes..."
+msgstr "マスターサイズを再同期中…"
+
+msgid "'%(path)s' does not exist. Fix the path or clear it to auto-detect."
+msgstr "「%(path)s」は存在しません。パスを修正するか、自動検出のためにクリアしてください。"
+
+msgid "tes3cmd"
+msgstr "tes3cmd"
+
+msgid "tes3cmd not found. Browse to the compiled tes3cmd.exe (MOMW Tools Pack)."
+msgstr "tes3cmd が見つかりません。コンパイル済みの tes3cmd.exe (MOMW Tools Pack) を参照してください。"
+
+msgid "Add at least one plugin file first."
+msgstr "まず少なくとも 1 つのプラグインファイルを追加してください。"
+
+msgid "tes3cmd clean"
+msgstr "tes3cmd clean"
+
+msgid "Clean %(count)d plugin file?\n\nEach is staged into a private 'Data Files' with its masters so tes3cmd sees the full VFS; plugins whose masters can't be found are skipped. A one-time .preclean.bak copy of each modified file is kept."
+msgid_plural "Clean %(count)d plugin files?\n\nEach is staged into a private 'Data Files' with its masters so tes3cmd sees the full VFS; plugins whose masters can't be found are skipped. A one-time .preclean.bak copy of each modified file is kept."
+msgstr[0] "%(count)d 件のプラグインファイルをクリーンにしますか?\n\n各ファイルは、tes3cmd が完全な VFS を見られるよう、そのマスターと共にプライベートな「Data Files」に準備されます。マスターが見つからないプラグインはスキップされます。変更された各ファイルの一度きりの .preclean.bak コピーが保持されます。"
+
+msgid "tes3cmd %(command)s running..."
+msgstr "tes3cmd %(command)s を実行中…"
+
+msgid "  Engine: %(command)s"
+msgstr "  エンジン: %(command)s"
+
+msgid "  Staging dir: %(path)s"
+msgstr "  ステージングディレクトリ: %(path)s"
+
+msgid "  SKIPPED: could not stage '%(name)s'."
+msgstr "  スキップ: 「%(name)s」を準備できませんでした。"
+
+msgid "  SKIPPED: master(s) not found in any data folder: %(names)s -- cleaning without the masters present gives wrong results."
+msgstr "  スキップ: マスターがどのデータフォルダにも見つかりませんでした: %(names)s -- マスターが存在しない状態でのクリーン化は誤った結果を生みます。"
+
+msgid "  (exit code %(code)d) -- original NOT touched"
+msgstr "  (終了コード %(code)d) -- 元ファイルは変更されていません"
+
+msgid "  no changes -- already clean"
+msgstr "  変更なし -- すでにクリーン"
+
+msgid "  cleaned: %(before)d -> %(after)d bytes (backup: %(backup)s)"
+msgstr "  クリーン化: %(before)d -> %(after)d バイト (バックアップ: %(backup)s)"
+
+msgid "  ERROR: %(error)s"
+msgstr "  エラー: %(error)s"
+
+msgid "tes3cmd clean: %(changed)d cleaned, %(clean)d already clean, %(skipped)d skipped (missing masters), %(failed)d failed."
+msgstr "tes3cmd clean: クリーン化 %(changed)d 件、すでにクリーン %(clean)d 件、スキップ %(skipped)d 件 (マスター欠落)、失敗 %(failed)d 件。"
+
+msgid "  Re-run '1. Sort' to refresh checks."
+msgstr "  チェックを更新するには「1. 並べ替え」を再実行してください。"
+
+msgid "tes3cmd %(command)s: %(ok)d ok, %(failed)d failed. See the log."
+msgstr "tes3cmd %(command)s: 成功 %(ok)d、失敗 %(failed)d。ログを参照してください。"
+
+msgid " MASTER-SIZE RESYNC (in-app, VFS-aware)"
+msgstr " マスターサイズ再同期 (アプリ内、VFS 対応)"
+
+msgid "  %(name)s: ERROR: %(error)s"
+msgstr "  %(name)s: エラー: %(error)s"
+
+msgid "  %(name)s: already in sync"
+msgstr "  %(name)s: すでに同期済み"
+
+msgid "  %(name)s: WARNING: master '%(master)s' not found in any data folder -- its size field left untouched"
+msgstr "  %(name)s: 警告: マスター「%(master)s」がどのデータフォルダにも見つかりません -- そのサイズフィールドは変更されません"
+
+msgid "Resync: %(fixed)d plugin(s) updated, %(ok)d already in sync, %(failed)d error(s)."
+msgstr "再同期: プラグイン %(fixed)d 件を更新、すでに同期済み %(ok)d 件、失敗 %(failed)d 件。"
+
+msgid "  Re-run '1. Sort' to refresh the master check."
+msgstr "  マスターチェックを更新するには「1. 並べ替え」を再実行してください。"
+
+msgid "Locate the tes3conv executable"
+msgstr "tes3conv 実行ファイルの場所を指定"
+
+msgid "tes3conv set - click 'Check Conflicts' again to re-scan with field diffs."
+msgstr "tes3conv を設定しました -- フィールド差分で再スキャンするには「競合をチェック」をもう一度クリックしてください。"
+
+msgid "tes3conv set"
+msgstr "tes3conv を設定しました"
+
+msgid "tes3conv location saved.\n\nClick 'Check Conflicts' again to re-scan; the field comparison will then populate when you select a record."
+msgstr "tes3conv の場所を保存しました。\n\n再スキャンするには「競合をチェック」をもう一度クリックしてください。フィールドレベルの差分が利用可能になりました。"
+
+msgid "could not read rule file %(file)s for predicate checks: %(error)s"
+msgstr "述語チェック用のルールファイル %(file)s を読み取れませんでした: %(error)s"
+
+msgid "NOTE: %(name)s: %(count)d conditional/unrecognized line inside ordering rules treated as not-installed and bridged over (mlox does the same)."
+msgid_plural "NOTE: %(name)s: %(count)d conditional/unrecognized lines inside ordering rules treated as not-installed and bridged over (mlox does the same)."
+msgstr[0] "注記: %(name)s: 順序付けルール内の条件付き/認識されない行 %(count)d 件を未インストールとして扱い、橋渡ししました (mlox も同様に行います)。"
+
+msgid "could not parse rule file %(file)s: %(error)s"
+msgstr "ルールファイル %(file)s を解析できませんでした: %(error)s"
+
+msgid "Loaded %(count)d plugin refs from %(file)s"
+msgstr "%(file)s からプラグイン参照 %(count)d 件を読み込みました"
+
+msgid "%(count)d mlox ordering rule not applied -- your openmw.cfg already orders these the other way, so your (curated) cfg order is kept:"
+msgid_plural "%(count)d mlox ordering rules not applied -- your openmw.cfg already orders these the other way, so your (curated) cfg order is kept:"
+msgstr[0] "mlox 順序付けルール %(count)d 件は適用されませんでした -- あなたの openmw.cfg はすでにこれらを逆に並べているため、あなたの (キュレート済み) cfg 順序が保持されます:"
+
+msgid "    - mlox wanted '%(first)s' before '%(second)s', but your load order already has '%(second)s' before '%(first)s'"
+msgstr "    - mlox は「%(first)s」を「%(second)s」の前に置きたがりましたが、あなたのロード順ではすでに「%(second)s」が「%(first)s」の前にあります"
+
+msgid "WARNING: %(count)d plugin could not be placed due to an unresolved cycle and was appended at the end: %(names)s"
+msgid_plural "WARNING: %(count)d plugins could not be placed due to an unresolved cycle and were appended at the end: %(names)s"
+msgstr[0] "警告: 未解決の循環のため %(count)d 件のプラグインを配置できず、末尾に追加しました: %(names)s"
+
+msgid "No exterior cells have conflicts."
+msgstr "競合のある屋外セルはありません。"
+
+msgid "(%(x)d, %(y)d) â %(count)d conflict, %(n)d plugin(s): %(plugins)s"
+msgid_plural "(%(x)d, %(y)d) â %(count)d conflicts, %(n)d plugin(s): %(plugins)s"
+msgstr[0] "(%(x)d, %(y)d) → 競合 %(count)d 件、プラグイン %(n)d 件: %(plugins)s"
+
+msgid "Cell"
+msgstr "セル"
+
+msgid "Conflicts"
+msgstr "競合"
+
+msgid "Yours"
+msgstr "あなた"
+
+msgid "Record types"
+msgstr "レコードタイプ"
+
+msgid "Usually wins"
+msgstr "通常は勝ち"
+
+msgid "terrain shape, textures and vertex colors"
+msgstr "地形の形状、テクスチャ、頂点カラー"
+
+msgid "NPC navigation -- broken edges strand NPCs, and nothing else reports it"
+msgstr "NPC のナビゲーション -- 壊れた辺は NPC を立ち往生させ、他に何もこれを報告しません"
+
+msgid "the cell's own record: name, water level, region, ambient light"
+msgstr "セル自身のレコード: 名前、水位、地域、環境光"
+
+msgid "Record type"
+msgstr "レコードタイプ"
+
+msgid "Cells"
+msgstr "セル"
+
+msgid "What it governs"
+msgstr "制御する内容"
+
+msgid "Focus on plugin:"
+msgstr "プラグインに注目:"
+
+msgid "- all plugins -"
+msgstr "- すべてのプラグイン -"
+
+msgid "Cells with conflicts"
+msgstr "競合のあるセル"
+
+msgid "Spatial conflicts"
+msgstr "空間的な競合"
+
+msgid "Involving your mods"
+msgstr "あなたの Mod に関係する"
+
+msgid "Non-spatial (objects, dialogue, interiors)"
+msgstr "非空間 (オブジェクト、会話、屋内)"
+
+msgid "Conflict density by cell"
+msgstr "セルごとの競合密度"
+
+msgid "outlined = involves your mods"
+msgstr "枠線 = あなたの Mod に関係"
+
+msgid "Conflicting records per cell. North is up. Hover a cell for its count and which plugins are conflicting there. Each of the first few counts has its own color and larger counts are grouped, because one, two and three conflicts are different situations while thirty and thirty-five are not. Focusing a plugin recolors its cells by its own count there on this same scale, and mutes the rest."
+msgstr "セルごとの競合レコード。北が上。セルにカーソルを合わせると、その件数とそこで競合するプラグインが分かります。最初のいくつかの件数はそれぞれ独自の色を持ち、大きいものはまとめられます。1、2、3 の競合は異なる状況ですが、30 と 35 はそうではないためです。プラグインに注目すると、そのセルを同じスケールでそのプラグイン自身の件数で再着色し、残りを薄くします。"
+
+msgid "What is being edited"
+msgstr "編集対象"
+
+msgid "All cells (worst first)"
+msgstr "すべてのセル (悪い順)"
+
+msgid "Touches %(cells)s cell(s), %(total)s conflict(s) here. %(breakdown)s"
+msgstr "セル %(cells)s 件に影響、ここでの競合 %(total)s 件。%(breakdown)s"
+
+msgid "(no type breakdown available)"
+msgstr "(タイプ別内訳は利用できません)"
+
+msgid "Conflict map"
+msgstr "競合マップ"
+
+msgid "Cells where the same record is defined by more than one plugin. Coverage (which mods touch which cells) is a different question -- see the cell map."
+msgstr "同じレコードが複数のプラグインで定義されているセル。カバレッジ (どの Mod がどのセルに触れるか) は別の問題です -- セルマップを参照してください。"
+
+msgid "On this page"
+msgstr "このページの内容"
+
+msgid "Rendered from %(name)s"
+msgstr "%(name)s からレンダリング"
+
+msgid "Program documentation"
+msgstr "プログラムのドキュメント"
+
+msgid "Generated %(when)s"
+msgstr "%(when)s に生成"
+
+msgid "Base: %(plugin)s"
+msgstr "ベース: %(plugin)s"
+
+msgid "Winner: %(plugin)s"
+msgstr "勝者: %(plugin)s"
+
+msgid "Winner"
+msgstr "勝者"
+
+msgid "Step"
+msgstr "ステップ"
+
+msgid "Height difference"
+msgstr "高さの差"
+
+msgid "higher than the previous step"
+msgstr "前のステップより高い"
+
+msgid "lower than the previous step"
+msgstr "前のステップより低い"
+
+msgid "North is up. Unchanged vertices are left blank on a diff step, and color saturates at that step's largest movement, so shades are comparable within a page but not between pages. The Base step has nothing before it to diff against, so it shows that plugin's own absolute elevation on a separate low-to-high scale instead."
+msgstr "北が上。差分ステップでは変更されていない頂点は空白のままで、色はそのステップの最大の移動で飽和します。そのため色合いはページ内では比較可能ですが、ページ間では比較できません。ベースステップには比較する前のものがないため、そのプラグイン自身の絶対的な高さを、低から高への別スケールで表示します。"
+
+msgid "Base version"
+msgstr "ベースバージョン"
+
+msgid "vertex (%(col)s, %(row)s): %(delta)s units"
+msgstr "頂点 (%(col)s, %(row)s): %(delta)s ユニット"
+
+msgid "vertex (%(col)s, %(row)s): %(height)s units"
+msgstr "頂点 (%(col)s, %(row)s): %(height)s ユニット"
+
+msgid "Absolute elevation, %(lo)s to %(hi)s units. Nothing loaded before it to compare against."
+msgstr "絶対標高、%(lo)s ～ %(hi)s ユニット。比較する前に読み込まれたものはありません。"
+
+msgid "%(changed)s of %(total)s vertices differ from the previous step. Largest movement %(peak)s units (%(up)s raised, %(down)s lowered)."
+msgstr "前のステップと比べて %(total)s 頂点中 %(changed)s 頂点が異なります。最大の移動は %(peak)s ユニット (上昇 %(up)s、下降 %(down)s)。"
+
+msgid "The terrain is identical at this step. It differs from the previous step in some other field -- textures, colors or the world map -- not in height."
+msgstr "このステップでは地形は同一です。前のステップとは別のフィールド -- テクスチャ、カラー、ワールドマップ -- で異なり、高さでは異なりません。"
+
+msgid "Terrain difference"
+msgstr "地形の差"
+
+msgid "Absolute heights, decoded and subtracted. Comparing the raw fields is misleading: heights are stored as cumulative deltas, so moving one vertex changes every byte after it."
+msgstr "絶対的な高さをデコードして減算したもの。生のフィールドを比較するのは誤解を招きます: 高さは累積デルタとして保存されるため、1 つの頂点を移動すると以降のすべてのバイトが変わります。"
+
+msgid "Nothing to show."
+msgstr "表示するものがありません。"
+
+msgid "point %(index)d at (%(x)d, %(y)d, %(z)d)"
+msgstr "ポイント %(index)d @ (%(x)d, %(y)d, %(z)d)"
+
+msgid "Points"
+msgstr "ポイント"
+
+msgid "Connections"
+msgstr "接続"
+
+msgid "Extent"
+msgstr "範囲"
+
+msgid "%(units)d world units"
+msgstr "%(units)d ワールドユニット"
+
+msgid "path point"
+msgstr "パスポイント"
+
+msgid "edge added at this step"
+msgstr "このステップで追加された辺"
+
+msgid "edge removed at this step"
+msgstr "このステップで削除された辺"
+
+msgid "unchanged"
+msgstr "変更なし"
+
+msgid "connection"
+msgstr "接続"
+
+msgid "Edges added"
+msgstr "追加された辺"
+
+msgid "Edges removed"
+msgstr "削除された辺"
+
+msgid "Top-down view, north up. Hover a point for its coordinates."
+msgstr "真上からのビュー、北が上。座標を見るにはポイントにカーソルを合わせてください。"
+
+msgid "Base version â nothing loaded before it to compare against."
+msgstr "ベースバージョン -- 比較する前に読み込まれたものはありません。"
+
+msgid "The navigation graph is unchanged at this step. These records differ in point positions or flags, not in connectivity."
+msgstr "このステップではナビゲーショングラフは変更されていません。これらのレコードはポイントの位置やフラグが異なり、接続性は異なりません。"
+
+msgid "This step only removes connections. That is the shape of an accidentally rebuilt path grid, and it is worth checking in game."
+msgstr "このステップは接続を削除するだけです。それは偶発的に再構築されたパスグリッドの形であり、ゲーム内で確認する価値があります。"
+
+msgid "Navigation graph"
+msgstr "ナビゲーショングラフ"
+
+msgid "Path grid"
+msgstr "パスグリッド"
+
+msgid "The navigation mesh NPCs follow, and what this plugin changed about it."
+msgstr "NPC が従うナビゲーションメッシュと、このプラグインがそれについて変更した内容"
+
+msgid "Height range: %(lo)s to %(hi)s units"
+msgstr "高さの範囲: %(lo)s ～ %(hi)s ユニット"
+
+msgid "(vertical exaggerated %(times)sx)"
+msgstr "(垂直方向を %(times)s倍に強調)"
+
+msgid "contours every %(step)s units"
+msgstr "%(step)s ユニットごとの等高線"
+
+msgid "Reset"
+msgstr "リセット"
+
+msgid "Isometric"
+msgstr "等角投影"
+
+msgid "Top down"
+msgstr "真上から"
+
+msgid "Shading:"
+msgstr "シェーディング:"
+
+msgid "Relief"
+msgstr "起伏"
+
+msgid "Flat facets"
+msgstr "フラットな面"
+
+msgid "Hillshade"
+msgstr "陰影起伏"
+
+msgid "Lights:"
+msgstr "ライト:"
+
+msgid "Single"
+msgstr "単一"
+
+msgid "3-way"
+msgstr "3 方向"
+
+msgid "6-way"
+msgstr "6 方向"
+
+msgid "Scales:"
+msgstr "スケール:"
+
+msgid "Multiscale"
+msgstr "マルチスケール"
+
+msgid "Sun azimuth:"
+msgstr "太陽方位:"
+
+msgid "Sun altitude:"
+msgstr "太陽高度:"
+
+msgid "Tint:"
+msgstr "色合い:"
+
+msgid "Hypsometric"
+msgstr "高度段彩"
+
+msgid "Rainbow"
+msgstr "レインボー"
+
+msgid "Greyscale"
+msgstr "グレースケール"
+
+msgid "Tint %:"
+msgstr "色合い %:"
+
+msgid "Contours"
+msgstr "等高線"
+
+msgid "Vertical:"
+msgstr "垂直:"
+
+msgid "%(times)sx"
+msgstr "%(times)s倍"
+
+msgid "Drag to rotate, shift/right-drag to pan, scroll to zoom. Shading follows slope, which reads as terrain better than height does. Heights are drawn to the same scale as the ground, so a slope here is the slope in game."
+msgstr "ドラッグで回転、Shift/右ドラッグでパン、スクロールでズーム。シェーディングは傾斜に従い、高さよりも地形として読みやすくなります。高さは地面と同じスケールで描かれるため、ここでの傾斜はゲーム内の傾斜です。"
+
+msgid "Drag to rotate, shift/right-drag to pan, scroll to zoom; switch plugins to see the same cell as each one leaves it. Shading follows slope. Heights are drawn to the same scale as the ground, so a slope here is the slope in game."
+msgstr "ドラッグで回転、Shift/右ドラッグでパン、スクロールでズーム。プラグインを切り替えて、各プラグインが 1 つのセルをどう残すか見られます。シェーディングは傾斜に従います。高さは地面と同じスケールで描かれるため、ここでの傾斜はゲーム内の傾斜です。"
+
+msgid "Some records could not be decoded: %(detail)s"
+msgstr "一部のレコードをデコードできませんでした: %(detail)s"
+
+msgid "Surfaces"
+msgstr "サーフェス"
+
+msgid "Terrain surface"
+msgstr "地形サーフェス"
+
+msgid "The same 65x65 height grid the text view lists, as a shape you can turn."
+msgstr "テキストビューが列挙するのと同じ 65x65 の高さグリッドを、回転できる形状として表示します。"
+
+msgid "couldn't stage '%(name)s': %(error)s"
+msgstr "「%(name)s」を準備できませんでした: %(error)s"
+
+msgid "could not read the mesh: %(reason)s"
+msgstr "メッシュを読み取れませんでした: %(reason)s"
+
+msgid "loses collision"
+msgstr "コリジョンを失う"
+
+msgid "loses animation"
+msgstr "アニメーションを失う"
+
+msgid "needs %(count)d texture the other does not ship"
+msgid_plural "needs %(count)d textures the other does not ship"
+msgstr[0] "もう一方が同梱しないテクスチャ %(count)d 件を必要とします"
+
+msgid "%(percent)d%% of the triangles"
+msgstr "三角形の %(percent)d%%"
+
+msgid "Mesh contents (read just now):"
+msgstr "メッシュの内容 (たった今読み取り):"
+
+msgid "  %(n)d. %(dir)s - could not read: %(why)s"
+msgstr "  %(n)d. %(dir)s - 読み取れませんでした: %(why)s"
+
+msgid "%(count)d shape"
+msgid_plural "%(count)d shapes"
+msgstr[0] "形状 %(count)d 件"
+
+msgid "%(count)d triangle"
+msgid_plural "%(count)d triangles"
+msgstr[0] "三角形 %(count)d 件"
+
+msgid "%(count)d texture"
+msgid_plural "%(count)d textures"
+msgstr[0] "テクスチャ %(count)d 件"
+
+msgid "collision"
+msgstr "コリジョン"
+
+msgid "no collision"
+msgstr "コリジョンなし"
+
+msgid "animated"
+msgstr "アニメーション"
+
+msgid "PARTIAL: %(read)d of %(declared)d blocks"
+msgstr "部分的: %(declared)d 件中 %(read)d 件のブロック"
+
+msgid "  Against provider %(n)d, the winner %(note)s."
+msgstr "  提供元 %(n)d に対して、勝者は %(note)s。"
+
+msgid "  Textures referenced: %(list)s"
+msgstr "  参照されているテクスチャ: %(list)s"
+
+msgid "  %(count)d mesh conflict changes what the asset does; those lines are marked below."
+msgid_plural "  %(count)d mesh conflicts change what the asset does; those lines are marked below."
+msgstr[0] "  メッシュ競合 %(count)d 件がアセットの動作を変えます。それらの行は下で印が付いています。"
+
+msgid "Backup written: %(path)s"
+msgstr "バックアップを書き込みました: %(path)s"
+
+msgid "\n--- DRY RUN: no files written ---"
+msgstr "\n--- ドライラン: ファイルは書き込まれていません ---"
+
+msgid "Wrote updated: %(path)s"
+msgstr "更新版を書き込みました: %(path)s"
+
+msgid "Scanned '%(path)s': %(folders)d mod folder(s), %(plugins)d plugin(s)."
+msgstr "「%(path)s」をスキャン: Mod フォルダ %(folders)d 件、プラグイン %(plugins)d 件。"
+
+msgid "Wrote subset file: %(path)s"
+msgstr "サブセットファイルを書き込みました: %(path)s"
+
+msgid "'%(entry)s' from %(source)s is declared as groundcover but is not a plugin filename -- skipping."
+msgstr "%(source)s の「%(entry)s」は groundcover として宣言されていますが、プラグインファイル名ではありません -- スキップしました。"
+
+msgid "'%(entry)s' from %(source)s doesn't look like a plugin filename or a data folder path (no recognized extension, no slash) -- skipping."
+msgstr "%(source)s の「%(entry)s」はプラグインファイル名にもデータフォルダのパスにも見えません (認識された拡張子なし、スラッシュなし) -- スキップしました。"
+
+msgid "  %(file)s: %(plugins)d plugin(s), %(paths)d data path(s)"
+msgstr "  %(file)s: プラグイン %(plugins)d 件、データパス %(paths)d 件"
+
+msgid "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(paths)s"
+msgstr "  注記: データパスの挿入が見つかりましたが、並べ替えられていません (含めるには --sort-data-paths を指定): %(paths)s"
+
+msgid "  in-memory scan: %(plugins)d plugin(s), %(paths)d data path(s)"
+msgstr "  メモリ内スキャン: プラグイン %(plugins)d 件、データパス %(paths)d 件"
+
+msgid "  NOTE: data path insertion found but not sorted (pass --sort-data-paths to include it): %(count)d path"
+msgid_plural "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(count)d paths"
+msgstr[0] "  注記: データパスの挿入が見つかりましたが、並べ替えられていません (含めるには --sort-data-paths を指定): %(count)d 件のパス"
+
+msgid "  %(file)s: %(plugins)d content plugin(s), %(paths)d data path(s)"
+msgstr "  %(file)s: コンテンツプラグイン %(plugins)d 件、データパス %(paths)d 件"
+
+msgid "  Loaded %(count)d plugin entry from %(file)s"
+msgid_plural "  Loaded %(count)d plugin entries from %(file)s"
+msgstr[0] "  %(file)s からプラグインエントリ %(count)d 件を読み込みました"
+
+msgid "  WARNING: could not read plugin-order.yml (%(error)s) -- skipping yml checks."
+msgstr "  警告: plugin-order.yml を読み取れませんでした (%(error)s) -- yml チェックをスキップします。"
+
+msgid "  '%(list)s': %(count)d curated plugin on this list"
+msgid_plural "  '%(list)s': %(count)d curated plugins on this list"
+msgstr[0] "  「%(list)s」: このリストのキュレート済みプラグイン %(count)d 件"
+
+msgid "  WARNING: no plugins found for list '%(list)s' in the yml -- check the list name spelling. Curated-set checks skipped."
+msgstr "  警告: yml でリスト「%(list)s」のプラグインが見つかりませんでした -- リスト名のスペルを確認してください。キュレート済みセットのチェックをスキップしました。"
+
+msgid "  Excluded %(count)d curated plugin from the sort: %(names)s"
+msgid_plural "  Excluded %(count)d curated plugins from the sort: %(names)s"
+msgstr[0] "  並べ替えからキュレート済みプラグイン %(count)d 件を除外しました: %(names)s"
+
+msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
+msgstr "\n  すでに cfg にあります。cfg 内で再配置されます: %(names)s"
+
+msgid "  Not in cfg yet, will be inserted: %(names)s"
+msgstr "  まだ cfg にありません。挿入されます: %(names)s"
+
+msgid "  Read header masters for %(have)d of %(total)d custom plugin(s)."
+msgstr "  カスタムプラグイン %(total)d 件中 %(have)d 件のヘッダーマスターを読み取りました。"
+
+msgid "\n  No [Conflict]/[Requires]/[Note] warnings triggered."
+msgstr "\n  [Conflict]/[Requires]/[Note] の警告は発生しませんでした。"
+
+msgid "\n  No plugin-order.yml warnings."
+msgstr "\n  plugin-order.yml の警告はありません。"
+
+msgid "  (plugin files not reachable from the data folders; can't read headers)"
+msgstr "  (プラグインファイルにデータフォルダから到達できません。ヘッダーを読み取れません)"
+
+msgid "  All masters present and correctly ordered."
+msgstr "  すべてのマスターが存在し、正しく並んでいます。"
+
+msgid "master check failed: %(error)s"
+msgstr "マスターチェックに失敗しました: %(error)s"
+
+msgid "\n[STALE] '%(artifact)s' is older than %(count)d active plugin (e.g. %(examples)s%(more)s) -- re-run momw-configurator so it gets rebuilt against the current load order."
+msgid_plural "\n[STALE] '%(artifact)s' is older than %(count)d active plugins (e.g. %(examples)s%(more)s) -- re-run momw-configurator so it gets rebuilt against the current load order."
+msgstr[0] "\n[古い] 「%(artifact)s」はアクティブなプラグイン %(count)d 件より古いです (例: %(examples)s%(more)s) -- 現在のロード順に対して再構築されるよう momw-configurator を再実行してください。"
+
+msgid "  (excluded %(count)d plugin by --exclude)"
+msgid_plural "  (excluded %(count)d plugins by --exclude)"
+msgstr[0] "  (--exclude によりプラグイン %(count)d 件を除外)"
+
+msgid "  Keeping tes3conv JSON dump in: %(path)s"
+msgstr "  tes3conv の JSON ダンプを保持: %(path)s"
+
+msgid "  Engine: %(engine)s"
+msgstr "  エンジン: %(engine)s"
+
+msgid "native esp reader (field-level)"
+msgstr "ネイティブ esp リーダー (フィールドレベル)"
+
+msgid "\n  Wrote conflict report: %(path)s"
+msgstr "\n  競合レポートを書き込みました: %(path)s"
+
+msgid "could not write conflict CSV: %(error)s"
+msgstr "競合 CSV を書き込めませんでした: %(error)s"
+
+msgid "  Scanned %(scanned)d plugin(s): %(exterior)d exterior + %(interior)d interior cell(s) touched."
+msgstr "  プラグイン %(scanned)d 件をスキャン: 屋外セル %(exterior)d 件 + 屋内セル %(interior)d 件に影響。"
+
+msgid "  Wrote cell map: %(path)s  (open it in a browser)"
+msgstr "  セルマップを書き込みました: %(path)s  (ブラウザで開いてください)"
+
+msgid "could not write cell map: %(error)s"
+msgstr "セルマップを書き込めませんでした: %(error)s"
+
+msgid "  Scanned %(scanned)d plugin(s); %(cells)d interior cell(s), %(grids)d interior pathgrid(s)."
+msgstr "  プラグイン %(scanned)d 件をスキャン。屋内セル %(cells)d 件、屋内パスグリッド %(grids)d 件。"
+
+msgid "\n  No lint findings."
+msgstr "\n  Lint の指摘はありません。"
+
+msgid "\n  Wrote resource report: %(path)s"
+msgstr "\n  リソースレポートを書き込みました: %(path)s"
+
+msgid "could not write resource CSV: %(error)s"
+msgstr "リソース CSV を書き込めませんでした: %(error)s"
+
+msgid "  Pass --sort-data-paths to enable:"
+msgstr "  有効にするには --sort-data-paths を指定:"
+
+msgid "  <-- inserted"
+msgstr "  <-- 挿入済み"
+
+msgid "UNMANAGED (ORPHAN) ENTRIES FROM openmw.cfg"
+msgstr "openmw.cfg の未管理 (孤立) エントリ"
+
+msgid "  %(count)d orphan plugin pulled from openmw.cfg"
+msgid_plural "  %(count)d orphan plugins pulled from openmw.cfg"
+msgstr[0] "  openmw.cfg から孤立プラグイン %(count)d 件を取り込みました"
+
+msgid "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations."
+msgstr "  未管理のプラグインは見つかりませんでした -- cfg 内のすべての content= プラグインはリストまたは設定にあります。"
+
+msgid "groundcover declared by this run"
+msgstr "この実行で宣言された groundcover"
+
+msgid "  These are written as groundcover= rather than content=. Their data= folders are inserted normally -- OpenMW has to find the file."
+msgstr "  これらは content= ではなく groundcover= として書き込まれます。それらの data= フォルダは通常どおり挿入されます -- OpenMW がファイルを見つけられるはずです。"
+
+msgid "groundcover plugins held back"
+msgstr "保留された groundcover プラグイン"
+
+msgid "%(count)d plugin in your subset is already declared as groundcover in openmw.cfg, so it was NOT added to content=:"
+msgid_plural "%(count)d plugins in your subset are already declared as groundcover in openmw.cfg, so they were NOT added to content=:"
+msgstr[0] "あなたのサブセットのプラグイン %(count)d 件はすでに openmw.cfg で groundcover として宣言されているため、content= に追加「されませんでした」:"
+
+msgid "  Their groundcover= lines are untouched and their data= paths are still written, so the grass stays enabled -- as grass. Loading one as content= too would spawn every blade as a real object."
+msgstr "  それらの groundcover= 行は変更されず、data= パスはそれでも書き込まれるため、草は有効なまま -- 草として残ります。1 つを content= としても読み込むと、すべての草の葉が実際のオブジェクトとして生成されてしまいます。"
+
+msgid "  openmw.cfg left untouched (pass --write-cfg to patch it directly)"
+msgstr "  openmw.cfg は変更されていません (直接パッチするには --write-cfg を指定)"
+
+msgid "  WARNING: configurator preview failed: %(error)s"
+msgstr "  警告: コンフィギュレータのプレビューに失敗しました: %(error)s"
+
+msgid "\n  DRY RUN: would write %(path)s\n%(toml)s"
+msgstr "\n  ドライラン: %(path)s に書き込む予定\n%(toml)s"
+
+msgid "  Wrote corrected customizations: %(path)s"
+msgstr "  修正した customizations を書き込みました: %(path)s"
+
+msgid "  Plugins sorted:        %(count)d"
+msgstr "  並べ替えたプラグイン:        %(count)d"
+
+msgid "  Data paths inserted:   %(count)d"
+msgstr "  挿入されたデータパス:   %(count)d"
+
+msgid "  Rule warnings raised:  %(count)d"
+msgstr "  発生したルール警告:  %(count)d"
+
+msgid "  plugin-order.yml warnings: %(count)d"
+msgstr "  plugin-order.yml の警告: %(count)d"
+
+msgid "  openmw.cfg written:    %(answer)s"
+msgstr "  openmw.cfg を書き込みました:    %(answer)s"
+
+msgid "yes"
+msgstr "はい"
+
+msgid "no"
+msgstr "いいえ"
+
+msgid "  customizations.toml written: %(answer)s"
+msgstr "  customizations.toml を書き込みました: %(answer)s"
+
+msgid "Rule files (priority = order below, last = highest -- drag rows to reorder)"
+msgstr "ルールファイル (優先度 = 下の順序、最後 = 最高 -- 行をドラッグして並べ替え)"
+
+msgid "mlox rule files (mlox_base.txt, mlox_user.txt, ...), applied in this order.\nLater files can override/extend earlier ones -- put mlox_base.txt first and your own mlox_user.txt last. Drag rows to reorder, or use the buttons."
+msgstr "mlox ルールファイル (mlox_base.txt、mlox_user.txt、…) は、この順序で適用されます。\n後のファイルが前のファイルを上書き/拡張できます -- mlox_base.txt を最初に、自分の mlox_user.txt を最後に置いてください。行をドラッグして並べ替えるか、ボタンを使ってください。"
+
+msgid "Add File(s)..."
+msgstr "ファイルを追加…"
+
+msgid "Browse for one or more mlox rule .txt files to add to the list."
+msgstr "リストに追加する mlox ルール .txt ファイルを 1 つ以上参照してください。"
+
+msgid "Remove Selected"
+msgstr "選択項目を削除"
+
+msgid "Remove the selected rule file from the list (doesn't delete anything on disk)."
+msgstr "選択したルールファイルをリストから削除します (ディスク上のものは削除しません)。"
+
+msgid "Move Up"
+msgstr "上へ移動"
+
+msgid "Move the selected rule file earlier (lower priority)."
+msgstr "選択したルールファイルを前へ移動 (優先度を下げる)。"
+
+msgid "Move Down"
+msgstr "下へ移動"
+
+msgid "Move the selected rule file later (higher priority)."
+msgstr "選択したルールファイルを後ろへ移動 (優先度を上げる)。"
+
+msgid "New Rule..."
+msgstr "新規ルール…"
+
+msgid "Write your own mlox [Order]/[NearStart]/[NearEnd] rule without knowing the syntax: pick plugins (or grab the selected rows from the plugin panel), preview the rule, and append it to a personal rules file that loads LAST so it wins conflicts. This is how rules for modern mods get made -- consider contributing good ones upstream."
+msgstr "構文を知らなくても独自の mlox [Order]/[NearStart]/[NearEnd] ルールを書けます: プラグインを選択 (またはプラグインパネルから選択行を取得) し、ルールをプレビューして、競合で勝つよう「最後」に読み込まれる個人用ルールファイルに追加します。現代の Mod のルールはこうして作られます -- 良いものは上流に送ることを検討してください。"
+
+msgid "Update Rules..."
+msgstr "ルールを更新…"
+
+msgid "Download the CURRENT mlox_base.txt / mlox_user.txt from the actively maintained rules repo (github.com/%(repo)s -- the same source plox uses, and mlox 1.1+ auto-updates from) over the matching files in this list. The old files are kept as timestamped .bak copies. Files with other names (your personal rules) are never touched. Source URL configurable via Sources..."
+msgstr "積極的に保守されているルールリポジトリ (github.com/%(repo)s -- plox と同じソースで、mlox 1.1+ が更新元とするもの) から「現在の」mlox_base.txt / mlox_user.txt を、このリストの対応するファイルに上書きダウンロードします。古いファイルはタイムスタンプ付き .bak コピーとして保持されます。別の名前のファイル (あなたの個人用ルール) は決して触れられません。ソース URL はソース… から設定できます。"
+
+msgid "Sources..."
+msgstr "ソース…"
+
+msgid "Configure WHERE 'Update Rules...' and the plugin-order.yml 'Update...' button download from -- point them at a fork or mirror if upstream moves. Blank fields use the built-in defaults."
+msgstr "「ルールを更新…」と plugin-order.yml の「更新…」ボタンが「どこから」ダウンロードするかを設定します -- ソースが移動した場合はフォークやミラーを指定してください。空欄のフィールドは組み込みの既定値を使います。"
+
+msgid "(install tkinterdnd2 to drag files in from your file manager)"
+msgstr "(ファイルマネージャからファイルをドラッグするには tkinterdnd2 をインストール)"
+
+msgid "Choose a folder for the mlox rule files"
+msgstr "mlox ルールファイル用のフォルダを選択"
+
+msgid "Update rules"
+msgstr "ルールを更新"
+
+msgid "Download the current mlox rules from github.com/%(repo)s?\n\n%(files)s\n\nThey don't exist yet -- they'll be created here."
+msgstr "github.com/%(repo)s から現在の mlox ルールをダウンロードしますか?\n\n%(files)s\n\nまだ存在しません -- ここに作成されます。"
+
+msgid "Download the current rules from github.com/%(repo)s over these files?\n\n%(age)s\n\nTimestamped .bak copies of the old files are kept."
+msgstr "github.com/%(repo)s から現在のルールをこれらのファイルに上書きダウンロードしますか?\n\n%(age)s\n\n古いファイルのタイムスタンプ付き .bak コピーが保持されます。"
+
+msgid "Move the selected row(s) one position earlier. Works with a multi-selection; you can also drag a contiguous block up with the mouse."
+msgstr "選択した行を 1 つ前へ移動します。複数選択でも機能します。連続したブロックをマウスで上へドラッグすることもできます。"
+
+msgid "Move the selected row(s) one position later. Works with a multi-selection; you can also drag a contiguous block down with the mouse."
+msgstr "選択した行を 1 つ後ろへ移動します。複数選択でも機能します。連続したブロックをマウスで下へドラッグすることもできます。"
+
+msgid "Disable / Enable"
+msgstr "無効化 / 有効化"
+
+msgid "Opt the selected row in or out of the load order. Disabled rows are dimmed and marked, and are left out of Export: a custom item is simply not inserted, and an item already in your openmw.cfg gets a removeContent/removeData entry in the emitted TOML so it's durably removed. Double-click a row to toggle it too."
+msgstr "選択した行をロード順に含めるか外すかを切り替えます。無効化された行は薄く表示され印が付き、エクスポートから除外されます: カスタム項目は単に挿入されず、あなたの openmw.cfg にすでにある項目は、確実に削除されるよう、生成された TOML に removeContent/removeData エントリが入ります。行をダブルクリックしても切り替わります。"
+
+msgid "Discard any manual dragging and restore the order from the last Sort (your disable/enable choices are kept)."
+msgstr "手動のドラッグをすべて破棄し、前回の並べ替えから順序を復元します (有効/無効の選択は保持されます)。"
+
+msgid "Plugin load order -- drag to override mlox (red = touched by this sort, purple = master problem)"
+msgstr "プラグインのロード順 -- ドラッグで mlox を上書き (赤 = この並べ替えで変更、紫 = マスターの問題)"
+
+msgid "Data path order -- drag to adjust (highlighted = your custom paths)"
+msgstr "データパスの順序 -- ドラッグで調整 (強調 = あなたのカスタムパス)"
+
+msgid "Drag & drop is unavailable (tkinterdnd2 or its tkdnd library is missing) -- use the Browse buttons below."
+msgstr "ドラッグ＆ドロップは利用できません (tkinterdnd2 またはその tkdnd ライブラリがありません) -- 下の参照ボタンを使用してください。"
+
+msgid "Required. The openmw.cfg to read the current content= and data= order from, and (if 'Write openmw.cfg directly' is checked) to patch."
+msgstr "必須。現在の content= と data= の順序を読み取り、(「openmw.cfg を直接書き込む」にチェックした場合は) パッチする openmw.cfg。"
+
+msgid "A momw-configurator/umo customizations TOML to pull the plugin/data-path subset from automatically. Optional if you provide a subset file instead -- provide both and they're combined."
+msgstr "プラグイン/データパスのサブセットを自動的に取り込むための momw-configurator/umo customizations TOML。代わりにサブセットファイルを提供する場合は任意です -- 両方を提供するとマージされます。"
+
+msgid "A plain text file (one plugin filename or data folder path per line, '#' comments allowed) or a minimal TOML with subset=[...]/data=[...]. Combined with --emit-toml, this alone is enough to generate a brand new customizations.toml with no existing one required."
+msgstr "プレーンテキストファイル (1 行に 1 つのプラグインファイル名またはデータフォルダのパス、「#」コメント可) または subset=[...]/data=[...] を含む最小限の TOML。--emit-toml と組み合わせれば、これだけで既存のものを必要とせずに新しい customizations.toml を作成できます。"
+
+msgid "Where to write a corrected customizations.toml (sorted insert blocks, re-anchored). Disabled when 'write directly back' below is checked."
+msgstr "修正した customizations.toml を書き込む先 (並べ替えられた挿入ブロック、再アンカー済み)。下で「直接上書き」にチェックした場合は無効になります。"
+
+msgid "list name (optional):"
+msgstr "リスト名 (任意):"
+
+msgid "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser."
+msgstr "MOMW の plugin-order.yml (どのプラグインがどのキュレートリストに属するかの信頼できる情報源)。上でリスト名を指定すると、そのリストのキュレート済みプラグインは並べ替えから除外され (決して並べ替えられません)、あなた自身の追加だけが影響を受けます。また読み取り専用の警告が出されます: 冗長、孤立、needs-cleaning、ベース順序の拒否チェック。PyYAML がインストールされていれば使われ、なければ組み込みパーサーが使われます。"
+
+msgid "Write directly back to customizations.toml (overwrite in place; a .bak-<timestamp> copy is made first unless backups are disabled below)"
+msgstr "customizations.toml に直接書き戻します (その場で上書き。下でバックアップが無効でない限り、最初に .bak-<タイムスタンプ> コピーが作成されます)"
+
+msgid "Instead of writing to a separate file above, overwrite the customizations.toml given above in place. A timestamped backup is made first (unless disabled), and you'll get a confirmation prompt before it actually happens."
+msgstr "上の別ファイルに書き込む代わりに、上で指定した customizations.toml をその場で上書きします。最初にタイムスタンプ付きバックアップが作成され (無効でない限り)、実際に行われる前に確認を求められます。"
+
+msgid "Options"
+msgstr "オプション"
+
+msgid "Dry run (preview only, don't write files)"
+msgstr "ドライラン (プレビューのみ、ファイルは書き込まない)"
+
+msgid "When checked, Export shows exactly what it would write without touching any files. Uncheck when you're ready to actually save."
+msgstr "チェックすると、エクスポートはファイルに触れずに書き込む内容を正確に表示します。本当に保存する準備ができたらチェックを外してください。"
+
+msgid "Write openmw.cfg directly"
+msgstr "openmw.cfg を直接書き込む"
+
+msgid "Patch the content=/data= lines in openmw.cfg in place on Export. A .bak-<timestamp> copy is made first unless backups are disabled."
+msgstr "エクスポート時に openmw.cfg の content=/data= 行をその場でパッチします。バックアップが無効でない限り、最初に .bak-<タイムスタンプ> コピーが作成されます。"
+
+msgid "Sort data= paths too"
+msgstr "data= パスも並べ替える"
+
+msgid "mlox has no concept of data= folder order -- this positions new data= paths using an explicit after/before anchor if you wrote one, or by scanning the folder for plugins and anchoring next to their neighbor in the sorted content= order. Off by default so a plugin-only run can't surprise-reorder data= too. Also required for the data path order panel to populate."
+msgstr "mlox には data= フォルダ順序の概念がありません -- これは、あなたが書いた明示的な after/before アンカーを使って新しい data= パスを配置するか、フォルダをスキャンしてプラグインとアンカーを見つけ、並べ替えられた content= 順序でその隣に配置します。プラグインのみの実行が data= を予期せず並べ替えないよう、既定では無効です。データパス順序パネルが埋まっている必要もあります。"
+
+msgid "Skip .bak backup of openmw.cfg"
+msgstr "openmw.cfg の .bak バックアップをスキップ"
+
+msgid "Skip making a timestamped backup before overwriting openmw.cfg and/or an in-place customizations.toml. Not recommended."
+msgstr "openmw.cfg や customizations.toml をその場で上書きする前に、タイムスタンプ付きバックアップを作成するのをスキップします。非推奨です。"
+
+msgid "Skip mlox Conflict/Requires/Note warnings"
+msgstr "mlox の Conflict/Requires/Note 警告をスキップ"
+
+msgid "Skip evaluating [Conflict]/[Requires]/[Note] rules against the sorted plugin list. This is purely informational and read-only either way -- it never changes the computed order or what gets written, only whether warnings get printed."
+msgstr "並べ替えられたプラグインリストに対する [Conflict]/[Requires]/[Note] ルールの評価をスキップします。これはいずれにせよ純粋に情報提供であり読み取り専用です -- 計算された順序や書き込まれる内容を決して変えず、警告が表示されるかどうかだけを変えます。"
+
+msgid "Create subset text document (on Scan)"
+msgstr "サブセットのテキスト文書を作成 (スキャン時)"
+
+msgid "Controls what 'Scan...' does with its result. Checked: write the scanned list to a .txt subset file you choose, and load it (the file stays on disk for reuse). Unchecked: keep the scanned list in memory just for this session and feed it straight to the sort -- nothing is written to disk."
+msgstr "「スキャン…」がその結果をどうするかを制御します。チェック: スキャンしたリストを選択したサブセット .txt ファイルに書き込み、それを読み込みます (再利用のためファイルはディスクに残ります)。チェックなし: スキャンしたリストをこのセッションのためだけにメモリに保持し、並べ替えに直接渡します -- ディスクには何も書き込まれません。"
+
+msgid "Pull unmanaged (orphan) plugins from openmw.cfg"
+msgstr "openmw.cfg から未管理 (孤立) プラグインを取り込む"
+
+msgid "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml. Their current cfg order is kept as the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are left exactly as openmw.cfg has them: they are already in the cfg's own data= order, and there is no reliable way to tell a path the list manages from one you added, so pulling them would reorder the whole VFS."
+msgstr "openmw.cfg に「すでに」あって、何も管理していない content= プラグイン -- キュレートリスト (plugin-order.yml) でもあなたの customizations.toml でもないもの -- も並べ替えます。それらの現在の cfg 順序は、並べ替えが移動させるまで開始点として保持されます。ベースマスター (Morrowind/Tribunal/Bloodmoon) は決して触れられません。単独 (サブセットファイル不要) でも、それと一緒でも機能します。\n\ndata= パスは openmw.cfg にあるとおりそのまま残されます: それらはすでに cfg 自身の data= 順序にあり、リスト管理のパスとあなたが追加したパスを確実に区別する方法がないため、それらを取り込むと VFS 全体が並べ替えられてしまいます。"
+
+msgid "Exclude from conflict / cell scans:"
+msgstr "競合 / セルのスキャンから除外:"
+
+msgid "Declare as groundcover:"
+msgstr "groundcover として宣言:"
+
+msgid "Keep tes3conv JSON dump"
+msgstr "tes3conv の JSON ダンプを保持"
+
+msgid "Tidy old HTML views"
+msgstr "古い HTML ビューを整理"
+
+msgid "Every conflict map, terrain view and path grid is written to its own timestamped file so you can compare two of them side by side -- which means they pile up, and one map can be several megabytes.\n\nChecked: on exit, the newest 3 of each kind are kept and older ones removed (with their data folders). Only files this tool generated are ever touched -- never anything you saved yourself with a name of your own choosing.\n\nUnchecked: nothing is ever deleted."
+msgstr "すべての競合マップ、地形ビュー、パスグリッドは独自のタイムスタンプ付きファイルに書き込まれるため、2 つを並べて比較できます -- つまり蓄積し、1 つのマップが数メガバイトになることもあります。\n\nチェック: 終了時に各種類の最新 3 つを保持し、古いものは (そのデータフォルダごと) 削除します。このツールが生成したファイルだけが触れられます -- あなたが独自の名前で自分で保存したものは決して触れられません。\n\nチェックなし: 何も決して削除されません。"
+
+msgid "tes3conv conversions are written to disk (not held in RAM) and read per-plugin, so big load orders don't blow up memory. They always go to a 'tes3conv_json' folder next to the app and are reused within a run -- so Check Conflicts then Cell Map won't re-run tes3conv (a plugin is only re-converted if it changed). This box just decides what happens on exit: checked = keep that folder (reused next launch too); unchecked = delete it when you close the app."
+msgstr "tes3conv の変換はディスクに書き込まれ (RAM には保持されません)、プラグインごとに読み取られるため、大きなロード順でもメモリが膨張しません。それらは常にアプリの隣の「tes3conv_json」フォルダに入り、実行中は再利用されます -- そのため「競合をチェック」の後に「セルマップ」を実行しても tes3conv を再実行しません (プラグインは変更された場合のみ再変換されます)。このチェックボックスは終了時に何が起こるかだけを決めます: チェック = このフォルダを保持 (次回の実行でも再利用); チェックなし = アプリを閉じるときに削除。"
+
+msgid "Verbose Merged Lands log"
+msgstr "詳細な Merged Lands ログ"
+
+msgid "Checked: a Merge Lands run also names every plugin that carries a .mergedlands.toml and exactly what it sets (per layer: on/off and the conflict strategy), and lists every plugin it could not read -- rather than the headline counts. For working out why a merge did what it did.\n\nUnchecked: the normal summary log."
+msgstr "チェック: 土地のマージ実行が、.mergedlands.toml を運ぶすべてのプラグインと、それが設定する内容 (レイヤーごとに: オン/オフと競合戦略) を正確に列挙し、読み取れなかったすべてのプラグインを列挙します -- 基本的な集計の代わりに。マージがなぜそうなったかを理解するためです。\n\nチェックなし: 通常の要約ログ。"
+
+msgid "Log"
+msgstr "ログ"
+
+msgid "Full output from the last Sort and/or Export. Color key: green = a plugin/path this sort inserted or moved, orange = a heads-up (mlox warning, or a rule your curated cfg order overrode), blue = a section header, bright red = an error worth checking. Plain text = frozen base rows left untouched. Colors follow the syntax highlighting theme picked below."
+msgstr "前回の並べ替えおよび/またはエクスポートの完全な出力。色の凡例: 緑 = この並べ替えが挿入または移動したプラグイン/パス、橙 = 通知 (mlox の警告、またはあなたのキュレート済み cfg 順序が上書きしたルール)、青 = セクション見出し、鮮やかな赤 = 確認する価値のあるエラー。通常のテキスト = 変更されずに残された凍結ベース行。色は下で選択した構文強調テーマに従います。"
+
+msgid "Clear Log"
+msgstr "ログをクリア"
+
+msgid "Clear the log panel. Doesn't affect the order panels or any files."
+msgstr "ログパネルをクリアします。順序パネルやファイルには影響しません。"
+
+msgid "Save Log As..."
+msgstr "ログを名前を付けて保存…"
+
+msgid "Save the current log contents to a text file."
+msgstr "現在のログ内容をテキストファイルに保存します。"
+
+msgid "Theme:"
+msgstr "テーマ:"
+
+msgid "Color theme for the whole GUI: window/button colors, syntax highlighting here in the Log panel, and the field-diff JSON viewer (Check Conflicts -> double-click a field). Switching re-themes everything immediately, including any windows already open. Built-in: Dracula, Monokai, Atom One Dark, Gruvbox Dark, plus anything you've imported."
+msgstr "GUI 全体のカラーテーマ: ウィンドウ/ボタンの色、ここログパネルでの構文強調、JSON フィールド差分ビューア (競合をチェック -> フィールドをダブルクリック)。切り替えると、すでに開いているウィンドウも含めてすべてが一度に再着色されます。組み込み: Dracula、Monokai、Atom One Dark、Gruvbox Dark、およびインポートしたもの。"
+
+msgid "Import Theme..."
+msgstr "テーマをインポート…"
+
+msgid "Import a custom theme from a JSON file (background/foreground/select/section/warn/error/ok/inserted/dim as hex colors, plus an optional \"chrome\" object for explicit window/button colors) or a base16 scheme file (.yaml/.yml/.json with base00..base0F -- e.g. from the atelierbram/syntax-highlighting or chriskempson/base16 scheme repos). Window colors not given explicitly are derived from the background. Imported themes are saved and appear in the dropdown from then on."
+msgstr "JSON ファイル (background/foreground/select/section/warn/error/ok/inserted/dim を hex カラーで、加えてウィンドウ/ボタンの明示的な色用の任意の「chrome」オブジェクト) または base16 スキームファイル (base00..base0F を含む .yaml/.yml/.json -- 例: atelierbram/syntax-highlighting または chriskempson/base16 リポジトリから) からカスタムテーマをインポートします。明示的に設定されていないウィンドウの色は背景から導かれます。インポートしたテーマは保存され、以降ドロップダウンに表示されます。"
+
+msgid "Clear Memory"
+msgstr "メモリをクリア"
+
+msgid "Forget every plugin/folder added by hand (drag-drop or the Add buttons) and any scan result held only in memory (not saved to a .txt) -- none of that is shown anywhere on screen, and it otherwise keeps accumulating for the rest of the session. Does not touch any files."
+msgstr "手動で追加したすべてのプラグイン/フォルダ (ドラッグ＆ドロップまたは追加ボタン) と、メモリにのみ保持されたスキャン結果 (.txt に保存されていないもの) を忘れます -- これらは画面に表示されず、そうしないとセッションの終わりまで蓄積します。ファイルには一切触れません。"
+
+msgid "Help"
+msgstr "ヘルプ"
+
+msgid "Open the program's own documentation -- the Quick start (what to click, in order) or the Read me (every option, in detail) -- rendered as a readable page with a contents sidebar. Works offline; nothing is downloaded."
+msgstr "プログラム独自のドキュメントを開きます -- クイックスタート (何を、どの順にクリックするか) または「お読みください」(各オプションを詳細に) -- 目次サイドバー付きの読みやすいページとして。オフラインで動作し、何もダウンロードしません。"
+
+msgid "Log syntax highlighting: %(name)s"
+msgstr "ログの構文強調: %(name)s"
+
+msgid "Import syntax highlighting theme"
+msgstr "構文強調テーマをインポート"
+
+msgid "Import failed"
+msgstr "インポートに失敗しました"
+
+msgid "Couldn't import that theme:\n\n%(error)s"
+msgstr "そのテーマをインポートできませんでした:\n\n%(error)s"
+
+msgid "Imported and applied theme: %(name)s"
+msgstr "テーマをインポートして適用しました: %(name)s"
+
+msgid "Theme imported"
+msgstr "テーマをインポートしました"
+
+msgid "Imported \"%(name)s\" and set it as the active log theme."
+msgstr "「%(name)s」をインポートし、アクティブなログテーマに設定しました。"
+
+msgid "Missing input"
+msgstr "入力がありません"
+
+msgid "Select the mods folder to scan"
+msgstr "スキャンする Mod フォルダを選択"
+
+msgid "Save generated subset file as"
+msgstr "生成したサブセットファイルを名前を付けて保存"
+
+msgid "Scanning mods folder..."
+msgstr "Mod フォルダをスキャン中…"
+
+msgid "Scan complete -- %(folders)d folder(s), %(plugins)d plugin(s). Subset file loaded."
+msgstr "スキャン完了 -- フォルダ %(folders)d 件、プラグイン %(plugins)d 件。サブセットファイルを読み込みました。"
+
+msgid "Scan complete -- %(folders)d folder(s), %(plugins)d plugin(s). Held in memory (no file written)."
+msgstr "スキャン完了 -- フォルダ %(folders)d 件、プラグイン %(plugins)d 件。メモリに保持 (ファイルは書き込まれていません)。"
+
+msgid "Add plugin..."
+msgstr "プラグインを追加…"
+
+msgid "Include a plugin the Scan missed -- e.g. one sitting outside a recognised mod folder. It joins your custom subset on the next Sort. You can also drag a plugin file onto the list above from your file manager."
+msgstr "スキャンが見逃したプラグインを含めます -- 例: 認識された Mod フォルダの外にあるもの。次回の並べ替えであなたのカスタムサブセットに加わります。ファイルマネージャから上のリストにプラグインファイルをドラッグすることもできます。"
+
+msgid "(install tkinterdnd2 to drag a plugin in)"
+msgstr "(プラグインをドラッグするには tkinterdnd2 をインストール)"
+
+msgid "Add data folder..."
+msgstr "データフォルダを追加…"
+
+msgid "Include a folder the Scan missed -- e.g. an OpenMW Lua mod with a non-standard layout (no meshes/textures/... folder and no plugin). It joins your data paths on the next Sort; tick 'Sort data= paths too' to place it in the load order. You can also drag a folder onto the list above from your file manager."
+msgstr "スキャンが見逃したフォルダを含めます -- 例: 非標準の構成 (meshes/textures/… フォルダなし、プラグインなし) の OpenMW Lua Mod。次回の並べ替えであなたのデータパスに加わります。ロード順に置くには「data= パスも並べ替える」にチェックしてください。ファイルマネージャから上のリストにフォルダをドラッグすることもできます。"
+
+msgid "(install tkinterdnd2 to drag a folder in)"
+msgstr "(フォルダをドラッグするには tkinterdnd2 をインストール)"
+
+msgid "Select a data folder to add"
+msgstr "追加するデータフォルダを選択"
+
+msgid "Select plugin(s) to add"
+msgstr "追加するプラグインを選択"
+
+msgid "Plugins"
+msgstr "プラグイン"
+
+msgid "Added plugin"
+msgstr "プラグインを追加しました"
+
+msgid "Already added"
+msgstr "すでに追加済み"
+
+msgid "Added data folder"
+msgstr "データフォルダを追加しました"
+
+msgid "  Tick 'Sort data= paths too' to place it."
+msgstr "  配置するには「data= パスも並べ替える」にチェックしてください。"
+
+msgid "Not a plugin or folder: %(path)s"
+msgstr "プラグインでもフォルダでもありません: %(path)s"
+
+msgid "Nothing to clear."
+msgstr "クリアするものがありません。"
+
+msgid "%(n)d manual plugin(s)"
+msgstr "手動プラグイン %(n)d 件"
+
+msgid "%(n)d manual data folder(s)"
+msgstr "手動データフォルダ %(n)d 件"
+
+msgid "the in-memory scan result"
+msgstr "メモリ内のスキャン結果"
+
+msgid "Clear memory?"
+msgstr "メモリをクリアしますか?"
+
+msgid "This forgets everything added by hand this session and any scan result held in memory (not written to a subset file):\n\n%(summary)s\n\nThey will no longer be included on the next Sort. This does not touch the subset file field, remembered paths, or any file on disk. Continue?"
+msgstr "これは、このセッションで手動で追加したすべてと、メモリに保持されたスキャン結果 (サブセットファイルに保存されていないもの) を忘れます:\n\n%(summary)s\n\nこれらは次回の並べ替えでもう含まれません。サブセットファイルの欄、記憶されたパス、ディスク上のファイルには一切触れません。続行しますか?"
+
+msgid "Cleared: %(summary)s"
+msgstr "クリアしました: %(summary)s"
+
+msgid "%(what)s (%(n)d added, applied on Sort): %(value)s"
+msgstr "%(what)s (%(n)d 件追加、並べ替え時に適用): %(value)s"
+
+msgid "Sorting..."
+msgstr "並べ替え中…"
+
+msgid ", %(count)d yml warning(s)"
+msgstr ", yml 警告 %(count)d 件"
+
+msgid "Sorted %(plugins)d plugin(s), %(warnings)d rule warning(s)%(yml)s. Drag to adjust, then Export."
+msgstr "プラグイン %(plugins)d 件を並べ替え、ルール警告 %(warnings)d 件%(yml)s。ドラッグして調整後、エクスポートしてください。"
+
+msgid "openmw.cfg changed"
+msgstr "openmw.cfg が変更されました"
+
+msgid "openmw.cfg has changed on disk since you ran '1. Sort' (did momw-configurator re-run?).\n\nThe order on screen was computed against the OLD contents. It's safer to re-Sort first.\n\nExport anyway?"
+msgstr "「1. 並べ替え」を実行してから openmw.cfg がディスク上で変更されました (momw-configurator が再実行されましたか?)。\n\n画面上の順序は「古い」内容に対して計算されました。先に再度並べ替えるほうが安全です。\n\nそれでもエクスポートしますか?"
+
+msgid "Overwrite customizations.toml?"
+msgstr "customizations.toml を上書きしますか?"
+
+msgid "This will overwrite:\n%(path)s\n\nin place%(note)s. Continue?"
+msgstr "これは次を上書きします:\n%(path)s\n\nその場で%(note)s。続行しますか?"
+
+msgid "Exporting..."
+msgstr "エクスポート中…"
+
+msgid "Export done -- cfg written: %(cfg)s, toml written: %(toml)s."
+msgstr "エクスポート完了 -- cfg 書き込み: %(cfg)s、toml 書き込み: %(toml)s。"
+
+msgid "Building cell map..."
+msgstr "セルマップを作成中…"
+
+msgid "\n\nThis REPLACES the existing %(name)s."
+msgstr "\n\nこれは既存の %(name)s を置き換えます。"
+
+msgid "Build Merged Lands.esp?"
+msgstr "Merged Lands.esp をビルドしますか?"
+
+msgid "A new plugin will be written to:\n%(path)s\n\nIt carries terrain only -- no references, objects or scripts -- so everything placed in those cells stays where it is. Your mods are NOT modified, and deleting the merged plugin restores your previous behaviour completely.\n\nLoad it LAST, and back up your saves before playing with it the first time.%(existing)s\n\nYes: write it here.   No: choose a different folder."
+msgstr "新しいプラグインが次に書き込まれます:\n%(path)s\n\nこれは地形のみを運びます -- 参照、オブジェクト、スクリプトなし -- そのためこれらのセルに配置されたものはすべてそのまま残ります。あなたの Mod は変更「されず」、マージ済みプラグインを削除すれば以前の動作が完全に復元されます。\n\nそれを「最後」に読み込み、初めてプレイする前にセーブのバックアップを取ってください。%(existing)s\n\nはい: ここに書き込む。   いいえ: 別のフォルダを選ぶ。"
+
+msgid "Merging land..."
+msgstr "土地をマージ中…"
+
+msgid "Folder not found"
+msgstr "フォルダが見つかりません"
+
+msgid "%(path)s no longer exists. Please choose where to write."
+msgstr "%(path)s はもう存在しません。書き込み先を選択してください。"
+
+msgid "Data Files not found"
+msgstr "Data Files が見つかりません"
+
+msgid "Could not work out which folder holds your plugins, so there is no sensible place to put the merged plugin. Use 'Merged Lands folder...' to choose one."
+msgstr "どのフォルダにプラグインがあるか判断できなかったため、マージ済みプラグインを置く適切な場所がありません。「Merged Lands フォルダ…」を使って選択してください。"
+
+msgid "Where should Merged Lands.esp be written?"
+msgstr "Merged Lands.esp をどこに書き込みますか?"
+
+msgid "Not a data folder"
+msgstr "データフォルダではありません"
+
+msgid "%(path)s is not one of the folders OpenMW reads, so it will not find the merged plugin there.\n\nAdd this line to openmw.cfg:\n\ndata=\"%(path)s\"\n\nand put 'content=%(name)s' last."
+msgstr "%(path)s は OpenMW が読み取るフォルダの 1 つではないため、そこにマージ済みプラグインは見つかりません。\n\nこの行を openmw.cfg に追加してください:\n\ndata=\"%(path)s\"\n\nそして「content=%(name)s」を最後に置いてください。"
+
+msgid " MERGE LANDS"
+msgstr " 土地のマージ"
+
+msgid "Merge produced nothing to write."
+msgstr "マージの結果、書き込むものがありませんでした。"
+
+msgid "Merged Lands written: %(cells)d cell(s)."
+msgstr "Merged Lands を書き込みました: セル %(cells)d 件。"
+
+msgid "Merge failed -- see log."
+msgstr "マージに失敗しました -- ログを参照してください。"
+
+msgid "%(contested)d vertex/vertices were edited by more than one mod; the later one in your load order won each."
+msgstr "%(contested)d 件の頂点が複数の Mod によって編集されました。あなたのロード順で後のものがそれぞれ勝ちました。"
+
+msgid "%(major)d were blended far from a mod's intent where a .mergedlands.toml asked to Resolve."
+msgstr "%(major)d 件は、.mergedlands.toml が Resolve を求めた場所で、Mod の意図から大きく離れてブレンドされました。"
+
+msgid "Merged Lands built"
+msgstr "Merged Lands をビルドしました"
+
+msgid "Written to:\n%(path)s\n\nEnable it and place it LAST in your load order.\n\n%(cells)d land record(s), %(textures)d land texture(s).\n%(detail)s"
+msgstr "書き込みました:\n%(path)s\n\n有効にして、ロード順の最後に配置してください。\n\n地形レコード: %(cells)d 件、地面テクスチャ: %(textures)d 件。\n%(detail)s"
+
+msgid "Pick a plugin to write a .mergedlands.toml for"
+msgstr "..mergedlands.toml を書き込むプラグインを選択"
+
+msgid "Morrowind plugins"
+msgstr "Morrowind プラグイン"
+
+msgid "Existing .mergedlands.toml could not be read"
+msgstr "既存の .mergedlands.toml を読み取れませんでした"
+
+msgid "%(name)s will be replaced from defaults:\n\n%(err)s"
+msgstr "%(name)s は既定値から置き換えられます:\n\n%(err)s"
+
+msgid "Merge settings: %(name)s"
+msgstr "マージ設定: %(name)s"
+
+msgid "Choose how %(name)s's landscape edits merge. Uncheck a layer to keep this plugin from touching it; set a strategy for how its edits resolve where they collide with another mod. The defaults behave as if there were no file."
+msgstr "%(name)s の地形編集をどうマージするか選択してください。レイヤーのチェックを外すと、このプラグインがそれに触れないようにできます。別の Mod と衝突する場所で、その編集がどう解決されるか戦略を設定します。既定値はファイルがないかのように振る舞います。"
+
+msgid "meta_type:"
+msgstr "meta_type:"
+
+msgid "Patch = a hand-written settings file (the usual choice). Auto = default behaviour. MergedLands marks a plugin the tool generated so a re-run ignores it -- do not set that on an ordinary mod."
+msgstr "Patch = 手書きの設定ファイル (通常の選択)。Auto = 既定の動作。MergedLands はツールが生成したプラグインを、再実行時に無視されるよう印を付けます -- 通常の Mod には設定しないでください。"
+
+msgid "Layers"
+msgstr "レイヤー"
+
+msgid "include"
+msgstr "含める"
+
+msgid "layer"
+msgstr "レイヤー"
+
+msgid "conflict strategy"
+msgstr "競合戦略"
+
+msgid "Vertex heights -- and the normals stored with them."
+msgstr "頂点の高さ -- およびそれらと共に保存される法線。"
+
+msgid "Baked vertex colours (terrain lighting)."
+msgstr "ベイクされた頂点カラー (地形の照明)。"
+
+msgid "Which land texture paints each square."
+msgstr "各マスを塗る土地テクスチャ。"
+
+msgid "The low-resolution world-map heightmap."
+msgstr "低解像度のワールドマップ高さマップ。"
+
+msgid "Auto = later plugin wins for entries it changed Â· Overwrite = this plugin wins collisions Â· Ignore = keep the earlier edit Â· Resolve = blend conflicting numbers Â· Curvature = structure-weighted blend (ours)."
+msgstr "Auto = 変更したエントリでは後のプラグインが勝ち · Overwrite = 衝突でこのプラグインが勝ち · Ignore = 前の編集を保持 · Resolve = 競合する数値をブレンド · Curvature = 構造で重み付けしたブレンド (当ツール独自)。"
+
+msgid "Preview:"
+msgstr "プレビュー:"
+
+msgid "Write .mergedlands.toml"
+msgstr ".mergedlands.toml を書き込む"
+
+msgid "Could not write .mergedlands.toml"
+msgstr ".mergedlands.toml を書き込めませんでした"
+
+msgid "Wrote %(name)s."
+msgstr "%(name)s を書き込みました。"
+
+msgid "Merge settings written"
+msgstr "マージ設定を書き込みました"
+
+msgid "Wrote:\n%(path)s\n\nRun Merge Lands to apply it."
+msgstr "書き込みました:\n%(path)s\n\n適用するには土地のマージを実行してください。"
+
+msgid " CELL MAP"
+msgstr " セルマップ"
+
+msgid "native esp reader"
+msgstr "ネイティブ esp リーダー"
+
+msgid "  %(exterior)d exterior + %(interior)d interior cell(s) touched across %(scanned)d plugin(s)."
+msgstr "  %(scanned)d 件のプラグインにわたり、屋外セル %(exterior)d 件 + 屋内セル %(interior)d 件に影響。"
+
+msgid "  Map written to: %(path)s"
+msgstr "  マップを書き込みました: %(path)s"
+
+msgid "Cell map ready (%(exterior)d exterior, %(interior)d interior)."
+msgstr "セルマップの準備ができました (屋外 %(exterior)d、屋内 %(interior)d)。"
+
+msgid "Open in browser"
+msgstr "ブラウザで開く"
+
+msgid "(inline render failed -- use 'Open in browser'. The 3D and nav views need a real browser engine.)"
+msgstr "(インラインレンダリングに失敗しました -- 「ブラウザで開く」を使用してください。3D とナビゲーションのビューには本物のブラウザエンジンが必要です。)"
+
+msgid "Save HTML..."
+msgstr "HTML を保存…"
+
+msgid "(inline render failed - use 'Open in browser' for the full map)"
+msgstr "(インラインレンダリングに失敗しました -- 完全なマップは「ブラウザで開く」を使用してください)"
+
+msgid "Save cell map"
+msgstr "セルマップを保存"
+
+msgid "Cell map saved: %(path)s"
+msgstr "セルマップを保存しました: %(path)s"
+
+msgid "If upstream moves or a new fork takes over, point the updaters at the new location here. Blank = built-in defaults. Downloads are always validated before anything is overwritten."
+msgstr "上流が移動したり、新しいフォークが引き継いだりした場合は、ここで更新ツールに新しい場所を指定してください。空欄 = 組み込みの既定値。ダウンロードは何かが上書きされる前に常に検証されます。"
+
+msgid "mlox rules URL template:"
+msgstr "mlox ルールの URL テンプレート:"
+
+msgid "Where 'Update Rules...' downloads from. Must contain {name}, which is replaced with mlox_base.txt / mlox_user.txt per file.\nDefault: %(url)s"
+msgstr "「ルールを更新…」がダウンロードする元。{name} を含める必要があり、各ファイルについて mlox_base.txt / mlox_user.txt に置き換えられます。\n既定: %(url)s"
+
+msgid "default: %(url)s"
+msgstr "既定: %(url)s"
+
+msgid "plugin-order.yml URL:"
+msgstr "plugin-order.yml の URL:"
+
+msgid "Where the plugin-order.yml 'Update...' button downloads from. Blank tries the built-in candidates in order.\nDefault: %(url)s"
+msgstr "plugin-order.yml の「更新…」ボタンがダウンロードする元。空欄の場合は組み込みのオプションを順に試します。\n既定: %(url)s"
+
+msgid "default: %(url)s..."
+msgstr "既定: %(url)s…"
+
+msgid "Download sources"
+msgstr "ダウンロード元"
+
+msgid "The rules URL template must contain {name} (it's replaced with the rule filename)."
+msgstr "ルールの URL テンプレートには {name} を含める必要があります (ルールファイル名に置き換えられます)。"
+
+msgid "Reset to defaults"
+msgstr "既定値にリセット"
+
+msgid "Save & Close"
+msgstr "保存して閉じる"
+
+msgid "New mlox rule"
+msgstr "新規 mlox ルール"
+
+msgid "rules file:"
+msgstr "ルールファイル:"
+
+msgid "Personal rules file the rule is appended to (created with a header if new). Use your OWN file, not mlox_base/mlox_user -- those get overwritten by 'Update Rules...'. It's auto-added to the rule-files list LAST, so your rules win conflicts."
+msgstr "ルールが追加される個人用ルールファイル (新規の場合はヘッダー付きで作成)。mlox_base/mlox_user ではなく「自分の」ファイルを使ってください -- それらは「ルールを更新…」で上書きされます。ルールファイルリストの「最後」に自動的に追加され、あなたのルールが競合で勝つようにします。"
+
+msgid "Rule type"
+msgstr "ルールタイプ"
+
+msgid "Plugins (order matters for [Order])"
+msgstr "プラグイン ([Order] では順序が重要)"
+
+msgid "From plugin panel"
+msgstr "プラグインパネルから"
+
+msgid "Add the rows currently SELECTED in the main plugin-order panel, in their displayed order (Ctrl/Shift-click there to multi-select first)."
+msgstr "メインのプラグイン順パネルで現在「選択」されている行を、表示順で追加します (Ctrl/Shift クリックで先に複数選択)。"
+
+msgid "Group as ANY"
+msgstr "ANY としてグループ化"
+
+msgid "Wrap the SELECTED plugins in an [ANY ...] group, for a rule that is satisfied by whichever of several versions someone has installed -- the shape the guidelines use for mods with an XB edition, a Tribunal edition and so on.\n\nSelect the grouped entry and press again to ungroup."
+msgstr "「選択」したプラグインを [ANY …] グループで囲みます。インストール済みの複数バージョンのいずれかで満たされるルール用 -- ガイドが XB 版、Tribunal 版などの Mod に使う形式です。\n\nグループ化されたエントリを選択してもう一度押すとグループ解除します。"
+
+msgid "Type a plugin filename and press Enter. mlox wildcards are allowed: ? for one character, * for any run, <VER> for a version number -- though the guidelines ask for these to be used sparingly, since expanding them is slow."
+msgstr "プラグインファイル名を入力して Enter を押してください。mlox のワイルドカードが使えます: ? は 1 文字、* は任意の並び、<VER> はバージョン番号 -- ただし展開が遅いため、ガイドは控えめな使用を求めています。"
+
+msgid "Add"
+msgstr "追加"
+
+msgid "Message and source"
+msgstr "メッセージとソース"
+
+msgid "message:"
+msgstr "メッセージ:"
+
+msgid "What to tell the person, and what to do about it. Ordering rules carry no message; the warning rules are much less useful without one.\n\nA message containing ']' is written in the block form automatically, because a ']' would otherwise close the rule label early."
+msgstr "相手に何を伝え、それについて何をするか。順序付けルールはメッセージを持ちません。それのない警告ルールははるかに役に立ちません。\n\n「]」を含むメッセージは自動的にブロック形式で書かれます。そうしないと「]」がルールのラベルを早く閉じてしまうためです。"
+
+msgid "(Ref:) source:"
+msgstr "(参照:) ソース:"
+
+msgid "Where this rule's claim comes from: a readme filename, a forum post, a URL. The guidelines ask for one on every rule so that someone else can check it, or correct it.\n\nA URL gets whitespace before the closing parenthesis automatically -- pages that auto-link URLs otherwise swallow the ')' into the link."
+msgstr "このルールの主張の出所: readme のファイル名、フォーラムの投稿、URL。ガイドは、他の誰かがそれを検証したり修正したりできるよう、各ルールにこれを求めます。\n\nURL には閉じ括弧の前に自動的にスペースが入ります -- URL から自動でリンクを作るページは、そうしないと「)」をリンクに飲み込んでしまいます。"
+
+msgid "@section:"
+msgstr "@セクション:"
+
+msgid "Optional heading written above the rule. The rule-base groups rules into sections, roughly one per mod, to keep the file navigable."
+msgstr "ルールの上に書かれる任意の見出し。ルールベースはルールをおおよそ Mod ごとに 1 つのセクションにまとめ、ファイルを見やすく保ちます。"
+
+msgid "highlight:"
+msgstr "強調:"
+
+msgid "none"
+msgstr "なし"
+
+msgid "%(mark)s = %(meaning)s"
+msgstr "%(mark)s = %(meaning)s"
+
+msgid "; comment:"
+msgstr "; コメント:"
+
+msgid "A ';' comment written above the rule. mlox strips these before reading."
+msgstr "ルールの上に書かれた「;」コメント。mlox は読み取り前にこれらを除去します"
+
+msgid "Preview"
+msgstr "プレビュー"
+
+msgid "Append rule"
+msgstr "ルールを追加"
+
+msgid "Write the rule to the file above. Refused while there is an error: mlox silently discards a rule it cannot use, so this is the only place you would find out.\n\nWarnings do not block -- they are the guidelines' advice, not the parser's requirements."
+msgstr "上のファイルにルールを書き込みます。エラーがある間は拒否されます: mlox は使えないルールを黙って破棄するため、ここがそれに気づける唯一の場所です。\n\n警告はブロックしません -- それはガイドの助言であり、パーサーの要件ではありません。"
+
+msgid "Rule guide"
+msgstr "ルールガイド"
+
+msgid "Open the rule reference: what each rule kind says, how expressions nest, and the conventions the rule-base follows.\n\nIt opens in your browser, so it can sit beside this window while you work."
+msgstr "ルールのリファレンスを開きます: 各ルール種別が何を意味するか、式がどのように入れ子になるか、ルールベースがどの慣習に従うか。\n\nブラウザで開くので、作業中にこのウィンドウの隣に置いておけます。"
+
+msgid "No problems. This rule follows the guidelines.\n"
+msgstr "問題ありません。このルールはガイドラインに従っています。\n"
+
+msgid "Select row(s) in the plugin-order panel first."
+msgstr "まずプラグイン順パネルで行を選択してください。"
+
+msgid "Personal rules file"
+msgstr "個人用ルールファイル"
+
+msgid "New rule"
+msgstr "新規ルール"
+
+msgid "Set a rules file first."
+msgstr "まずルールファイルを設定してください。"
+
+msgid "Don't append personal rules to mlox_base.txt / mlox_user.txt -- 'Update Rules...' overwrites those. Pick your own file (e.g. mlox_my_rules.txt)."
+msgstr "個人用ルールを mlox_base.txt / mlox_user.txt に追加しないでください -- 「ルールを更新…」がそれらを上書きします。自分のファイル (例: mlox_my_rules.txt) を選択してください。"
+
+msgid "Rule conflicts with the curated order"
+msgstr "ルールがキュレート済みの順序と競合しています"
+
+msgid "This [Order] rule contradicts the frozen curated (MOMW) order for:\n\n%(pairs)s\n\nmlox will DISCARD those orderings (it never reorders the curated list), so the rule won't take effect for them. Write it anyway?"
+msgstr "この [Order] ルールは、次について凍結されたキュレート済み (MOMW) 順序と矛盾します:\n\n%(pairs)s\n\nmlox はこれらの順序付けを「破棄」します (キュレートリストの順序を決して変えません)。そのため、これらにはルールが効きません。それでも書き込みますか?"
+
+msgid "Rule appended to %(file)s. Re-run '1. Sort' to apply it."
+msgstr "ルールを %(file)s に追加しました。適用するには「1. 並べ替え」を再実行してください。"
+
+msgid "Update %(name)s"
+msgstr "%(name)s を更新"
+
+msgid "Save %(name)s as"
+msgstr "%(name)s を名前を付けて保存"
+
+msgid "the file doesn't exist yet -- it will be created"
+msgstr "ファイルはまだ存在しません -- 作成されます"
+
+msgid "your copy is ~%(days)d day(s) old"
+msgstr "あなたのコピーは約 %(days)d 日前のものです"
+
+msgid "Download the current %(name)s from MOMW?\n\n%(age)s.\n\nThe download is validated before anything is written; a timestamped .bak of the old file is kept."
+msgstr "MOMW から現在の %(name)s をダウンロードしますか?\n\n%(age)s。\n\nダウンロードは何かが書き込まれる前に検証されます。古いファイルのタイムスタンプ付き .bak コピーが保持されます。"
+
+msgid "Downloading %(name)s..."
+msgstr "%(name)s をダウンロード中…"
+
+msgid "Run '1. Sort' first so there's a load order to check against."
+msgstr "照合するロード順があるように、まず「1. 並べ替え」を実行してください。"
+
+msgid "Choose an OpenMW save"
+msgstr "OpenMW のセーブを選択"
+
+msgid "Save check failed: %(error)s"
+msgstr "保存チェックに失敗しました: %(error)s"
+
+msgid "Save check: %(count)d missing dependency! See the log."
+msgid_plural "Save check: %(count)d missing dependencies! See the log."
+msgstr[0] "保存チェック: 欠落している依存関係 %(count)d 件! ログを参照してください。"
+
+msgid "Save Check"
+msgstr "保存チェック"
+
+msgid "Save check: all %(count)d dependencies present."
+msgstr "保存チェック: すべての依存関係が存在します (%(count)d 件)。"
+
+msgid "%(file)s: all %(count)d content files it needs are in the current load order. Safe to export."
+msgstr "%(file)s: 必要なコンテンツファイル %(count)d 件はすべて現在のロード順にあります。安全にエクスポートできます。"
+
+msgid "Quick start"
+msgstr "クイックスタート"
+
+msgid "Read me"
+msgstr "お読みください"
+
+msgid "Writing mlox rules"
+msgstr "mlox ルールを書き込み中"
+
+msgid "Documentation not found"
+msgstr "ドキュメントが見つかりません"
+
+msgid "%(name)s was not found next to the program.\n\nIt ships alongside the app; if this is a build made without it, the same document is in the project folder."
+msgstr "%(name)s はプログラムのそばに見つかりませんでした。\n\nこれはアプリと一緒に同梱されています。それなしのビルドの場合、同じ文書がプロジェクトフォルダにあります。"
+
+msgid "Could not open documentation"
+msgstr "ドキュメントを開けませんでした"
+
+msgid "%(name)s could not be rendered:\n%(error)s"
+msgstr "%(name)s をレンダリングできませんでした:\n%(error)s"
+
+msgid "Set openmw.cfg (or run a Sort) so I know where to look."
+msgstr "どこを見ればよいか把握するため、openmw.cfg を設定 (または並べ替えを実行) してください。"
+
+msgid "Scanning for backups..."
+msgstr "バックアップをスキャン中…"
+
+msgid "Found %(count)d backup file."
+msgid_plural "Found %(count)d backup files."
+msgstr[0] "バックアップファイル %(count)d 件が見つかりました。"
+
+msgid "Backup scan failed: %(error)s"
+msgstr "バックアップのスキャンに失敗しました: %(error)s"
+
+msgid "%(count)d backup file. Restore copies the backup over its original; Delete removes the backup file itself."
+msgid_plural "%(count)d backup files. Restore copies the backup over its original; Delete removes the backup file itself."
+msgstr[0] "バックアップファイル %(count)d 件。復元はバックアップを元ファイルに上書きコピーします。削除はバックアップファイル自体を削除します。"
+
+msgid "Restore"
+msgstr "復元"
+
+msgid "Copy %(count)d backup over its original (overwriting it)?"
+msgid_plural "Copy %(count)d backups over their originals (overwriting them)?"
+msgstr[0] "バックアップ %(count)d 件を元ファイルに上書きコピーしますか?"
+
+msgid "Restored %(count)d backup%(failed)s. Re-run '1. Sort' to refresh checks."
+msgid_plural "Restored %(count)d backups%(failed)s. Re-run '1. Sort' to refresh checks."
+msgstr[0] "バックアップ %(count)d 件を復元しました%(failed)s。チェックを更新するには「1. 並べ替え」を再実行してください。"
+
+msgid ", %(fail)d failed"
+msgstr ", 失敗 %(fail)d 件"
+
+msgid "Delete"
+msgstr "削除"
+
+msgid "Permanently delete %(count)d backup file?"
+msgid_plural "Permanently delete %(count)d backup files?"
+msgstr[0] "バックアップファイル %(count)d 件を完全に削除しますか?"
+
+msgid "Deleted %(count)d backup file."
+msgid_plural "Deleted %(count)d backup files."
+msgstr[0] "バックアップファイル %(count)d 件を削除しました。"
+
+msgid "Restore Selected"
+msgstr "選択項目を復元"
+
+msgid "Delete Selected"
+msgstr "選択項目を削除"
+
+msgid "Refresh"
+msgstr "更新"
+
+msgid "Linting plugins..."
+msgstr "プラグインを Lint 中…"
+
+msgid " LINT (tes3lint-style checks, native)"
+msgstr " LINT (tes3lint 形式のチェック、ネイティブ)"
+
+msgid "\n  No lint findings. Clean bill of health."
+msgstr "\n  Lint の指摘はありません。問題なしです。"
+
+msgid "Lint: %(count)d finding. See the log."
+msgid_plural "Lint: %(count)d findings. See the log."
+msgstr[0] "Lint: 指摘 %(count)d 件。ログを参照してください。"
+
+msgid "Lint: no findings."
+msgstr "Lint: 指摘なし。"

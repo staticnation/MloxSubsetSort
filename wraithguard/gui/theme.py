@@ -218,6 +218,13 @@ def apply_dark_theme(root: tk.Tk) -> ttk.Style:
     )
     style.map("TScrollbar", background=[("active", DARK["btn_bg_active"])])
     apply_titlebar_theme(root)
+    # Right-align labels/entries/buttons app-wide when the active language reads
+    # right-to-left. A no-op otherwise, so this is unconditional; it runs after
+    # the style.configure() calls above so the RTL anchors win over the class
+    # defaults set here.
+    from wraithguard.gui.rtl import apply_rtl_defaults
+
+    apply_rtl_defaults(root)
     return style
 
 

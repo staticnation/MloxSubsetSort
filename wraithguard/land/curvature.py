@@ -82,7 +82,7 @@ def _normal_at(rows: Sequence[Sequence[float]], x: int, y: int) -> tuple[float, 
     ny = -(north - here) * _STEP
     nz = _STEP * _STEP
     length = math.sqrt(nx * nx + ny * ny + nz * nz)
-    if length == 0.0:
+    if length == 0.0:  # pragma: no cover - nz is _STEP**2 > 0, so length is never zero
         return (0.0, 0.0, 1.0)
     return (nx / length, ny / length, nz / length)
 

@@ -227,7 +227,7 @@ def _load_toml(path: Path) -> dict[str, Any]:
     """
     try:
         import tomllib
-    except ImportError:
+    except ImportError:  # pragma: no cover - Python 3.10 only; 3.11+ has tomllib
         try:
             # no-redef fires only when tomllib resolved above (3.11+), and
             # unused-ignore only when it did not (3.10). The project supports

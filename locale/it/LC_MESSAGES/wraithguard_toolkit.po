@@ -1,0 +1,2462 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: wraithguard_toolkit\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: it\n"
+"Language-Team: Italian\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "  Inferred anchor for '%(value)s': %(mode)s '%(anchor)s' (via plugin %(via)s)"
+msgstr "  Ancora dedotta per «%(value)s»: %(mode)s «%(anchor)s» (tramite il plugin %(via)s)"
+
+msgid "NOTE: '%(value)s' already present in data= list -- skipping duplicate insert."
+msgstr "NOTA: «%(value)s» è già presente nella lista data= -- inserimento duplicato saltato."
+
+msgid "NOTE: '%(value)s' has no after/before anchor -- appending at end of data= list."
+msgstr "NOTA: «%(value)s» non ha un'ancora after/before -- aggiunto alla fine della lista data=."
+
+msgid "WARNING: anchor '%(anchor)s' not found among existing data= paths for '%(value)s' -- appending at end instead."
+msgstr "AVVISO: ancora «%(anchor)s» non trovata tra i percorsi data= esistenti per «%(value)s» -- aggiunto alla fine invece."
+
+msgid "WARNING: anchor '%(anchor)s' in the emitted TOML matches %(count)d openmw.cfg lines -- momw-configurator errors on ambiguous matches. Colliding lines: %(lines)s%(more)s"
+msgstr "AVVISO: l'ancora «%(anchor)s» nel TOML emesso corrisponde a %(count)d righe di openmw.cfg -- momw-configurator fallisce con corrispondenze ambigue. Righe in conflitto: %(lines)s%(more)s"
+
+msgid "WARNING: remove entry '%(entry)s' matches %(count)d openmw.cfg lines -- momw-configurator removes ALL of them, silently. Colliding lines: %(lines)s%(more)s"
+msgstr "AVVISO: la voce di rimozione «%(entry)s» corrisponde a %(count)d righe di openmw.cfg -- momw-configurator le rimuove TUTTE, silenziosamente. Righe in conflitto: %(lines)s%(more)s"
+
+msgid "Scanning for conflicts..."
+msgstr "Ricerca conflitti…"
+
+msgid " TES3 RECORD CONFLICTS (read-only)"
+msgstr " CONFLITTI DI RECORD TES3 (sola lettura)"
+
+msgid "  Engine: tes3conv (%(path)s) -- field-level diffs available."
+msgstr "  Motore: tes3conv (%(path)s) -- differenze per campo disponibili."
+
+msgid "Conflicts: %(count)d record(s), %(involved)d involving your mods. See the Conflicts window."
+msgstr "Conflitti: %(count)d record, %(involved)d che coinvolgono i tuoi mod. Vedi la finestra dei conflitti."
+
+msgid "No data= folders to scan."
+msgstr "Nessuna cartella data= da analizzare."
+
+msgid "Scanning data folders for file conflicts..."
+msgstr "Analisi delle cartelle dati per conflitti di file…"
+
+msgid " DATA-PATH RESOURCE (VFS) CONFLICTS"
+msgstr " CONFLITTI DI RISORSE DEL PERCORSO DATI (VFS)"
+
+msgid "Resource conflicts: %(count)d file(s). See the window."
+msgstr "Conflitti di risorse: %(count)d file. Vedi la finestra."
+
+msgid "%(conflicts)d loose-file conflict(s) across %(dirs)d folder(s), %(files)d file(s) - %(involved)d involve your custom data paths (â). Later folder wins - reorder the data-path panel to change it."
+msgstr "%(conflicts)d conflitto(i) di file sciolti su %(dirs)d cartella(e), %(files)d file -- %(involved)d coinvolgono i tuoi percorsi dati personalizzati (→). La cartella più recente vince -- riordina il pannello dei percorsi dati per cambiarlo."
+
+msgid "Only my paths"
+msgstr "Solo i miei percorsi"
+
+msgid "Search:"
+msgstr "Cerca:"
+
+msgid "Filter by file path or winning folder. Enter jumps to the next match (Shift+Enter: previous) and scrolls it into view."
+msgstr "Filtra per percorso di file o cartella vincente. Invio salta alla corrispondenza successiva (Maiusc+Invio: precedente) e la porta in vista."
+
+msgid "Select a file to see every folder that provides it, in load order.\nSelecting a mesh (.nif) also reads it and describes what each provider contains -- shapes, textures, collision, animation -- and what the winning mesh loses. Rows marked ! in the second column already have a finding."
+msgstr "Seleziona un file per vedere ogni cartella che lo fornisce, in ordine di caricamento.\nSelezionare una mesh (.nif) la legge anche e descrive cosa contiene ciascun fornitore -- forme, texture, collisione, animazione -- e cosa perde la mesh vincente. Le righe contrassegnate con ! nella seconda colonna hanno già un rilievo."
+
+msgid "Save report (CSV)..."
+msgstr "Salva report (CSV)…"
+
+msgid "View in 3D"
+msgstr "Visualizza in 3D"
+
+msgid "Export 3D file..."
+msgstr "Esporta file 3D…"
+
+msgid "Edit mesh..."
+msgstr "Modifica mesh…"
+
+msgid "Compare Textures"
+msgstr "Confronta texture"
+
+msgid "Export comparison..."
+msgstr "Esporta confronto…"
+
+msgid "Close"
+msgstr "Chiudi"
+
+msgid "Could not read the meshes: %(error)s"
+msgstr "Impossibile leggere le mesh: %(error)s"
+
+msgid "Cannot show this mesh"
+msgstr "Impossibile mostrare questa mesh"
+
+msgid "Opened the 3D view for %(path)s"
+msgstr "Vista 3D aperta per %(path)s"
+
+msgid "Mesh view"
+msgstr "Vista mesh"
+
+msgid "No mesh to show"
+msgstr "Nessuna mesh da mostrare"
+
+msgid "None of the referenced meshes could be found in the data folders (a missing mod, or the file lives in a .bsa that is not present)."
+msgstr "Nessuna delle mesh referenziate è stata trovata nelle cartelle dati (un mod mancante, o il file è in un .bsa non presente)."
+
+msgid "No image to show"
+msgstr "Nessuna immagine da mostrare"
+
+msgid "None of the referenced images could be found in the data folders (a missing mod, or the file lives in a .bsa that is not present)."
+msgstr "Nessuna delle immagini referenziate è stata trovata nelle cartelle dati (un mod mancante, o il file è in un .bsa non presente)."
+
+msgid "Cannot show this image"
+msgstr "Impossibile mostrare questa immagine"
+
+msgid "Export the 3D view"
+msgstr "Esporta la vista 3D"
+
+msgid "Export failed"
+msgstr "Esportazione non riuscita"
+
+msgid "Exported: %(path)s"
+msgstr "Esportato: %(path)s"
+
+msgid "Cannot edit this mesh"
+msgstr "Impossibile modificare questa mesh"
+
+msgid "Its file could not be read."
+msgstr "Impossibile leggere il suo file."
+
+msgid "This mesh does not parse completely, so an edit cannot be written back safely."
+msgstr "Questa mesh non viene analizzata completamente, quindi una modifica non può essere riscritta in sicurezza."
+
+msgid "Editing %(path)s"
+msgstr "Modifica di %(path)s"
+
+msgid "Cannot show this texture"
+msgstr "Impossibile mostrare questa texture"
+
+msgid "Opened the texture comparison for %(path)s"
+msgstr "Confronto texture aperto per %(path)s"
+
+msgid "Texture comparison"
+msgstr "Confronto texture"
+
+msgid "Export the texture comparison"
+msgstr "Esporta il confronto texture"
+
+msgid "Save resource conflicts"
+msgstr "Salva conflitti di risorse"
+
+msgid "Saved: %(path)s"
+msgstr "Salvato: %(path)s"
+
+msgid "Save failed"
+msgstr "Salvataggio non riuscito"
+
+msgid "%(conflicts)d conflicting record(s) across %(scanned)d plugin(s) - %(involved)d involve your custom mods (â). Winner = last loaded."
+msgstr "%(conflicts)d record in conflitto su %(scanned)d plugin -- %(involved)d coinvolgono i tuoi mod personalizzati (→). Vincitore = caricato per ultimo."
+
+msgid "Only my mods"
+msgstr "Solo i miei mod"
+
+msgid "Filter by record type, id, or winning plugin. Enter jumps to the next match (Shift+Enter: previous) and scrolls it into view."
+msgstr "Filtra per tipo di record, id o plugin vincente. Invio salta alla corrispondenza successiva (Maiusc+Invio: precedente) e la porta in vista."
+
+msgid "Include my mods' non-conflicting records"
+msgstr "Includi i record senza conflitto dei miei mod"
+
+msgid "Include other mods' non-conflicting records"
+msgstr "Includi i record senza conflitto di altri mod"
+
+msgid "Set tes3conv..."
+msgstr "Imposta tes3conv…"
+
+msgid "Field comparison for the selected record - RED = a plugin's edit is discarded Â· AMBER = overridden but nothing lost Â· â = your custom mod Â· last column wins Â· double-click a field for the full value:"
+msgstr "Confronto dei campi per il record selezionato -- ROSSO = la modifica di un plugin viene scartata · AMBRA = sovrascritta ma niente perso · → = il tuo mod personalizzato · l'ultima colonna vince · doppio clic su un campo per il valore completo:"
+
+msgid "Field-by-field diff of the selected record. Red = the plugins disagree; the last one in the load order wins.\n\nDouble-click any row for the full value, one tab per plugin. Fields stored as binary are decoded rather than shown raw, so an edit reads as a change instead of a wall of base64:\n  â¢ bytecode -- disassembled to named script instructions. Spans the disassembler cannot decode are printed as offset/hex/ASCII rather than guessed at, and a 'decoded: N%' header says how much was understood.\n  â¢ variables -- the script's local variable names, in declaration order.\n  â¢ landscape (vertex heights, normals, colors, textures, world map) -- decoded to one terrain row per line, so the diff shows which rows of the cell moved. Heights are reconstructed to absolute world units.\n  â¢ path grid connections -- decoded to a per-point adjacency list (point -> its neighbours), so you can see which nodes were rewired."
+msgstr "Differenza campo per campo del record selezionato. Rosso = i plugin sono in disaccordo; l'ultimo nell'ordine di caricamento vince.\n\nDoppio clic su una riga per il valore completo, una scheda per plugin. I campi memorizzati in binario vengono decodificati invece di essere mostrati grezzi, così una modifica si legge come un cambiamento e non come un muro di base64:\n  • bytecode -- disassemblato in istruzioni di script con nome. Le porzioni che il disassemblatore non può decodificare vengono stampate come offset/hex/ASCII invece che indovinate, e un'intestazione «decoded: N%» indica quanto è stato compreso.\n  • variables -- i nomi delle variabili locali dello script, in ordine di dichiarazione.\n  • landscape (altezze dei vertici, normali, colori, texture, mappa del mondo) -- decodificato in una riga di terreno per riga, così la differenza mostra quali righe della cella si sono spostate. Le altezze vengono ricostruite in unità assolute del mondo.\n  • path grid connections -- decodificato in una lista di adiacenza per punto (punto -> i suoi vicini), così vedi quali nodi sono stati ricablati."
+
+msgid "Add record to patch..."
+msgstr "Aggiungi record alla patch…"
+
+msgid "Choose which plugin's version of the selected record should win, and add it to a patch. Nothing is written yet, and no mod is ever modified: the patch is one new plugin that loads last."
+msgstr "Scegli quale versione del record selezionato deve vincere, e aggiungila a una patch. Non viene ancora scritto niente, e nessun mod viene mai modificato: la patch è un unico nuovo plugin che si carica per ultimo."
+
+msgid "Merge field..."
+msgstr "Unisci campo…"
+
+msgid "Take the selected field from a plugin of your choosing and keep the rest of the record as it is now -- for when one mod fixed one thing and another mod fixed something else in the same record."
+msgstr "Prendi il campo selezionato da un plugin a tua scelta e mantieni il resto del record com'è -- per quando un mod ha corretto una cosa e un altro un'altra cosa nello stesso record."
+
+msgid "Define value..."
+msgstr "Definisci valore…"
+
+msgid "Type your own value for the selected field -- a number or string no plugin in the conflict uses (a compromise weight, a corrected health). It is written to the patch exactly as given, in the field's own type; your mods are not modified."
+msgstr "Digita il tuo valore per il campo selezionato -- un numero o una stringa che nessun plugin del conflitto usa (un peso di compromesso, un valore corretto). Viene scritto nella patch esattamente come indicato, nel tipo del campo; i tuoi mod non vengono modificati."
+
+msgid "Patch Builder..."
+msgstr "Costruttore di patch…"
+
+msgid "Review and edit the records queued so far, then write them as one new plugin. Nothing is written until you say so."
+msgstr "Rivedi e modifica i record in coda finora, poi scrivili come un nuovo plugin. Non viene scritto niente finché non lo dici."
+
+msgid "Plugin view..."
+msgstr "Vista plugin…"
+
+msgid "The same scan with the load order's own shape restored: plugin, then kind of record, then record, with the record compared across every plugin that defines it.\n\nA flat list answers 'what conflicts'. This answers 'what does this mod change, and where does it lose', which is the question you are actually asking. The colours fill in on their own once the conflict window's background survey finishes. Read-only."
+msgstr "La stessa analisi con la struttura dell'ordine di caricamento ripristinata: plugin, poi tipo di record, poi record, confrontato su ogni plugin che lo definisce.\n\nUna lista piatta risponde a «cosa è in conflitto». Questo risponde a «cosa cambia questo mod, e dove perde», la domanda che ti stai davvero ponendo. I colori si riempiono da soli una volta terminato lo studio in background della finestra dei conflitti. Sola lettura."
+
+msgid "Journal chains..."
+msgstr "Catene del diario…"
+
+msgid "Every quest's journal stages, sorted by journal index rather than file order, with the winning plugin's text for each stage. Reads the whole load order once when opened. Read-only."
+msgstr "Le fasi del diario di ogni missione, ordinate per indice del diario invece che per ordine di file, con il testo del plugin vincente per ogni fase. Legge tutto l'ordine di caricamento una volta all'apertura. Sola lettura."
+
+msgid "Plugin summary..."
+msgstr "Riepilogo plugin…"
+
+msgid "Judge every conflict in the list and count the result per mod, rather than per record.\n\nA flat list of conflicts cannot answer the question that decides load order: which of my mods is losing work? This compares each record field by field and counts, for every plugin, how many records it edits and does not get its way on.\n\nReads every conflicting record with tes3conv, so it takes a moment on a large load order. Read-only."
+msgstr "Valutare ogni conflitto della lista e contare il risultato per mod invece che per record.\n\nUna lista piatta di conflitti non può rispondere alla domanda che decide l'ordine di caricamento: quale dei miei mod perde lavoro? Questo confronta ogni record campo per campo e conta, per ogni plugin, in quanti record modifica senza spuntarla.\n\nLegge ogni record in conflitto con tes3conv, quindi ci vuole un momento su un ordine di caricamento grande. Sola lettura."
+
+msgid "Conflict map (direct)..."
+msgstr "Mappa dei conflitti (diretta)…"
+
+msgid "Build and open a conflict map directly from the selected conflicts. Shows which mods edit LAND records in each cell, with a breakdown of terrain shape, NPC navigation, and cell record edits."
+msgstr "Costruire e aprire una mappa dei conflitti direttamente dai conflitti selezionati. Mostra quali mod modificano i record LAND in ogni cella, con una suddivisione tra forma del terreno, navigazione degli PNG e modifiche del record di cella."
+
+msgid "Dump tes3conv JSON..."
+msgstr "Esporta JSON di tes3conv…"
+
+msgid "Busy reading plugins -- try that again in a moment."
+msgstr "Occupato a leggere i plugin -- riprova tra un momento."
+
+msgid "Nothing to summarise."
+msgstr "Niente da riassumere."
+
+msgid "Judge every conflict?"
+msgstr "Valutare ogni conflitto?"
+
+msgid "This reads every plugin that defines any of these %(count)d records -- once each, not once per record -- and will take a few minutes. The checkboxes and filters above narrow the list first if you would rather summarise part of it.\n\nGo ahead?"
+msgstr "Questo legge ogni plugin che definisce uno di questi %(count)d record -- una volta ciascuno, non una volta per record -- e richiederà alcuni minuti. Le caselle e i filtri sopra restringono prima la lista se preferisci riassumerne solo una parte.\n\nContinuare?"
+
+msgid "Colouring the load order (%(count)d record(s))..."
+msgstr "Colorazione dell'ordine di caricamento (%(count)d record)…"
+
+msgid "Judging %(count)d conflict(s)..."
+msgstr "Valutazione di %(count)d conflitto(i)…"
+
+msgid "Reading plugin %(done)d of %(total)d..."
+msgstr "Lettura del plugin %(done)d di %(total)d…"
+
+msgid "Could not summarise the conflicts."
+msgstr "Impossibile riassumere i conflitti."
+
+msgid "Summary failed"
+msgstr "Riepilogo non riuscito"
+
+msgid "Unknown error."
+msgstr "Errore sconosciuto."
+
+msgid "Coloured %(count)d record(s) across the load order."
+msgstr "%(count)d record colorati nell'ordine di caricamento."
+
+msgid "Judged %(count)d record(s); %(losers)d plugin(s) losing work."
+msgstr "%(count)d record valutati; %(losers)d plugin perdono lavoro."
+
+msgid "Plugin conflict summary"
+msgstr "Riepilogo conflitti tra plugin"
+
+msgid "How each mod fares across the conflicts listed. 'Loses' counts records it edits where a later plugin overwrote the change with something different -- work that never reaches the game. 'Same as original' counts records it redefines without changing anything, which is usually removable but not always: an unchanged dialogue response may be there to hold a line's position in its topic."
+msgstr "Come se la cava ogni mod nei conflitti elencati. «Perde» conta i record che modifica dove un plugin successivo ha sovrascritto la modifica con qualcos'altro -- lavoro che non arriva mai al gioco. «Uguale all'originale» conta i record che ridefinisce senza cambiare niente, di solito rimovibili ma non sempre: una risposta di dialogo invariata può essere lì per mantenere la posizione di una riga nel suo argomento."
+
+msgid "Plugin"
+msgstr "Plugin"
+
+msgid "Records"
+msgstr "Record"
+
+msgid "Loses"
+msgstr "Perde"
+
+msgid "Wins"
+msgstr "Vince"
+
+msgid "Same as original"
+msgstr "Uguale all'originale"
+
+msgid "Defines first"
+msgstr "Definisce per primo"
+
+msgid "%(records)d record(s) judged, %(plugins)d plugin(s) involved%(unreadable)s. The conflict list behind this window is now coloured to match: red where an edit is discarded, amber where a record is overridden but nothing is lost."
+msgstr "%(records)d record valutati, %(plugins)d plugin coinvolti%(unreadable)s. La lista dei conflitti dietro questa finestra è ora colorata di conseguenza: rosso dove una modifica viene scartata, ambra dove un record viene sovrascritto senza perdite."
+
+msgid ", %(n)d could not be read"
+msgstr ", %(n)d non sono stati letti"
+
+msgid "Nothing selected"
+msgstr "Niente selezionato"
+
+msgid "Select a record above, then a field in the comparison below."
+msgstr "Seleziona un record sopra, poi un campo nel confronto sotto."
+
+msgid "Select a conflicting record first."
+msgstr "Seleziona prima un record in conflitto."
+
+msgid "Nothing to choose"
+msgstr "Niente da scegliere"
+
+msgid "Only one plugin defines this record, so there is nothing to patch."
+msgstr "Un solo plugin definisce questo record, quindi non c'è niente da correggere con la patch."
+
+msgid "Which version should win?"
+msgstr "Quale versione deve vincere?"
+
+msgid "%(type)s  %(id)s"
+msgstr "%(type)s  %(id)s"
+
+msgid "Take %(field)s from this plugin, keeping the rest of the record as it is now.\nYour mods are not modified."
+msgstr "Prendere %(field)s da questo plugin, mantenendo il resto del record com'è.\nI tuoi mod non vengono modificati."
+
+msgid "The patch will carry this plugin's whole record and load last.\nYour mods are not modified."
+msgstr "La patch porterà l'intero record di questo plugin e si caricherà per ultima.\nI tuoi mod non vengono modificati."
+
+msgid "currently wins"
+msgstr "vince attualmente"
+
+msgid "Use this field"
+msgstr "Usa questo campo"
+
+msgid "Add to patch"
+msgstr "Aggiungi alla patch"
+
+msgid "Cancel"
+msgstr "Annulla"
+
+msgid "Cannot set this field"
+msgstr "Impossibile impostare questo campo"
+
+msgid "%(path)s says which record this is -- giving it a typed value would make a different record, not a patched one."
+msgstr "%(path)s indica di quale record si tratta -- dargli un valore tipizzato creerebbe un altro record, non uno corretto."
+
+msgid "Define a value"
+msgstr "Definisci un valore"
+
+msgid "Type a value for %(path)s. It is written to the patch exactly as given, in the field's own type.\nYour mods are not modified."
+msgstr "Digita un valore per %(path)s. Viene scritto nella patch esattamente come indicato, nel tipo del campo.\nI tuoi mod non vengono modificati."
+
+msgid "currently: %(val)s  (%(kind)s)"
+msgstr "attualmente: %(val)s  (%(kind)s)"
+
+msgid "keeping unnamed bits: %(bits)s"
+msgstr "mantengo i bit senza nome: %(bits)s"
+
+msgid "Enabled (true)"
+msgstr "Abilitato (true)"
+
+msgid "Set value"
+msgstr "Imposta valore"
+
+msgid "Building the conflict map..."
+msgstr "Costruzione della mappa dei conflitti…"
+
+msgid "The conflict map could not be built."
+msgstr "Impossibile costruire la mappa dei conflitti."
+
+msgid "Could not build conflict map"
+msgstr "Impossibile costruire la mappa dei conflitti"
+
+msgid "%(error)s"
+msgstr "%(error)s"
+
+msgid "Conflict map ready (%(cells)d cell(s))."
+msgstr "Mappa dei conflitti pronta (%(cells)d cella(e))."
+
+msgid "Conflict Map"
+msgstr "Mappa dei conflitti"
+
+msgid "Could not write the page"
+msgstr "Impossibile scrivere la pagina"
+
+msgid "Writing %(path)s failed: %(error)s"
+msgstr "Scrittura di %(path)s fallita: %(error)s"
+
+msgid "Saved, but could not open a viewer"
+msgstr "Salvato, ma impossibile aprire un visualizzatore"
+
+msgid "The page was written to %(path)s (%(error)s)"
+msgstr "La pagina è stata scritta in %(path)s (%(error)s)"
+
+msgid "Could not build the view"
+msgstr "Impossibile costruire la vista"
+
+msgid "Nothing to compare"
+msgstr "Niente da confrontare"
+
+msgid "Only one plugin edits this cell's terrain, so every strategy gives the same result. Strategy choice only matters where two or more plugins change the same ground."
+msgstr "Un solo plugin modifica il terreno di questa cella, quindi ogni strategia dà lo stesso risultato. La scelta della strategia conta solo dove due o più plugin cambiano lo stesso suolo."
+
+msgid "Merged: %(s)s"
+msgstr "Unito: %(s)s"
+
+msgid "Format reference..."
+msgstr "Riferimento del formato…"
+
+msgid "Show what this kind of record is supposed to contain: every subrecord, whether the game requires it, how wide it is, and -- where the layout is documented -- the named fields inside it.\n\nA diff tells you what changed; this tells you what it was."
+msgstr "Mostra cosa questo tipo di record dovrebbe contenere: ogni sottorecord, se il gioco lo richiede, la sua larghezza, e -- dove la struttura è documentata -- i campi con nome al suo interno.\n\nUna differenza ti dice cosa è cambiato; questo ti dice cos'era."
+
+msgid "Read as dialogue..."
+msgstr "Leggi come dialogo…"
+
+msgid "Show this record as the line an NPC says -- to whom, and under what conditions -- instead of raw subrecords. Each plugin's version is rendered in turn, so you can read what a conflict actually changes."
+msgstr "Mostra questo record come la battuta che dice un PNG -- a chi, e a quali condizioni -- invece che come sottorecord grezzi. La versione di ogni plugin viene resa a turno, così leggi cosa un conflitto cambia davvero."
+
+msgid "Dialogue"
+msgstr "Dialogo"
+
+msgid "(no dialogue content)"
+msgstr "(nessun contenuto di dialogo)"
+
+msgid "Format reference: %(type)s"
+msgstr "Riferimento del formato: %(type)s"
+
+msgid "Show graph..."
+msgstr "Mostra grafo…"
+
+msgid "Draw the path grid as a navigation graph, with the edges this plugin added in green and the ones it removed in red.\n\nA mod that only REMOVES edges has probably rebuilt its path grid by accident -- that breaks NPC movement and nothing else reports it."
+msgstr "Disegna la griglia dei percorsi come un grafo di navigazione, con gli archi che questo plugin ha aggiunto in verde e quelli rimossi in rosso.\n\nUn mod che si limita a RIMUOVERE archi ha probabilmente ricostruito la sua griglia dei percorsi per sbaglio -- questo rompe il movimento degli PNG e niente altro lo segnala."
+
+msgid "Show difference..."
+msgstr "Mostra differenza…"
+
+msgid "Decode both versions to absolute heights and subtract them: red where the winner raised the ground, blue where it lowered it.\n\nComparing the raw values above is misleading. Heights are stored as cumulative deltas, so moving ONE vertex changes every byte after it and two nearly-identical cells look completely different."
+msgstr "Decodifica entrambe le versioni in altezze assolute e sottraile: rosso dove il vincitore ha alzato il suolo, blu dove l'ha abbassato.\n\nConfrontare i valori grezzi sopra è fuorviante. Le altezze sono memorizzate come delta cumulativi, così spostare UN vertice cambia ogni byte successivo e due celle quasi identiche sembrano totalmente diverse."
+
+msgid "Show in 3D..."
+msgstr "Mostra in 3D…"
+
+msgid "Draw the cell's terrain as a surface you can rotate, with each plugin's version switchable in place. Drag to turn it.\n\nShading follows slope rather than height, which reads as terrain."
+msgstr "Disegna il terreno della cella come una superficie che puoi ruotare, con la versione di ogni plugin commutabile sul posto. Trascina per ruotarla.\n\nL'ombreggiatura segue la pendenza invece dell'altezza, il che si legge come terreno."
+
+msgid "Compare strategies..."
+msgstr "Confronta strategie…"
+
+msgid "Show what each conflict strategy would do to this cell -- the merged terrain under Overwrite, Resolve, Ignore and Curvature, switchable in the same 3D view alongside each plugin's own version.\n\nPreview it here, then set the strategy you want in the plugin's .mergedlands.toml with Merge Settings. Only differs where two or more plugins actually contest a vertex."
+msgstr "Mostra cosa farebbe ogni strategia di conflitto a questa cella -- il terreno unito sotto Overwrite, Resolve, Ignore e Curvature, commutabile nella stessa vista 3D accanto alla versione di ogni plugin.\n\nAnteprimalo qui, poi imposta la strategia che vuoi nel .mergedlands.toml del plugin tramite Impostazioni di unione. Differisce solo dove due o più plugin si contendono davvero un vertice."
+
+msgid "View mesh..."
+msgstr "Visualizza mesh…"
+
+msgid "Open the mesh this record points at in the 3D viewer, resolved through your data folders and .bsa archives. One per plugin, so a record whose plugins point at different meshes shows them side by side -- the same viewer the Resource Conflicts window uses."
+msgstr "Apri la mesh a cui punta questo record nel visualizzatore 3D, risolta tramite le tue cartelle dati e gli archivi .bsa. Una per plugin, così un record i cui plugin puntano a mesh diverse le mostra affiancate -- lo stesso visualizzatore che usa la finestra dei conflitti di risorse."
+
+msgid "View image..."
+msgstr "Visualizza immagine…"
+
+msgid "Open the texture/icon this record points at, resolved through your data folders and .bsa archives, and compared across the plugins that define it -- the same image viewer the Resource Conflicts window uses."
+msgstr "Apri la texture/l'icona a cui punta questo record, risolta tramite le tue cartelle dati e gli archivi .bsa, e confrontata sui plugin che la definiscono -- lo stesso visualizzatore di immagini che usa la finestra dei conflitti di risorse."
+
+msgid "Queue the whole record from a plugin you pick, then open the patch builder."
+msgstr "Metti in coda l'intero record da un plugin che scegli, poi apri il costruttore di patch."
+
+msgid "Take this field..."
+msgstr "Prendi questo campo…"
+
+msgid "Queue just this field from a plugin you pick -- the rest of the record keeps the load-order winner. For when one mod fixed the script and another retextured the mesh."
+msgstr "Metti in coda solo questo campo da un plugin che scegli -- il resto del record mantiene il vincitore dell'ordine di caricamento. Per quando un mod ha corretto lo script e un altro ha ritesturizzato la mesh."
+
+msgid "Dump tes3conv JSON to folder"
+msgstr "Esporta JSON di tes3conv in una cartella"
+
+msgid "Wrote %(count)d JSON file to %(folder)s"
+msgid_plural "Wrote %(count)d JSON files to %(folder)s"
+msgstr[0] "%(count)d file JSON scritto in %(folder)s"
+msgstr[1] "%(count)d file JSON scritti in %(folder)s"
+
+msgid "JSON dumped"
+msgstr "JSON esportato"
+
+msgid "Wrote %(count)d tes3conv JSON file to:\n%(folder)s"
+msgid_plural "Wrote %(count)d tes3conv JSON files to:\n%(folder)s"
+msgstr[0] "%(count)d file JSON di tes3conv scritto in:\n%(folder)s"
+msgstr[1] "%(count)d file JSON di tes3conv scritti in:\n%(folder)s"
+
+msgid "Nothing written"
+msgstr "Niente scritto"
+
+msgid "No JSON was written. The tes3conv session may have been cleared - re-run Check Conflicts, then dump again."
+msgstr "Nessun JSON è stato scritto. La sessione di tes3conv potrebbe essere stata svuotata -- riesegui Controlla conflitti, poi esporta di nuovo."
+
+msgid "Dump failed"
+msgstr "Esportazione non riuscita"
+
+msgid "Word wrap"
+msgstr "A capo automatico"
+
+msgid "Syntax highlighting: %(theme)s"
+msgstr "Evidenziazione sintassi: %(theme)s"
+
+msgid "your mods'"
+msgstr "dei tuoi mod"
+
+msgid "other mods'"
+msgstr "di altri mod"
+
+msgid "No custom mods"
+msgstr "Nessun mod personalizzato"
+
+msgid "You have no custom/subset mods configured, so there is nothing to list here."
+msgstr "Non hai mod personalizzati/di sottoinsieme configurati, quindi non c'è niente da elencare qui."
+
+msgid "Finding %(label)s non-conflicting records..."
+msgstr "Ricerca dei record senza conflitto di %(label)s…"
+
+msgid "Could not list records."
+msgstr "Impossibile elencare i record."
+
+msgid "Could not list records"
+msgstr "Impossibile elencare i record"
+
+msgid "Found %(count)d non-conflicting record(s) from %(label)s."
+msgstr "%(count)d record senza conflitto trovati da %(label)s."
+
+msgid "Save conflict report"
+msgstr "Salva report dei conflitti"
+
+msgid "Conflict report saved: %(path)s"
+msgstr "Report dei conflitti salvato: %(path)s"
+
+msgid "tes3conv needed"
+msgstr "tes3conv necessario"
+
+msgid "Reading journal stages needs tes3conv, which does the binary decoding.\n\nUse 'Set tes3conv...' in the Conflicts window to point at it."
+msgstr "Leggere le fasi del diario richiede tes3conv, che esegue la decodifica binaria.\n\nUsa «Imposta tes3conv…» nella finestra dei conflitti per indicarlo."
+
+msgid "Journal chains"
+msgstr "Catene del diario"
+
+msgid "Every quest's journal stages, sorted by journal index rather than file order, with the winning plugin's text, dialogue requirements, full result script, and everything else that script does -- item grants, disposition changes, other scripts starting, whatever a mod actually does at that stage. Read-only: nothing here writes."
+msgstr "Le fasi del diario di ogni missione, ordinate per indice del diario invece che per ordine di file, con il testo del plugin vincente, i requisiti di dialogo, lo script di risultato completo e tutto il resto che quello script fa -- consegne di oggetti, cambi di disposizione, avvio di altri script, qualsiasi cosa un mod faccia davvero in quella fase. Sola lettura: niente qui scrive."
+
+msgid "Quest / stage / call"
+msgstr "Missione / fase / chiamata"
+
+msgid "Index"
+msgstr "Indice"
+
+msgid "Reading the load order..."
+msgstr "Lettura dell'ordine di caricamento…"
+
+msgid "Could not read the load order -- see the log."
+msgstr "Impossibile leggere l'ordine di caricamento -- vedi il registro."
+
+msgid "%(text)s (finished)"
+msgstr "%(text)s (completato)"
+
+msgid "%(quests)d quest(s), %(stages)d stage(s), %(calls)d call site(s) found."
+msgstr "%(quests)d missione(i), %(stages)d fase(i), %(calls)d punto(i) di chiamata trovati."
+
+msgid " [bytecode]"
+msgstr " [bytecode]"
+
+msgid "(no text)"
+msgstr "(nessun testo)"
+
+msgid "if"
+msgstr "se"
+
+msgid "Also happens"
+msgstr "Accade anche"
+
+msgid "Copy"
+msgstr "Copia"
+
+msgid "Stage id"
+msgstr "ID fase"
+
+msgid "Journal index"
+msgstr "Indice del diario"
+
+msgid "Quest state"
+msgstr "Stato della missione"
+
+msgid "(none)"
+msgstr "(nessuno)"
+
+msgid "Defined by"
+msgstr "Definito da"
+
+msgid "(unknown)"
+msgstr "(sconosciuto)"
+
+msgid "Text"
+msgstr "Testo"
+
+msgid "Requirements"
+msgstr "Requisiti"
+
+msgid "Set by"
+msgstr "Impostato da"
+
+msgid "(no script call found)"
+msgstr "(nessuna chiamata di script trovata)"
+
+msgid "Also sets"
+msgstr "Imposta anche"
+
+msgid "%(quest)s [%(index)d] -- no matching stage found"
+msgstr "%(quest)s [%(index)d] -- nessuna fase corrispondente trovata"
+
+msgid "Full script"
+msgstr "Script completo"
+
+msgid "Function"
+msgstr "Funzione"
+
+msgid "Sets quest"
+msgstr "Imposta la missione"
+
+msgid "Sets index"
+msgstr "Imposta l'indice"
+
+msgid "Found in"
+msgstr "Trovato in"
+
+msgid "Source"
+msgstr "Origine"
+
+msgid "compiled bytecode -- no source text was shipped"
+msgstr "bytecode compilato -- nessun testo sorgente incluso"
+
+msgid "Condition"
+msgstr "Condizione"
+
+msgid "(unconditional)"
+msgstr "(senza condizione)"
+
+msgid "Response"
+msgstr "Risposta"
+
+msgid "Requires"
+msgstr "Richiede"
+
+msgid "Target stage"
+msgstr "Fase di destinazione"
+
+msgid "(no matching stage found)"
+msgstr "(nessuna fase corrispondente trovata)"
+
+msgid "Patch Builder"
+msgstr "Costruttore di patch"
+
+msgid "Records queued for the patch. Nothing is written until you press Write. Your mods are never modified."
+msgstr "Record in coda per la patch. Non viene scritto niente finché non premi Scrivi. I tuoi mod non vengono mai modificati."
+
+msgid "Record"
+msgstr "Record"
+
+msgid "Field"
+msgstr "Campo"
+
+msgid "How"
+msgstr "Come"
+
+msgid "From"
+msgstr "Da"
+
+msgid "Remove"
+msgstr "Rimuovi"
+
+msgid "Drop the selected record, or just the selected field. Removing a record's last field drops the record too."
+msgstr "Scarta il record selezionato, o solo il campo selezionato. Rimuovere l'ultimo campo di un record scarta anche il record."
+
+msgid "Clear all"
+msgstr "Svuota tutto"
+
+msgid "Write patch..."
+msgstr "Scrivi patch…"
+
+msgid "Patch Builder... (%(count)d)"
+msgstr "Costruttore di patch… (%(count)d)"
+
+msgid "base: %(base)s"
+msgstr "base: %(base)s"
+
+msgid "unknown"
+msgstr "sconosciuto"
+
+msgid "set to"
+msgstr "impostato a"
+
+msgid "from"
+msgstr "da"
+
+msgid "%(count)d record(s) queued."
+msgstr "%(count)d record in coda."
+
+msgid "Nothing queued yet. Add records from the conflict list."
+msgstr "Niente in coda ancora. Aggiungi record dalla lista dei conflitti."
+
+msgid "Clear the patch?"
+msgstr "Svuotare la patch?"
+
+msgid "This drops every queued record. Nothing has been written, so nothing is lost."
+msgstr "Questo scarta ogni record in coda. Non è stato scritto niente, quindi niente va perso."
+
+msgid "tes3conv not found"
+msgstr "tes3conv non trovato"
+
+msgid "Cannot measure master sizes without tes3conv. Set its path and try again."
+msgstr "Impossibile misurare le dimensioni dei master senza tes3conv. Imposta il suo percorso e riprova."
+
+msgid "Rescan needed"
+msgstr "Nuova analisi necessaria"
+
+msgid "%(what)s is no longer in the scan, so there is no way to tell which plugin its unchosen fields should come from. Rescan and queue it again."
+msgstr "%(what)s non è più nell'analisi, quindi non c'è modo di sapere da quale plugin debbano venire i suoi campi non scelti. Rianalizza e rimettilo in coda."
+
+msgid "Append or replace?"
+msgstr "Aggiungere o sostituire?"
+
+msgid "%(name)s already exists. This session has %(count)d record(s) queued.\n\nAppend keeps everything already written and adds these on top -- the way to build one patch across several sessions.\n\nReplace throws away what is already there and writes only this session's records.\n\nYour mods are NOT modified either way, and deleting the patch restores your previous behaviour completely. Load it LAST, and back up your saves."
+msgstr "%(name)s esiste già. Questa sessione ha %(count)d record in coda.\n\nAggiungi mantiene tutto ciò che è già scritto e aggiunge questi sopra -- il modo di costruire una patch su più sessioni.\n\nSostituisci scarta ciò che c'è e scrive solo i record di questa sessione.\n\nI tuoi mod NON vengono modificati in nessun caso, ed eliminare la patch ripristina completamente il tuo comportamento precedente. Caricala per ULTIMA, e fai il backup dei salvataggi."
+
+msgid "Could not read the existing patch"
+msgstr "Impossibile leggere la patch esistente"
+
+msgid "%(name)s could not be decoded, so there is nothing to append to. Run Write again and choose Replace, or check the file opens in another tool first."
+msgstr "%(name)s non è stato decodificato, quindi non c'è niente a cui aggiungere. Riesegui Scrivi e scegli Sostituisci, o controlla prima che il file si apra in un altro strumento."
+
+msgid "Write patch?"
+msgstr "Scrivere la patch?"
+
+msgid "%(count)d record(s) will be written to:\n%(path)s\n\nIt carries whole records chosen by you, and loads last. Your mods are NOT modified, and deleting the patch restores your previous behaviour completely.\n\nLoad it LAST, and back up your saves."
+msgstr "%(count)d record verranno scritti in:\n%(path)s\n\nPorta record interi scelti da te, e si carica per ultima. I tuoi mod NON vengono modificati, ed eliminare la patch ripristina completamente il tuo comportamento precedente.\n\nCaricala per ULTIMA, e fai il backup dei salvataggi."
+
+msgid "Patch failed"
+msgstr "Patch non riuscita"
+
+msgid " (%(carried)d carried forward from before)"
+msgstr " (%(carried)d riportati da sessioni precedenti)"
+
+msgid "Patch written"
+msgstr "Patch scritta"
+
+msgid "%(records)d record(s) written to:\n%(path)s%(carried)s\n\nDeclares %(masters)d master(s). Add it to your load order LAST."
+msgstr "%(records)d record scritti in:\n%(path)s%(carried)s\n\nDichiara %(masters)d master. Aggiungila per ULTIMA nel tuo ordine di caricamento."
+
+msgid "Write the patch as"
+msgstr "Scrivi la patch come"
+
+msgid "Morrowind plugin"
+msgstr "Plugin di Morrowind"
+
+msgid "All files"
+msgstr "Tutti i file"
+
+msgid "Plugin view"
+msgstr "Vista plugin"
+
+msgid "Your load order as a tree. Open a plugin to see what it changes, and a record to compare it across every plugin that defines it. Records are read and judged as you open them. Read-only: nothing here writes."
+msgstr "Il tuo ordine di caricamento come un albero. Apri un plugin per vedere cosa cambia, e un record per confrontarlo su ogni plugin che lo definisce. I record vengono letti e valutati man mano che li apri. Sola lettura: niente qui scrive."
+
+msgid "Plugin / type / record"
+msgstr "Plugin / tipo / record"
+
+msgid "#"
+msgstr "#"
+
+msgid "Double-click a field for its full value across every plugin."
+msgstr "Doppio clic su un campo per il suo valore completo su ogni plugin."
+
+msgid "Colour says what this plugin is doing to the records beneath it:\n  blue = it defines them first\n  green = it changes them and nothing later disagrees\n  amber = it changes them, others disagreed, and it still wins\n  RED = it changes them and something later overrides the change\n  grey = it redefines them without changing anything\n\nRecords are read as you expand them, so colour fills in a moment after a group opens. A plugin takes the worst of whatever has been judged beneath it."
+msgstr "Il colore indica cosa questo plugin sta facendo ai record sottostanti:\n  blu = li definisce per primo\n  verde = li cambia e niente di successivo dissente\n  ambra = li cambia, altri hanno dissentito, e vince comunque\n  ROSSO = li cambia e qualcosa di successivo sovrascrive la modifica\n  grigio = li ridefinisce senza cambiare niente\n\nI record vengono letti man mano che li espandi, quindi il colore si riempie un momento dopo l'apertura di un gruppo. Un plugin prende il peggio di ciò che è stato valutato sotto."
+
+msgid "Select a record in the tree, then choose which plugin's whole version of it should win. Added to a patch that loads last; no mod is ever modified."
+msgstr "Seleziona un record nell'albero, poi scegli quale versione intera deve vincere. Aggiunta a una patch che si carica per ultima; nessun mod viene mai modificato."
+
+msgid "Select a record, then a field in the comparison on the right, and take just that field from a plugin of your choosing -- keeping the rest of the record as it is now."
+msgstr "Seleziona un record, poi un campo nel confronto a destra, e prendi solo quel campo da un plugin a tua scelta -- mantenendo il resto del record com'è."
+
+msgid "Select a record and a field on the right, then type your own value for it -- a number or string no plugin in the conflict uses. Written verbatim in the field's own type; your mods are not modified."
+msgstr "Seleziona un record e un campo a destra, poi digita il tuo valore -- un numero o una stringa che nessun plugin del conflitto usa. Scritto letteralmente nel tipo del campo; i tuoi mod non vengono modificati."
+
+msgid "Merge this plugin's fields..."
+msgstr "Unisci i campi di questo plugin…"
+
+msgid "Select a plugin above, then pick which of its fields should win across every record it defines -- one decision instead of hundreds. Reads the plugin in the background (the window stays responsive), then queues those fields into a patch. Records where this plugin already wins, or where the value already matches, are skipped; your mods are not modified."
+msgstr "Seleziona un plugin sopra, poi scegli quali dei suoi campi devono vincere su ogni record che definisce -- una decisione invece di centinaia. Legge il plugin in background (la finestra resta reattiva), poi mette in coda quei campi in una patch. I record dove questo plugin vince già, o dove il valore corrisponde già, vengono saltati; i tuoi mod non vengono modificati."
+
+msgid "Review and edit everything queued so far, then write it as one new plugin. Nothing is written until you say so."
+msgstr "Rivedi e modifica tutto ciò che è in coda finora, poi scrivilo come un nuovo plugin. Non viene scritto niente finché non lo dici."
+
+msgid "Highlight only conflicts that lose work"
+msgstr "Evidenzia solo i conflitti che perdono lavoro"
+
+msgid "Click a plugin to highlight the plugins it conflicts with, in purple.\n\nChecked (lost): only records where an edit is actually discarded -- the conflicts worth acting on. Needs a plugin summary, which opening this view starts on its own.\n\nUnchecked (broad): any record two plugins both touch, whether or not anything is lost."
+msgstr "Fai clic su un plugin per evidenziare in viola quelli con cui è in conflitto.\n\nSpuntato (perso): solo i record dove una modifica viene davvero scartata -- i conflitti su cui vale la pena agire. Richiede un riepilogo dei plugin, che aprire questa vista avvia da solo.\n\nNon spuntato (ampio): qualsiasi record che due plugin toccano entrambi, che qualcosa vada perso o no."
+
+msgid "(opening...)"
+msgstr "(apertura…)"
+
+msgid "Plugin view: %(n)d plugin(s). Open one to see what it changes."
+msgstr "Vista plugin: %(n)d plugin. Aprine uno per vedere cosa cambia."
+
+msgid "Nothing to show -- run a conflict scan first."
+msgstr "Niente da mostrare -- esegui prima un'analisi dei conflitti."
+
+msgid "Judging the first %(n)d of %(total)d record(s) in this group."
+msgstr "Valutazione dei primi %(n)d di %(total)d record in questo gruppo."
+
+msgid "%(name)s conflicts with %(n)d plugin(s) (highlighted)."
+msgstr "%(name)s è in conflitto con %(n)d plugin (evidenziati)."
+
+msgid "Judging the load order -- conflicts that lose work highlight when it finishes."
+msgstr "Valutazione dell'ordine di caricamento -- i conflitti che perdono lavoro vengono evidenziati al termine."
+
+msgid "%(name)s conflicts with nothing here."
+msgstr "%(name)s non è in conflitto con niente qui."
+
+msgid "  (wins)"
+msgstr "  (vince)"
+
+msgid "(set a tes3conv binary to compare fields)"
+msgstr "(imposta un binario tes3conv per confrontare i campi)"
+
+msgid "(busy, or this record could not be read)"
+msgstr "(occupato, o questo record non è stato letto)"
+
+msgid "Select a record in the tree first."
+msgstr "Seleziona prima un record nell'albero."
+
+msgid "Select a record in the tree, then a field in the comparison on the right."
+msgstr "Seleziona un record nell'albero, poi un campo nel confronto a destra."
+
+msgid "Select a plugin"
+msgstr "Seleziona un plugin"
+
+msgid "Select a plugin in the tree first, then try again."
+msgstr "Seleziona prima un plugin nell'albero, poi riprova."
+
+msgid "No field data"
+msgstr "Nessun dato di campo"
+
+msgid "Set a tes3conv binary to compare fields."
+msgstr "Imposta un binario tes3conv per confrontare i campi."
+
+msgid "Nothing to merge"
+msgstr "Niente da unire"
+
+msgid "%(name)s shares no record with another plugin, so there is nothing to take."
+msgstr "%(name)s non condivide alcun record con un altro plugin, quindi non c'è niente da prendere."
+
+msgid "Reading %(name)s (%(n)d record(s))..."
+msgstr "Lettura di %(name)s (%(n)d record)…"
+
+msgid "Could not read %(name)s: %(err)s"
+msgstr "Impossibile leggere %(name)s: %(err)s"
+
+msgid "%(name)s already wins every field it could change here."
+msgstr "%(name)s vince già ogni campo che potrebbe cambiare qui."
+
+msgid "%(name)s either already wins, or matches the winner, for every field -- so there is nothing to take."
+msgstr "%(name)s o vince già, o corrisponde al vincitore, per ogni campo -- quindi non c'è niente da prendere."
+
+msgid "Merge fields from %(name)s"
+msgstr "Unisci i campi da %(name)s"
+
+msgid "Pick the fields %(name)s should win, across every record it defines."
+msgstr "Scegli i campi che %(name)s deve vincere, su ogni record che definisce."
+
+msgid "The number is how many records each field would change.\nYour mods are not modified."
+msgstr "Il numero indica quanti record cambierebbe ogni campo.\nI tuoi mod non vengono modificati."
+
+msgid "This plugin's value"
+msgstr "Valore di questo plugin"
+
+msgid "%(fields)d field(s) selected, %(n)d record change(s) queued."
+msgstr "%(fields)d campo(i) selezionato(i), %(n)d modifica(e) di record in coda."
+
+msgid "Queued %(n)d field take(s) from %(name)s."
+msgstr "%(n)d presa(e) di campo da %(name)s in coda."
+
+msgid "Select all"
+msgstr "Seleziona tutto"
+
+msgid "Merge selected"
+msgstr "Unisci selezione"
+
+msgid "tes3cmd:"
+msgstr "tes3cmd:"
+
+msgid "Path to tes3cmd. Leave empty to auto-detect (PATH, next to this app, next to openmw.cfg). End users normally have the compiled tes3cmd.exe from the MOMW Tools Pack; the pure-perl script works too if perl is installed."
+msgstr "Percorso di tes3cmd. Lascialo vuoto per il rilevamento automatico (PATH, accanto a questa app, accanto a openmw.cfg). Gli utenti finali di solito hanno il tes3cmd.exe compilato del MOMW Tools Pack; anche lo script in puro Perl funziona se Perl è installato."
+
+msgid "Locate tes3cmd"
+msgstr "Individua tes3cmd"
+
+msgid "Browse..."
+msgstr "Sfoglia…"
+
+msgid "Plugins to run on"
+msgstr "Plugin su cui eseguire"
+
+msgid "My mods (last sort)"
+msgstr "I miei mod (ultimo ordinamento)"
+
+msgid "Add every custom mod from the last Sort whose file could be located (curated plugins are the list's job, not yours)."
+msgstr "Aggiungi ogni mod personalizzato dell'ultimo Ordinamento il cui file è stato individuato (i plugin curati sono compito della lista, non tuo)."
+
+msgid "List mods (last sort)"
+msgstr "Mod della lista (ultimo ordinamento)"
+
+msgid "Add every curated-list plugin from the last Sort whose file could be located -- the complement of 'My mods': everything ACTIVE that is NOT one of your custom additions."
+msgstr "Aggiungi ogni plugin della lista curata dell'ultimo Ordinamento il cui file è stato individuato -- il complemento di «I miei mod»: tutto ciò che è ATTIVO e NON è una delle tue aggiunte personalizzate."
+
+msgid "MOMW needs-cleaning"
+msgstr "MOMW da pulire"
+
+msgid "Add every ACTIVE plugin that plugin-order.yml flags as needs_cleaning (MOMW's own 'clean this one' list), resolved across the data folders. Requires the plugin-order.yml path on the main tab."
+msgstr "Aggiungi ogni plugin ATTIVO che plugin-order.yml segna come needs_cleaning (la lista «pulisci questo» di MOMW), risolto sulle cartelle dati. Richiede il percorso di plugin-order.yml nella scheda principale."
+
+msgid "Add file(s)..."
+msgstr "Aggiungi file…"
+
+msgid "Remove selected"
+msgstr "Rimuovi selezione"
+
+msgid "Clear"
+msgstr "Svuota"
+
+msgid "Command"
+msgstr "Comando"
+
+msgid "extra arguments:"
+msgstr "argomenti aggiuntivi:"
+
+msgid "Optional extra tes3cmd switches, e.g. --instances for clean, --author/--description for header. Passed through verbatim."
+msgstr "Opzioni tes3cmd aggiuntive facoltative, es. --instances per clean, --author/--description per l'intestazione. Passate letteralmente."
+
+msgid "Run"
+msgstr "Esegui"
+
+msgid "Output streams to the main Log. Modifying commands ask for confirmation first; tes3cmd makes its own backups."
+msgstr "L'output va al Registro principale. I comandi che modificano chiedono prima conferma; tes3cmd crea i propri backup."
+
+msgid "Run '1. Sort' first so I know which mods are yours."
+msgstr "Esegui prima «1. Ordina» così so quali mod sono i tuoi."
+
+msgid "tes3cmd: added %(count)d of your mods"
+msgstr "tes3cmd: aggiunti %(count)d dei tuoi mod"
+
+msgid " (%(count)d file not found in the data folders)"
+msgid_plural " (%(count)d files not found in the data folders)"
+msgstr[0] " (%(count)d file non trovato nelle cartelle dati)"
+msgstr[1] " (%(count)d file non trovati nelle cartelle dati)"
+
+msgid "Run '1. Sort' first so I know the active load order."
+msgstr "Esegui prima «1. Ordina» così conosco l'ordine di caricamento attivo."
+
+msgid "tes3cmd: added %(count)d list mod(s)"
+msgstr "tes3cmd: aggiunti %(count)d mod della lista"
+
+msgid "Set the plugin-order.yml path on the main tab first."
+msgstr "Imposta prima il percorso di plugin-order.yml nella scheda principale."
+
+msgid "Couldn't read plugin-order.yml: %(error)s"
+msgstr "Impossibile leggere plugin-order.yml: %(error)s"
+
+msgid "tes3cmd: added %(count)d needs-cleaning plugin"
+msgid_plural "tes3cmd: added %(count)d needs-cleaning plugins"
+msgstr[0] "tes3cmd: aggiunto %(count)d plugin da pulire"
+msgstr[1] "tes3cmd: aggiunti %(count)d plugin da pulire"
+
+msgid "Choose plugin file(s)"
+msgstr "Scegli file di plugin"
+
+msgid "Resync master sizes"
+msgstr "Risincronizza dimensioni master"
+
+msgid "Rewrite the recorded master sizes in %(count)d plugin file to match the installed masters?\n\nOnly the 8-byte size fields change; a one-time .masterfix.bak copy of each file is kept."
+msgid_plural "Rewrite the recorded master sizes in %(count)d plugin files to match the installed masters?\n\nOnly the 8-byte size fields change; a one-time .masterfix.bak copy of each file is kept."
+msgstr[0] "Riscrivere le dimensioni dei master registrate in %(count)d file di plugin per corrispondere ai master installati?\n\nCambiano solo i campi dimensione da 8 byte; viene conservata una copia .masterfix.bak una tantum di ogni file."
+msgstr[1] "Riscrivere le dimensioni dei master registrate in %(count)d file di plugin per corrispondere ai master installati?\n\nCambiano solo i campi dimensione da 8 byte; viene conservata una copia .masterfix.bak una tantum di ogni file."
+
+msgid "Resyncing master sizes..."
+msgstr "Risincronizzazione delle dimensioni dei master…"
+
+msgid "'%(path)s' does not exist. Fix the path or clear it to auto-detect."
+msgstr "«%(path)s» non esiste. Correggi il percorso o svuotalo per il rilevamento automatico."
+
+msgid "tes3cmd"
+msgstr "tes3cmd"
+
+msgid "tes3cmd not found. Browse to the compiled tes3cmd.exe (MOMW Tools Pack)."
+msgstr "tes3cmd non trovato. Naviga fino al tes3cmd.exe compilato (MOMW Tools Pack)."
+
+msgid "Add at least one plugin file first."
+msgstr "Aggiungi prima almeno un file di plugin."
+
+msgid "tes3cmd clean"
+msgstr "tes3cmd clean"
+
+msgid "Clean %(count)d plugin file?\n\nEach is staged into a private 'Data Files' with its masters so tes3cmd sees the full VFS; plugins whose masters can't be found are skipped. A one-time .preclean.bak copy of each modified file is kept."
+msgid_plural "Clean %(count)d plugin files?\n\nEach is staged into a private 'Data Files' with its masters so tes3cmd sees the full VFS; plugins whose masters can't be found are skipped. A one-time .preclean.bak copy of each modified file is kept."
+msgstr[0] "Pulire %(count)d file di plugin?\n\nCiascuno viene preparato in un «Data Files» privato con i suoi master così tes3cmd vede l'intero VFS; i plugin i cui master non si trovano vengono saltati. Viene conservata una copia .preclean.bak una tantum di ogni file modificato."
+msgstr[1] "Pulire %(count)d file di plugin?\n\nCiascuno viene preparato in un «Data Files» privato con i suoi master così tes3cmd vede l'intero VFS; i plugin i cui master non si trovano vengono saltati. Viene conservata una copia .preclean.bak una tantum di ogni file modificato."
+
+msgid "tes3cmd %(command)s running..."
+msgstr "tes3cmd %(command)s in esecuzione…"
+
+msgid "  Engine: %(command)s"
+msgstr "  Motore: %(command)s"
+
+msgid "  Staging dir: %(path)s"
+msgstr "  Cartella di preparazione: %(path)s"
+
+msgid "  SKIPPED: could not stage '%(name)s'."
+msgstr "  SALTATO: impossibile preparare «%(name)s»."
+
+msgid "  SKIPPED: master(s) not found in any data folder: %(names)s -- cleaning without the masters present gives wrong results."
+msgstr "  SALTATO: master non trovati in alcuna cartella dati: %(names)s -- pulire senza i master presenti dà risultati errati."
+
+msgid "  (exit code %(code)d) -- original NOT touched"
+msgstr "  (codice di uscita %(code)d) -- originale NON toccato"
+
+msgid "  no changes -- already clean"
+msgstr "  nessuna modifica -- già pulito"
+
+msgid "  cleaned: %(before)d -> %(after)d bytes (backup: %(backup)s)"
+msgstr "  pulito: %(before)d -> %(after)d byte (backup: %(backup)s)"
+
+msgid "  ERROR: %(error)s"
+msgstr "  ERRORE: %(error)s"
+
+msgid "tes3cmd clean: %(changed)d cleaned, %(clean)d already clean, %(skipped)d skipped (missing masters), %(failed)d failed."
+msgstr "tes3cmd clean: %(changed)d puliti, %(clean)d già puliti, %(skipped)d saltati (master mancanti), %(failed)d falliti."
+
+msgid "  Re-run '1. Sort' to refresh checks."
+msgstr "  Riesegui «1. Ordina» per aggiornare i controlli."
+
+msgid "tes3cmd %(command)s: %(ok)d ok, %(failed)d failed. See the log."
+msgstr "tes3cmd %(command)s: %(ok)d ok, %(failed)d falliti. Vedi il registro."
+
+msgid " MASTER-SIZE RESYNC (in-app, VFS-aware)"
+msgstr " RISINC. DIMENSIONI MASTER (nell'app, con VFS)"
+
+msgid "  %(name)s: ERROR: %(error)s"
+msgstr "  %(name)s: ERRORE: %(error)s"
+
+msgid "  %(name)s: already in sync"
+msgstr "  %(name)s: già sincronizzato"
+
+msgid "  %(name)s: WARNING: master '%(master)s' not found in any data folder -- its size field left untouched"
+msgstr "  %(name)s: AVVISO: master «%(master)s» non trovato in alcuna cartella dati -- il suo campo dimensione lasciato intatto"
+
+msgid "Resync: %(fixed)d plugin(s) updated, %(ok)d already in sync, %(failed)d error(s)."
+msgstr "Risinc.: %(fixed)d plugin aggiornati, %(ok)d già sincronizzati, %(failed)d errore(i)."
+
+msgid "  Re-run '1. Sort' to refresh the master check."
+msgstr "  Riesegui «1. Ordina» per aggiornare il controllo dei master."
+
+msgid "Locate the tes3conv executable"
+msgstr "Individua l'eseguibile tes3conv"
+
+msgid "tes3conv set - click 'Check Conflicts' again to re-scan with field diffs."
+msgstr "tes3conv impostato -- fai di nuovo clic su «Controlla conflitti» per rianalizzare con le differenze per campo."
+
+msgid "tes3conv set"
+msgstr "tes3conv impostato"
+
+msgid "tes3conv location saved.\n\nClick 'Check Conflicts' again to re-scan; the field comparison will then populate when you select a record."
+msgstr "Posizione di tes3conv salvata.\n\nFai di nuovo clic su «Controlla conflitti» per rianalizzare; il confronto dei campi si riempirà quando selezioni un record."
+
+msgid "could not read rule file %(file)s for predicate checks: %(error)s"
+msgstr "impossibile leggere il file delle regole %(file)s per i controlli dei predicati: %(error)s"
+
+msgid "NOTE: %(name)s: %(count)d conditional/unrecognized line inside ordering rules treated as not-installed and bridged over (mlox does the same)."
+msgid_plural "NOTE: %(name)s: %(count)d conditional/unrecognized lines inside ordering rules treated as not-installed and bridged over (mlox does the same)."
+msgstr[0] "NOTA: %(name)s: %(count)d riga condizionale/non riconosciuta nelle regole di ordinamento trattata come non installata e superata (mlox fa lo stesso)."
+msgstr[1] "NOTA: %(name)s: %(count)d righe condizionali/non riconosciute nelle regole di ordinamento trattate come non installate e superate (mlox fa lo stesso)."
+
+msgid "could not parse rule file %(file)s: %(error)s"
+msgstr "impossibile analizzare il file delle regole %(file)s: %(error)s"
+
+msgid "Loaded %(count)d plugin refs from %(file)s"
+msgstr "%(count)d riferimenti di plugin caricati da %(file)s"
+
+msgid "%(count)d mlox ordering rule not applied -- your openmw.cfg already orders these the other way, so your (curated) cfg order is kept:"
+msgid_plural "%(count)d mlox ordering rules not applied -- your openmw.cfg already orders these the other way, so your (curated) cfg order is kept:"
+msgstr[0] "%(count)d regola di ordinamento mlox non applicata -- il tuo openmw.cfg le ordina già al contrario, quindi viene mantenuto il tuo ordine cfg (curato):"
+msgstr[1] "%(count)d regole di ordinamento mlox non applicate -- il tuo openmw.cfg le ordina già al contrario, quindi viene mantenuto il tuo ordine cfg (curato):"
+
+msgid "    - mlox wanted '%(first)s' before '%(second)s', but your load order already has '%(second)s' before '%(first)s'"
+msgstr "    - mlox voleva «%(first)s» prima di «%(second)s», ma il tuo ordine di caricamento ha già «%(second)s» prima di «%(first)s»"
+
+msgid "WARNING: %(count)d plugin could not be placed due to an unresolved cycle and was appended at the end: %(names)s"
+msgid_plural "WARNING: %(count)d plugins could not be placed due to an unresolved cycle and were appended at the end: %(names)s"
+msgstr[0] "AVVISO: %(count)d plugin non è stato collocato per un ciclo irrisolto ed è stato aggiunto alla fine: %(names)s"
+msgstr[1] "AVVISO: %(count)d plugin non sono stati collocati per un ciclo irrisolto e sono stati aggiunti alla fine: %(names)s"
+
+msgid "No exterior cells have conflicts."
+msgstr "Nessuna cella esterna ha conflitti."
+
+msgid "(%(x)d, %(y)d) â %(count)d conflict, %(n)d plugin(s): %(plugins)s"
+msgid_plural "(%(x)d, %(y)d) â %(count)d conflicts, %(n)d plugin(s): %(plugins)s"
+msgstr[0] "(%(x)d, %(y)d) → %(count)d conflitto, %(n)d plugin: %(plugins)s"
+msgstr[1] "(%(x)d, %(y)d) → %(count)d conflitti, %(n)d plugin: %(plugins)s"
+
+msgid "Cell"
+msgstr "Cella"
+
+msgid "Conflicts"
+msgstr "Conflitti"
+
+msgid "Yours"
+msgstr "I tuoi"
+
+msgid "Record types"
+msgstr "Tipi di record"
+
+msgid "Usually wins"
+msgstr "Di solito vince"
+
+msgid "terrain shape, textures and vertex colors"
+msgstr "forma del terreno, texture e colori dei vertici"
+
+msgid "NPC navigation -- broken edges strand NPCs, and nothing else reports it"
+msgstr "navigazione degli PNG -- gli archi rotti bloccano gli PNG, e niente altro lo segnala"
+
+msgid "the cell's own record: name, water level, region, ambient light"
+msgstr "il record proprio della cella: nome, livello dell'acqua, regione, luce ambientale"
+
+msgid "Record type"
+msgstr "Tipo di record"
+
+msgid "Cells"
+msgstr "Celle"
+
+msgid "What it governs"
+msgstr "Cosa governa"
+
+msgid "Focus on plugin:"
+msgstr "Concentrati sul plugin:"
+
+msgid "- all plugins -"
+msgstr "- tutti i plugin -"
+
+msgid "Cells with conflicts"
+msgstr "Celle con conflitti"
+
+msgid "Spatial conflicts"
+msgstr "Conflitti spaziali"
+
+msgid "Involving your mods"
+msgstr "Che coinvolgono i tuoi mod"
+
+msgid "Non-spatial (objects, dialogue, interiors)"
+msgstr "Non spaziale (oggetti, dialoghi, interni)"
+
+msgid "Conflict density by cell"
+msgstr "Densità di conflitti per cella"
+
+msgid "outlined = involves your mods"
+msgstr "con contorno = coinvolge i tuoi mod"
+
+msgid "Conflicting records per cell. North is up. Hover a cell for its count and which plugins are conflicting there. Each of the first few counts has its own color and larger counts are grouped, because one, two and three conflicts are different situations while thirty and thirty-five are not. Focusing a plugin recolors its cells by its own count there on this same scale, and mutes the rest."
+msgstr "Record in conflitto per cella. Il nord è in alto. Passa sopra una cella per il suo conteggio e quali plugin sono in conflitto lì. Ognuno dei primi conteggi ha il proprio colore e quelli maggiori vengono raggruppati, perché uno, due e tre conflitti sono situazioni diverse mentre trenta e trentacinque non lo sono. Mettere a fuoco un plugin ricolora le sue celle in base al suo conteggio sulla stessa scala, e attenua il resto."
+
+msgid "What is being edited"
+msgstr "Cosa viene modificato"
+
+msgid "All cells (worst first)"
+msgstr "Tutte le celle (le peggiori prima)"
+
+msgid "Touches %(cells)s cell(s), %(total)s conflict(s) here. %(breakdown)s"
+msgstr "Tocca %(cells)s cella(e), %(total)s conflitto(i) qui. %(breakdown)s"
+
+msgid "(no type breakdown available)"
+msgstr "(nessuna suddivisione per tipo disponibile)"
+
+msgid "Conflict map"
+msgstr "Mappa dei conflitti"
+
+msgid "Cells where the same record is defined by more than one plugin. Coverage (which mods touch which cells) is a different question -- see the cell map."
+msgstr "Celle dove lo stesso record è definito da più di un plugin. La copertura (quali mod toccano quali celle) è un'altra questione -- vedi la mappa delle celle."
+
+msgid "On this page"
+msgstr "In questa pagina"
+
+msgid "Rendered from %(name)s"
+msgstr "Generato da %(name)s"
+
+msgid "Program documentation"
+msgstr "Documentazione del programma"
+
+msgid "Generated %(when)s"
+msgstr "Generato %(when)s"
+
+msgid "Base: %(plugin)s"
+msgstr "Base: %(plugin)s"
+
+msgid "Winner: %(plugin)s"
+msgstr "Vincitore: %(plugin)s"
+
+msgid "Winner"
+msgstr "Vincitore"
+
+msgid "Step"
+msgstr "Passo"
+
+msgid "Height difference"
+msgstr "Differenza di altezza"
+
+msgid "higher than the previous step"
+msgstr "più alto del passo precedente"
+
+msgid "lower than the previous step"
+msgstr "più basso del passo precedente"
+
+msgid "North is up. Unchanged vertices are left blank on a diff step, and color saturates at that step's largest movement, so shades are comparable within a page but not between pages. The Base step has nothing before it to diff against, so it shows that plugin's own absolute elevation on a separate low-to-high scale instead."
+msgstr "Il nord è in alto. I vertici invariati restano vuoti in un passo di differenza, e il colore si satura al movimento maggiore di quel passo, così le tonalità sono confrontabili all'interno di una pagina ma non tra pagine. Il passo base non ha niente prima con cui confrontare, quindi mostra l'elevazione assoluta propria di quel plugin su una scala a parte dal basso all'alto."
+
+msgid "Base version"
+msgstr "Versione base"
+
+msgid "vertex (%(col)s, %(row)s): %(delta)s units"
+msgstr "vertice (%(col)s, %(row)s): %(delta)s unità"
+
+msgid "vertex (%(col)s, %(row)s): %(height)s units"
+msgstr "vertice (%(col)s, %(row)s): %(height)s unità"
+
+msgid "Absolute elevation, %(lo)s to %(hi)s units. Nothing loaded before it to compare against."
+msgstr "Elevazione assoluta, %(lo)s a %(hi)s unità. Niente caricato prima con cui confrontare."
+
+msgid "%(changed)s of %(total)s vertices differ from the previous step. Largest movement %(peak)s units (%(up)s raised, %(down)s lowered)."
+msgstr "%(changed)s di %(total)s vertici differiscono dal passo precedente. Movimento maggiore %(peak)s unità (%(up)s alzati, %(down)s abbassati)."
+
+msgid "The terrain is identical at this step. It differs from the previous step in some other field -- textures, colors or the world map -- not in height."
+msgstr "Il terreno è identico in questo passo. Differisce dal passo precedente in un altro campo -- texture, colori o mappa del mondo -- non in altezza."
+
+msgid "Terrain difference"
+msgstr "Differenza di terreno"
+
+msgid "Absolute heights, decoded and subtracted. Comparing the raw fields is misleading: heights are stored as cumulative deltas, so moving one vertex changes every byte after it."
+msgstr "Altezze assolute, decodificate e sottratte. Confrontare i campi grezzi è fuorviante: le altezze sono memorizzate come delta cumulativi, così spostare un vertice cambia ogni byte successivo."
+
+msgid "Nothing to show."
+msgstr "Niente da mostrare."
+
+msgid "point %(index)d at (%(x)d, %(y)d, %(z)d)"
+msgstr "punto %(index)d in (%(x)d, %(y)d, %(z)d)"
+
+msgid "Points"
+msgstr "Punti"
+
+msgid "Connections"
+msgstr "Connessioni"
+
+msgid "Extent"
+msgstr "Estensione"
+
+msgid "%(units)d world units"
+msgstr "%(units)d unità del mondo"
+
+msgid "path point"
+msgstr "punto del percorso"
+
+msgid "edge added at this step"
+msgstr "arco aggiunto in questo passo"
+
+msgid "edge removed at this step"
+msgstr "arco rimosso in questo passo"
+
+msgid "unchanged"
+msgstr "invariato"
+
+msgid "connection"
+msgstr "connessione"
+
+msgid "Edges added"
+msgstr "Archi aggiunti"
+
+msgid "Edges removed"
+msgstr "Archi rimossi"
+
+msgid "Top-down view, north up. Hover a point for its coordinates."
+msgstr "Vista dall'alto, nord in alto. Passa sopra un punto per le sue coordinate."
+
+msgid "Base version â nothing loaded before it to compare against."
+msgstr "Versione base -- niente caricato prima con cui confrontare."
+
+msgid "The navigation graph is unchanged at this step. These records differ in point positions or flags, not in connectivity."
+msgstr "Il grafo di navigazione è invariato in questo passo. Questi record differiscono nelle posizioni dei punti o nei flag, non nella connettività."
+
+msgid "This step only removes connections. That is the shape of an accidentally rebuilt path grid, and it is worth checking in game."
+msgstr "Questo passo rimuove solo connessioni. È la forma di una griglia dei percorsi ricostruita per sbaglio, e vale la pena controllarla nel gioco."
+
+msgid "Navigation graph"
+msgstr "Grafo di navigazione"
+
+msgid "Path grid"
+msgstr "Griglia dei percorsi"
+
+msgid "The navigation mesh NPCs follow, and what this plugin changed about it."
+msgstr "La mesh di navigazione che gli PNG seguono, e cosa questo plugin vi ha cambiato."
+
+msgid "Height range: %(lo)s to %(hi)s units"
+msgstr "Intervallo di altezza: %(lo)s a %(hi)s unità"
+
+msgid "(vertical exaggerated %(times)sx)"
+msgstr "(verticale esagerata %(times)sx)"
+
+msgid "contours every %(step)s units"
+msgstr "curve di livello ogni %(step)s unità"
+
+msgid "Reset"
+msgstr "Reimposta"
+
+msgid "Isometric"
+msgstr "Isometrica"
+
+msgid "Top down"
+msgstr "Vista dall'alto"
+
+msgid "Shading:"
+msgstr "Ombreggiatura:"
+
+msgid "Relief"
+msgstr "Rilievo"
+
+msgid "Flat facets"
+msgstr "Sfaccettature piatte"
+
+msgid "Hillshade"
+msgstr "Ombreggiatura del rilievo"
+
+msgid "Lights:"
+msgstr "Luci:"
+
+msgid "Single"
+msgstr "Singola"
+
+msgid "3-way"
+msgstr "3 direzioni"
+
+msgid "6-way"
+msgstr "6 direzioni"
+
+msgid "Scales:"
+msgstr "Scale:"
+
+msgid "Multiscale"
+msgstr "Multiscala"
+
+msgid "Sun azimuth:"
+msgstr "Azimut del sole:"
+
+msgid "Sun altitude:"
+msgstr "Altezza del sole:"
+
+msgid "Tint:"
+msgstr "Tinta:"
+
+msgid "Hypsometric"
+msgstr "Ipsometrica"
+
+msgid "Rainbow"
+msgstr "Arcobaleno"
+
+msgid "Greyscale"
+msgstr "Scala di grigi"
+
+msgid "Tint %:"
+msgstr "Tinta %:"
+
+msgid "Contours"
+msgstr "Curve di livello"
+
+msgid "Vertical:"
+msgstr "Verticale:"
+
+msgid "%(times)sx"
+msgstr "%(times)sx"
+
+msgid "Drag to rotate, shift/right-drag to pan, scroll to zoom. Shading follows slope, which reads as terrain better than height does. Heights are drawn to the same scale as the ground, so a slope here is the slope in game."
+msgstr "Trascina per ruotare, Maiusc/trascinamento-destro per spostare, rotella per ingrandire. L'ombreggiatura segue la pendenza, che si legge come terreno meglio dell'altezza. Le altezze sono disegnate alla stessa scala del suolo, così una pendenza qui è la pendenza nel gioco."
+
+msgid "Drag to rotate, shift/right-drag to pan, scroll to zoom; switch plugins to see the same cell as each one leaves it. Shading follows slope. Heights are drawn to the same scale as the ground, so a slope here is the slope in game."
+msgstr "Trascina per ruotare, Maiusc/trascinamento-destro per spostare, rotella per ingrandire; cambia plugin per vedere la stessa cella come la lascia ciascuno. L'ombreggiatura segue la pendenza. Le altezze sono disegnate alla stessa scala del suolo, così una pendenza qui è la pendenza nel gioco."
+
+msgid "Some records could not be decoded: %(detail)s"
+msgstr "Alcuni record non sono stati decodificati: %(detail)s"
+
+msgid "Surfaces"
+msgstr "Superfici"
+
+msgid "Terrain surface"
+msgstr "Superficie del terreno"
+
+msgid "The same 65x65 height grid the text view lists, as a shape you can turn."
+msgstr "La stessa griglia di altezze 65x65 elencata dalla vista testuale, come una figura che puoi ruotare."
+
+msgid "couldn't stage '%(name)s': %(error)s"
+msgstr "impossibile preparare «%(name)s»: %(error)s"
+
+msgid "could not read the mesh: %(reason)s"
+msgstr "impossibile leggere la mesh: %(reason)s"
+
+msgid "loses collision"
+msgstr "perde la collisione"
+
+msgid "loses animation"
+msgstr "perde l'animazione"
+
+msgid "needs %(count)d texture the other does not ship"
+msgid_plural "needs %(count)d textures the other does not ship"
+msgstr[0] "richiede %(count)d texture che l'altro non include"
+msgstr[1] "richiede %(count)d texture che l'altro non include"
+
+msgid "%(percent)d%% of the triangles"
+msgstr "%(percent)d%% dei triangoli"
+
+msgid "Mesh contents (read just now):"
+msgstr "Contenuto della mesh (letto proprio ora):"
+
+msgid "  %(n)d. %(dir)s - could not read: %(why)s"
+msgstr "  %(n)d. %(dir)s -- impossibile leggere: %(why)s"
+
+msgid "%(count)d shape"
+msgid_plural "%(count)d shapes"
+msgstr[0] "%(count)d forma"
+msgstr[1] "%(count)d forme"
+
+msgid "%(count)d triangle"
+msgid_plural "%(count)d triangles"
+msgstr[0] "%(count)d triangolo"
+msgstr[1] "%(count)d triangoli"
+
+msgid "%(count)d texture"
+msgid_plural "%(count)d textures"
+msgstr[0] "%(count)d texture"
+msgstr[1] "%(count)d texture"
+
+msgid "collision"
+msgstr "collisione"
+
+msgid "no collision"
+msgstr "nessuna collisione"
+
+msgid "animated"
+msgstr "animato"
+
+msgid "PARTIAL: %(read)d of %(declared)d blocks"
+msgstr "PARZIALE: %(read)d di %(declared)d blocchi"
+
+msgid "  Against provider %(n)d, the winner %(note)s."
+msgstr "  Contro il fornitore %(n)d, il vincitore %(note)s."
+
+msgid "  Textures referenced: %(list)s"
+msgstr "  Texture referenziate: %(list)s"
+
+msgid "  %(count)d mesh conflict changes what the asset does; those lines are marked below."
+msgid_plural "  %(count)d mesh conflicts change what the asset does; those lines are marked below."
+msgstr[0] "  %(count)d conflitto di mesh cambia ciò che l'asset fa; quelle righe sono contrassegnate sotto."
+msgstr[1] "  %(count)d conflitti di mesh cambiano ciò che l'asset fa; quelle righe sono contrassegnate sotto."
+
+msgid "Backup written: %(path)s"
+msgstr "Backup scritto: %(path)s"
+
+msgid "\n--- DRY RUN: no files written ---"
+msgstr "\n--- SIMULAZIONE: nessun file scritto ---"
+
+msgid "Wrote updated: %(path)s"
+msgstr "Aggiornato scritto: %(path)s"
+
+msgid "Scanned '%(path)s': %(folders)d mod folder(s), %(plugins)d plugin(s)."
+msgstr "«%(path)s» analizzato: %(folders)d cartella(e) di mod, %(plugins)d plugin."
+
+msgid "Wrote subset file: %(path)s"
+msgstr "File di sottoinsieme scritto: %(path)s"
+
+msgid "'%(entry)s' from %(source)s is declared as groundcover but is not a plugin filename -- skipping."
+msgstr "«%(entry)s» da %(source)s è dichiarato come groundcover ma non è un nome di file di plugin -- saltato."
+
+msgid "'%(entry)s' from %(source)s doesn't look like a plugin filename or a data folder path (no recognized extension, no slash) -- skipping."
+msgstr "«%(entry)s» da %(source)s non sembra un nome di file di plugin né un percorso di cartella dati (nessuna estensione riconosciuta, nessuna barra) -- saltato."
+
+msgid "  %(file)s: %(plugins)d plugin(s), %(paths)d data path(s)"
+msgstr "  %(file)s: %(plugins)d plugin, %(paths)d percorso(i) dati"
+
+msgid "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(paths)s"
+msgstr "  NOTA: inserimenti di percorsi dati trovati ma non ordinati (passa --sort-data-paths per includerli): %(paths)s"
+
+msgid "  in-memory scan: %(plugins)d plugin(s), %(paths)d data path(s)"
+msgstr "  analisi in memoria: %(plugins)d plugin, %(paths)d percorso(i) dati"
+
+msgid "  NOTE: data path insertion found but not sorted (pass --sort-data-paths to include it): %(count)d path"
+msgid_plural "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(count)d paths"
+msgstr[0] "  NOTA: inserimento di percorso dati trovato ma non ordinato (passa --sort-data-paths per includerlo): %(count)d percorso"
+msgstr[1] "  NOTA: inserimenti di percorsi dati trovati ma non ordinati (passa --sort-data-paths per includerli): %(count)d percorsi"
+
+msgid "  %(file)s: %(plugins)d content plugin(s), %(paths)d data path(s)"
+msgstr "  %(file)s: %(plugins)d plugin di contenuto, %(paths)d percorso(i) dati"
+
+msgid "  Loaded %(count)d plugin entry from %(file)s"
+msgid_plural "  Loaded %(count)d plugin entries from %(file)s"
+msgstr[0] "  %(count)d voce di plugin caricata da %(file)s"
+msgstr[1] "  %(count)d voci di plugin caricate da %(file)s"
+
+msgid "  WARNING: could not read plugin-order.yml (%(error)s) -- skipping yml checks."
+msgstr "  AVVISO: impossibile leggere plugin-order.yml (%(error)s) -- controlli yml saltati."
+
+msgid "  '%(list)s': %(count)d curated plugin on this list"
+msgid_plural "  '%(list)s': %(count)d curated plugins on this list"
+msgstr[0] "  «%(list)s»: %(count)d plugin curato in questa lista"
+msgstr[1] "  «%(list)s»: %(count)d plugin curati in questa lista"
+
+msgid "  WARNING: no plugins found for list '%(list)s' in the yml -- check the list name spelling. Curated-set checks skipped."
+msgstr "  AVVISO: nessun plugin trovato per la lista «%(list)s» nel yml -- controlla l'ortografia del nome della lista. Controlli del set curato saltati."
+
+msgid "  Excluded %(count)d curated plugin from the sort: %(names)s"
+msgid_plural "  Excluded %(count)d curated plugins from the sort: %(names)s"
+msgstr[0] "  %(count)d plugin curato escluso dall'ordinamento: %(names)s"
+msgstr[1] "  %(count)d plugin curati esclusi dall'ordinamento: %(names)s"
+
+msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
+msgstr "\n  Già in cfg, verrà riposizionato al suo interno: %(names)s"
+
+msgid "  Not in cfg yet, will be inserted: %(names)s"
+msgstr "  Non ancora in cfg, verrà inserito: %(names)s"
+
+msgid "  Read header masters for %(have)d of %(total)d custom plugin(s)."
+msgstr "  Master di intestazione letti per %(have)d di %(total)d plugin personalizzati."
+
+msgid "\n  No [Conflict]/[Requires]/[Note] warnings triggered."
+msgstr "\n  Nessun avviso [Conflict]/[Requires]/[Note] attivato."
+
+msgid "\n  No plugin-order.yml warnings."
+msgstr "\n  Nessun avviso di plugin-order.yml."
+
+msgid "  (plugin files not reachable from the data folders; can't read headers)"
+msgstr "  (file di plugin non raggiungibili dalle cartelle dati; impossibile leggere le intestazioni)"
+
+msgid "  All masters present and correctly ordered."
+msgstr "  Tutti i master presenti e correttamente ordinati."
+
+msgid "master check failed: %(error)s"
+msgstr "controllo dei master fallito: %(error)s"
+
+msgid "\n[STALE] '%(artifact)s' is older than %(count)d active plugin (e.g. %(examples)s%(more)s) -- re-run momw-configurator so it gets rebuilt against the current load order."
+msgid_plural "\n[STALE] '%(artifact)s' is older than %(count)d active plugins (e.g. %(examples)s%(more)s) -- re-run momw-configurator so it gets rebuilt against the current load order."
+msgstr[0] "\n[OBSOLETO] «%(artifact)s» è più vecchio di %(count)d plugin attivo (es. %(examples)s%(more)s) -- riesegui momw-configurator così viene ricostruito contro l'ordine di caricamento attuale."
+msgstr[1] "\n[OBSOLETO] «%(artifact)s» è più vecchio di %(count)d plugin attivi (es. %(examples)s%(more)s) -- riesegui momw-configurator così viene ricostruito contro l'ordine di caricamento attuale."
+
+msgid "  (excluded %(count)d plugin by --exclude)"
+msgid_plural "  (excluded %(count)d plugins by --exclude)"
+msgstr[0] "  (%(count)d plugin escluso da --exclude)"
+msgstr[1] "  (%(count)d plugin esclusi da --exclude)"
+
+msgid "  Keeping tes3conv JSON dump in: %(path)s"
+msgstr "  Conservo l'esportazione JSON di tes3conv in: %(path)s"
+
+msgid "  Engine: %(engine)s"
+msgstr "  Motore: %(engine)s"
+
+msgid "native esp reader (field-level)"
+msgstr "lettore esp nativo (per campo)"
+
+msgid "\n  Wrote conflict report: %(path)s"
+msgstr "\n  Report dei conflitti scritto: %(path)s"
+
+msgid "could not write conflict CSV: %(error)s"
+msgstr "impossibile scrivere il CSV dei conflitti: %(error)s"
+
+msgid "  Scanned %(scanned)d plugin(s): %(exterior)d exterior + %(interior)d interior cell(s) touched."
+msgstr "  %(scanned)d plugin analizzati: %(exterior)d esterna(e) + %(interior)d interna(e) toccate."
+
+msgid "  Wrote cell map: %(path)s  (open it in a browser)"
+msgstr "  Mappa delle celle scritta: %(path)s  (aprila in un browser)"
+
+msgid "could not write cell map: %(error)s"
+msgstr "impossibile scrivere la mappa delle celle: %(error)s"
+
+msgid "  Scanned %(scanned)d plugin(s); %(cells)d interior cell(s), %(grids)d interior pathgrid(s)."
+msgstr "  %(scanned)d plugin analizzati; %(cells)d cella(e) interna(e), %(grids)d griglia(e) di percorsi interna(e)."
+
+msgid "\n  No lint findings."
+msgstr "\n  Nessun rilievo dall'analisi."
+
+msgid "\n  Wrote resource report: %(path)s"
+msgstr "\n  Report delle risorse scritto: %(path)s"
+
+msgid "could not write resource CSV: %(error)s"
+msgstr "impossibile scrivere il CSV delle risorse: %(error)s"
+
+msgid "  Pass --sort-data-paths to enable:"
+msgstr "  Passa --sort-data-paths per abilitare:"
+
+msgid "  <-- inserted"
+msgstr "  <-- inserito"
+
+msgid "UNMANAGED (ORPHAN) ENTRIES FROM openmw.cfg"
+msgstr "VOCI NON GESTITE (ORFANE) DA openmw.cfg"
+
+msgid "  %(count)d orphan plugin pulled from openmw.cfg"
+msgid_plural "  %(count)d orphan plugins pulled from openmw.cfg"
+msgstr[0] "  %(count)d plugin orfano recuperato da openmw.cfg"
+msgstr[1] "  %(count)d plugin orfani recuperati da openmw.cfg"
+
+msgid "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations."
+msgstr "  Nessun plugin non gestito trovato -- ogni plugin content= nella cfg è nella lista o nelle tue personalizzazioni."
+
+msgid "groundcover declared by this run"
+msgstr "groundcover dichiarato da questa esecuzione"
+
+msgid "  These are written as groundcover= rather than content=. Their data= folders are inserted normally -- OpenMW has to find the file."
+msgstr "  Questi vengono scritti come groundcover= invece che content=. Le loro cartelle data= vengono inserite normalmente -- OpenMW deve trovare il file."
+
+msgid "groundcover plugins held back"
+msgstr "plugin groundcover trattenuti"
+
+msgid "%(count)d plugin in your subset is already declared as groundcover in openmw.cfg, so it was NOT added to content=:"
+msgid_plural "%(count)d plugins in your subset are already declared as groundcover in openmw.cfg, so they were NOT added to content=:"
+msgstr[0] "%(count)d plugin nel tuo sottoinsieme è già dichiarato come groundcover in openmw.cfg, quindi NON è stato aggiunto a content=:"
+msgstr[1] "%(count)d plugin nel tuo sottoinsieme sono già dichiarati come groundcover in openmw.cfg, quindi NON sono stati aggiunti a content=:"
+
+msgid "  Their groundcover= lines are untouched and their data= paths are still written, so the grass stays enabled -- as grass. Loading one as content= too would spawn every blade as a real object."
+msgstr "  Le loro righe groundcover= restano intatte e i loro percorsi data= vengono comunque scritti, così l'erba resta abilitata -- come erba. Caricarne uno anche come content= farebbe apparire ogni filo come un oggetto reale."
+
+msgid "  openmw.cfg left untouched (pass --write-cfg to patch it directly)"
+msgstr "  openmw.cfg lasciato intatto (passa --write-cfg per applicarvi la patch direttamente)"
+
+msgid "  WARNING: configurator preview failed: %(error)s"
+msgstr "  AVVISO: l'anteprima del configuratore è fallita: %(error)s"
+
+msgid "\n  DRY RUN: would write %(path)s\n%(toml)s"
+msgstr "\n  SIMULAZIONE: scriverebbe %(path)s\n%(toml)s"
+
+msgid "  Wrote corrected customizations: %(path)s"
+msgstr "  Personalizzazioni corrette scritte: %(path)s"
+
+msgid "  Plugins sorted:        %(count)d"
+msgstr "  Plugin ordinati:        %(count)d"
+
+msgid "  Data paths inserted:   %(count)d"
+msgstr "  Percorsi dati inseriti: %(count)d"
+
+msgid "  Rule warnings raised:  %(count)d"
+msgstr "  Avvisi di regole:       %(count)d"
+
+msgid "  plugin-order.yml warnings: %(count)d"
+msgstr "  Avvisi di plugin-order.yml: %(count)d"
+
+msgid "  openmw.cfg written:    %(answer)s"
+msgstr "  openmw.cfg scritto:     %(answer)s"
+
+msgid "yes"
+msgstr "sì"
+
+msgid "no"
+msgstr "no"
+
+msgid "  customizations.toml written: %(answer)s"
+msgstr "  customizations.toml scritto: %(answer)s"
+
+msgid "Rule files (priority = order below, last = highest -- drag rows to reorder)"
+msgstr "File delle regole (priorità = ordine sotto, ultimo = più alta -- trascina le righe per riordinare)"
+
+msgid "mlox rule files (mlox_base.txt, mlox_user.txt, ...), applied in this order.\nLater files can override/extend earlier ones -- put mlox_base.txt first and your own mlox_user.txt last. Drag rows to reorder, or use the buttons."
+msgstr "File delle regole mlox (mlox_base.txt, mlox_user.txt, …), applicati in questo ordine.\nI file successivi possono sovrascrivere/estendere i precedenti -- metti mlox_base.txt per primo e il tuo mlox_user.txt per ultimo. Trascina le righe per riordinare, o usa i pulsanti."
+
+msgid "Add File(s)..."
+msgstr "Aggiungi file…"
+
+msgid "Browse for one or more mlox rule .txt files to add to the list."
+msgstr "Sfoglia per aggiungere uno o più file .txt di regole mlox alla lista."
+
+msgid "Remove Selected"
+msgstr "Rimuovi selezione"
+
+msgid "Remove the selected rule file from the list (doesn't delete anything on disk)."
+msgstr "Rimuovi il file delle regole selezionato dalla lista (non elimina niente dal disco)."
+
+msgid "Move Up"
+msgstr "Sposta su"
+
+msgid "Move the selected rule file earlier (lower priority)."
+msgstr "Sposta il file delle regole selezionato prima (priorità inferiore)."
+
+msgid "Move Down"
+msgstr "Sposta giù"
+
+msgid "Move the selected rule file later (higher priority)."
+msgstr "Sposta il file delle regole selezionato dopo (priorità superiore)."
+
+msgid "New Rule..."
+msgstr "Nuova regola…"
+
+msgid "Write your own mlox [Order]/[NearStart]/[NearEnd] rule without knowing the syntax: pick plugins (or grab the selected rows from the plugin panel), preview the rule, and append it to a personal rules file that loads LAST so it wins conflicts. This is how rules for modern mods get made -- consider contributing good ones upstream."
+msgstr "Scrivi la tua regola mlox [Order]/[NearStart]/[NearEnd] senza conoscerne la sintassi: scegli plugin (o prendi le righe selezionate dal pannello dei plugin), anteprima la regola, e aggiungila a un file delle regole personale che si carica per ULTIMO così vince i conflitti. È così che nascono le regole dei mod moderni -- valuta di contribuirne di buone a monte."
+
+msgid "Update Rules..."
+msgstr "Aggiorna regole…"
+
+msgid "Download the CURRENT mlox_base.txt / mlox_user.txt from the actively maintained rules repo (github.com/%(repo)s -- the same source plox uses, and mlox 1.1+ auto-updates from) over the matching files in this list. The old files are kept as timestamped .bak copies. Files with other names (your personal rules) are never touched. Source URL configurable via Sources..."
+msgstr "Scarica i mlox_base.txt / mlox_user.txt ATTUALI dal repository di regole mantenuto attivamente (github.com/%(repo)s -- la stessa fonte che usa plox, e da cui mlox 1.1+ si aggiorna) sopra i file corrispondenti in questa lista. I vecchi file vengono conservati come copie .bak con marca temporale. I file con altri nomi (le tue regole personali) non vengono mai toccati. URL di origine configurabile tramite Origini…"
+
+msgid "Sources..."
+msgstr "Origini…"
+
+msgid "Configure WHERE 'Update Rules...' and the plugin-order.yml 'Update...' button download from -- point them at a fork or mirror if upstream moves. Blank fields use the built-in defaults."
+msgstr "Configura DA DOVE scaricano «Aggiorna regole…» e il pulsante «Aggiorna…» di plugin-order.yml -- puntali a un fork o mirror se la fonte a monte si sposta. I campi vuoti usano i valori predefiniti integrati."
+
+msgid "(install tkinterdnd2 to drag files in from your file manager)"
+msgstr "(installa tkinterdnd2 per trascinare file dal tuo gestore di file)"
+
+msgid "Choose a folder for the mlox rule files"
+msgstr "Scegli una cartella per i file delle regole mlox"
+
+msgid "Update rules"
+msgstr "Aggiorna regole"
+
+msgid "Download the current mlox rules from github.com/%(repo)s?\n\n%(files)s\n\nThey don't exist yet -- they'll be created here."
+msgstr "Scaricare le regole mlox attuali da github.com/%(repo)s?\n\n%(files)s\n\nNon esistono ancora -- verranno create qui."
+
+msgid "Download the current rules from github.com/%(repo)s over these files?\n\n%(age)s\n\nTimestamped .bak copies of the old files are kept."
+msgstr "Scaricare le regole attuali da github.com/%(repo)s sopra questi file?\n\n%(age)s\n\nVengono conservate copie .bak con marca temporale dei vecchi file."
+
+msgid "Move the selected row(s) one position earlier. Works with a multi-selection; you can also drag a contiguous block up with the mouse."
+msgstr "Sposta la(e) riga(he) selezionata(e) una posizione prima. Funziona con selezione multipla; puoi anche trascinare un blocco contiguo verso l'alto col mouse."
+
+msgid "Move the selected row(s) one position later. Works with a multi-selection; you can also drag a contiguous block down with the mouse."
+msgstr "Sposta la(e) riga(he) selezionata(e) una posizione dopo. Funziona con selezione multipla; puoi anche trascinare un blocco contiguo verso il basso col mouse."
+
+msgid "Disable / Enable"
+msgstr "Disabilita / Abilita"
+
+msgid "Opt the selected row in or out of the load order. Disabled rows are dimmed and marked, and are left out of Export: a custom item is simply not inserted, and an item already in your openmw.cfg gets a removeContent/removeData entry in the emitted TOML so it's durably removed. Double-click a row to toggle it too."
+msgstr "Includi o escludi la riga selezionata dall'ordine di caricamento. Le righe disabilitate vengono attenuate e contrassegnate, ed escluse dall'Export: un elemento personalizzato semplicemente non viene inserito, e un elemento già nel tuo openmw.cfg riceve una voce removeContent/removeData nel TOML emesso così viene rimosso in modo duraturo. Doppio clic su una riga la commuta anche."
+
+msgid "Discard any manual dragging and restore the order from the last Sort (your disable/enable choices are kept)."
+msgstr "Scarta qualsiasi trascinamento manuale e ripristina l'ordine dell'ultimo Ordinamento (le tue scelte di abilita/disabilita vengono mantenute)."
+
+msgid "Plugin load order -- drag to override mlox (red = touched by this sort, purple = master problem)"
+msgstr "Ordine di caricamento dei plugin -- trascina per scavalcare mlox (rosso = toccato da questo ordinamento, viola = problema di master)"
+
+msgid "Data path order -- drag to adjust (highlighted = your custom paths)"
+msgstr "Ordine dei percorsi dati -- trascina per regolare (evidenziato = i tuoi percorsi personalizzati)"
+
+msgid "Drag & drop is unavailable (tkinterdnd2 or its tkdnd library is missing) -- use the Browse buttons below."
+msgstr "Il trascina e rilascia non è disponibile (manca tkinterdnd2 o la sua libreria tkdnd) -- usa i pulsanti Sfoglia sotto."
+
+msgid "Required. The openmw.cfg to read the current content= and data= order from, and (if 'Write openmw.cfg directly' is checked) to patch."
+msgstr "Obbligatorio. Il openmw.cfg da cui leggere l'ordine content= e data= attuale e (se «Scrivi openmw.cfg direttamente» è spuntato) a cui applicare la patch."
+
+msgid "A momw-configurator/umo customizations TOML to pull the plugin/data-path subset from automatically. Optional if you provide a subset file instead -- provide both and they're combined."
+msgstr "Un TOML di personalizzazioni di momw-configurator/umo da cui estrarre automaticamente il sottoinsieme di plugin/percorsi dati. Facoltativo se fornisci invece un file di sottoinsieme -- forniscili entrambi e vengono combinati."
+
+msgid "A plain text file (one plugin filename or data folder path per line, '#' comments allowed) or a minimal TOML with subset=[...]/data=[...]. Combined with --emit-toml, this alone is enough to generate a brand new customizations.toml with no existing one required."
+msgstr "Un file di testo semplice (un nome di file di plugin o percorso di cartella dati per riga, commenti «#» consentiti) o un TOML minimo con subset=[...]/data=[...]. Combinato con --emit-toml, questo da solo basta a generare un customizations.toml nuovo senza che ne serva uno esistente."
+
+msgid "Where to write a corrected customizations.toml (sorted insert blocks, re-anchored). Disabled when 'write directly back' below is checked."
+msgstr "Dove scrivere un customizations.toml corretto (blocchi di inserimento ordinati, riancorati). Disabilitato quando «riscrivi direttamente» sotto è spuntato."
+
+msgid "list name (optional):"
+msgstr "nome della lista (facoltativo):"
+
+msgid "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser."
+msgstr "Il plugin-order.yml di MOMW (la fonte di verità su quali plugin appartengono a quale lista curata). Con il nome della lista sopra impostato, i plugin curati di quella lista vengono esclusi dall'ordinamento (mai riordinati) così vengono toccate solo le tue aggiunte personalizzate, e vengono emessi avvisi in sola lettura: ridondante, orfano, needs-cleaning e un controllo di deriva dell'ordine base. PyYAML usato se installato, altrimenti un parser integrato."
+
+msgid "Write directly back to customizations.toml (overwrite in place; a .bak-<timestamp> copy is made first unless backups are disabled below)"
+msgstr "Riscrivi direttamente in customizations.toml (sovrascrivi sul posto; prima viene creata una copia .bak-<marca temporale> a meno che i backup siano disabilitati sotto)"
+
+msgid "Instead of writing to a separate file above, overwrite the customizations.toml given above in place. A timestamped backup is made first (unless disabled), and you'll get a confirmation prompt before it actually happens."
+msgstr "Invece di scrivere in un file separato sopra, sovrascrivi sul posto il customizations.toml indicato sopra. Prima viene creato un backup con marca temporale (a meno che sia disabilitato), e avrai una richiesta di conferma prima che accada davvero."
+
+msgid "Options"
+msgstr "Opzioni"
+
+msgid "Dry run (preview only, don't write files)"
+msgstr "Simulazione (solo anteprima, non scrive file)"
+
+msgid "When checked, Export shows exactly what it would write without touching any files. Uncheck when you're ready to actually save."
+msgstr "Quando è spuntato, l'Export mostra esattamente cosa scriverebbe senza toccare alcun file. Deselezionalo quando sei pronto a salvare davvero."
+
+msgid "Write openmw.cfg directly"
+msgstr "Scrivi openmw.cfg direttamente"
+
+msgid "Patch the content=/data= lines in openmw.cfg in place on Export. A .bak-<timestamp> copy is made first unless backups are disabled."
+msgstr "Applica la patch alle righe content=/data= di openmw.cfg sul posto all'Export. Prima viene creata una copia .bak-<marca temporale> a meno che i backup siano disabilitati."
+
+msgid "Sort data= paths too"
+msgstr "Ordina anche i percorsi data="
+
+msgid "mlox has no concept of data= folder order -- this positions new data= paths using an explicit after/before anchor if you wrote one, or by scanning the folder for plugins and anchoring next to their neighbor in the sorted content= order. Off by default so a plugin-only run can't surprise-reorder data= too. Also required for the data path order panel to populate."
+msgstr "mlox non ha un concetto di ordine delle cartelle data= -- questo posiziona i nuovi percorsi data= con un'ancora after/before esplicita se ne hai scritta una, o analizzando la cartella per plugin e ancorandola accanto al loro vicino nell'ordine content= ordinato. Disabilitato per impostazione predefinita così un'esecuzione solo-plugin non riordina data= a sorpresa. Richiesto anche perché il pannello dell'ordine dei percorsi dati si riempia."
+
+msgid "Skip .bak backup of openmw.cfg"
+msgstr "Salta il backup .bak di openmw.cfg"
+
+msgid "Skip making a timestamped backup before overwriting openmw.cfg and/or an in-place customizations.toml. Not recommended."
+msgstr "Salta la creazione di un backup con marca temporale prima di sovrascrivere openmw.cfg e/o un customizations.toml sul posto. Non consigliato."
+
+msgid "Skip mlox Conflict/Requires/Note warnings"
+msgstr "Salta gli avvisi Conflict/Requires/Note di mlox"
+
+msgid "Skip evaluating [Conflict]/[Requires]/[Note] rules against the sorted plugin list. This is purely informational and read-only either way -- it never changes the computed order or what gets written, only whether warnings get printed."
+msgstr "Salta la valutazione delle regole [Conflict]/[Requires]/[Note] contro la lista di plugin ordinata. È puramente informativa e in sola lettura in ogni caso -- non cambia mai l'ordine calcolato né ciò che viene scritto, solo se gli avvisi vengono stampati."
+
+msgid "Create subset text document (on Scan)"
+msgstr "Crea documento di testo del sottoinsieme (alla Scansione)"
+
+msgid "Controls what 'Scan...' does with its result. Checked: write the scanned list to a .txt subset file you choose, and load it (the file stays on disk for reuse). Unchecked: keep the scanned list in memory just for this session and feed it straight to the sort -- nothing is written to disk."
+msgstr "Controlla cosa fa «Scansiona…» del suo risultato. Spuntato: scrivere la lista analizzata in un file di sottoinsieme .txt che scegli, e caricarla (il file resta sul disco per il riuso). Non spuntato: mantenere la lista analizzata in memoria solo per questa sessione e passarla direttamente all'ordinamento -- niente viene scritto sul disco."
+
+msgid "Pull unmanaged (orphan) plugins from openmw.cfg"
+msgstr "Recupera plugin non gestiti (orfani) da openmw.cfg"
+
+msgid "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml. Their current cfg order is kept as the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are left exactly as openmw.cfg has them: they are already in the cfg's own data= order, and there is no reliable way to tell a path the list manages from one you added, so pulling them would reorder the whole VFS."
+msgstr "Ordina anche i plugin content= GIÀ in openmw.cfg che niente gestisce -- né la lista curata (plugin-order.yml) né il tuo customizations.toml. Il loro ordine cfg attuale viene mantenuto come ordine di partenza finché l'ordinamento non li riposiziona. I master base (Morrowind/Tribunal/Bloodmoon) non vengono mai toccati. Funziona da solo (nessun file di sottoinsieme necessario) o insieme a uno.\n\nI percorsi data= vengono lasciati esattamente come li ha openmw.cfg: sono già nell'ordine data= proprio della cfg, e non c'è modo affidabile di distinguere un percorso gestito dalla lista da uno che hai aggiunto, quindi recuperarli riordinerebbe l'intero VFS."
+
+msgid "Exclude from conflict / cell scans:"
+msgstr "Escludi dalle analisi di conflitti / celle:"
+
+msgid "Declare as groundcover:"
+msgstr "Dichiara come groundcover:"
+
+msgid "Keep tes3conv JSON dump"
+msgstr "Conserva l'esportazione JSON di tes3conv"
+
+msgid "Tidy old HTML views"
+msgstr "Pulisci le vecchie viste HTML"
+
+msgid "Every conflict map, terrain view and path grid is written to its own timestamped file so you can compare two of them side by side -- which means they pile up, and one map can be several megabytes.\n\nChecked: on exit, the newest 3 of each kind are kept and older ones removed (with their data folders). Only files this tool generated are ever touched -- never anything you saved yourself with a name of your own choosing.\n\nUnchecked: nothing is ever deleted."
+msgstr "Ogni mappa dei conflitti, vista del terreno e griglia dei percorsi viene scritta in un proprio file con marca temporale così puoi confrontarne due affiancate -- il che significa che si accumulano, e una mappa può essere di diversi megabyte.\n\nSpuntato: all'uscita, vengono mantenuti i 3 più recenti di ogni tipo e quelli più vecchi rimossi (con le loro cartelle dati). Vengono toccati solo i file generati da questo strumento -- mai qualcosa che hai salvato tu con un nome a tua scelta.\n\nNon spuntato: niente viene mai eliminato."
+
+msgid "tes3conv conversions are written to disk (not held in RAM) and read per-plugin, so big load orders don't blow up memory. They always go to a 'tes3conv_json' folder next to the app and are reused within a run -- so Check Conflicts then Cell Map won't re-run tes3conv (a plugin is only re-converted if it changed). This box just decides what happens on exit: checked = keep that folder (reused next launch too); unchecked = delete it when you close the app."
+msgstr "Le conversioni di tes3conv vengono scritte su disco (non tenute in RAM) e lette per plugin, così gli ordini di caricamento grandi non fanno esplodere la memoria. Vanno sempre in una cartella «tes3conv_json» accanto all'app e vengono riusate all'interno di un'esecuzione -- così Controlla conflitti e poi Mappa delle celle non rieseguono tes3conv (un plugin viene riconvertito solo se è cambiato). Questa casella decide solo cosa succede all'uscita: spuntato = mantenere quella cartella (riusata anche al prossimo avvio); non spuntato = eliminarla alla chiusura dell'app."
+
+msgid "Verbose Merged Lands log"
+msgstr "Registro dettagliato di Merged Lands"
+
+msgid "Checked: a Merge Lands run also names every plugin that carries a .mergedlands.toml and exactly what it sets (per layer: on/off and the conflict strategy), and lists every plugin it could not read -- rather than the headline counts. For working out why a merge did what it did.\n\nUnchecked: the normal summary log."
+msgstr "Spuntato: un'esecuzione di Merge Lands nomina anche ogni plugin che porta un .mergedlands.toml ed esattamente cosa imposta (per livello: attivo/disattivo e la strategia di conflitto), ed elenca ogni plugin che non è riuscito a leggere -- invece dei conteggi principali. Per capire perché un'unione ha fatto ciò che ha fatto.\n\nNon spuntato: il normale registro di riepilogo."
+
+msgid "Log"
+msgstr "Registro"
+
+msgid "Full output from the last Sort and/or Export. Color key: green = a plugin/path this sort inserted or moved, orange = a heads-up (mlox warning, or a rule your curated cfg order overrode), blue = a section header, bright red = an error worth checking. Plain text = frozen base rows left untouched. Colors follow the syntax highlighting theme picked below."
+msgstr "Output completo dell'ultimo Ordinamento e/o Export. Legenda dei colori: verde = un plugin/percorso che questo ordinamento ha inserito o spostato, arancione = un avviso (di mlox, o una regola che il tuo ordine cfg curato ha scavalcato), blu = un'intestazione di sezione, rosso acceso = un errore da controllare. Testo semplice = righe base congelate, lasciate intatte. I colori seguono il tema di evidenziazione sintassi scelto sotto."
+
+msgid "Clear Log"
+msgstr "Svuota il registro"
+
+msgid "Clear the log panel. Doesn't affect the order panels or any files."
+msgstr "Svuota il pannello del registro. Non influisce né sui pannelli dell'ordine né su alcun file."
+
+msgid "Save Log As..."
+msgstr "Salva il registro come…"
+
+msgid "Save the current log contents to a text file."
+msgstr "Salva il contenuto attuale del registro in un file di testo."
+
+msgid "Theme:"
+msgstr "Tema:"
+
+msgid "Color theme for the whole GUI: window/button colors, syntax highlighting here in the Log panel, and the field-diff JSON viewer (Check Conflicts -> double-click a field). Switching re-themes everything immediately, including any windows already open. Built-in: Dracula, Monokai, Atom One Dark, Gruvbox Dark, plus anything you've imported."
+msgstr "Tema di colore per l'intera interfaccia: colori di finestre/pulsanti, evidenziazione sintassi qui nel pannello del Registro, e il visualizzatore JSON delle differenze di campo (Controlla conflitti -> doppio clic su un campo). Cambiarlo ri-tematizza tutto all'istante, incluse le finestre già aperte. Integrati: Dracula, Monokai, Atom One Dark, Gruvbox Dark, più ciò che hai importato."
+
+msgid "Import Theme..."
+msgstr "Importa tema…"
+
+msgid "Import a custom theme from a JSON file (background/foreground/select/section/warn/error/ok/inserted/dim as hex colors, plus an optional \"chrome\" object for explicit window/button colors) or a base16 scheme file (.yaml/.yml/.json with base00..base0F -- e.g. from the atelierbram/syntax-highlighting or chriskempson/base16 scheme repos). Window colors not given explicitly are derived from the background. Imported themes are saved and appear in the dropdown from then on."
+msgstr "Importa un tema personalizzato da un file JSON (background/foreground/select/section/warn/error/ok/inserted/dim come colori hex, più un oggetto «chrome» facoltativo per colori di finestra/pulsante espliciti) o un file di schema base16 (.yaml/.yml/.json con base00..base0F -- es. dai repo atelierbram/syntax-highlighting o chriskempson/base16). I colori di finestra non dati esplicitamente vengono derivati dallo sfondo. I temi importati vengono salvati e appaiono da allora nel menu a discesa."
+
+msgid "Clear Memory"
+msgstr "Svuota la memoria"
+
+msgid "Forget every plugin/folder added by hand (drag-drop or the Add buttons) and any scan result held only in memory (not saved to a .txt) -- none of that is shown anywhere on screen, and it otherwise keeps accumulating for the rest of the session. Does not touch any files."
+msgstr "Dimentica ogni plugin/cartella aggiunto a mano (trascina-rilascia o i pulsanti Aggiungi) e qualsiasi risultato di analisi tenuto solo in memoria (non salvato in un .txt) -- niente di ciò è mostrato sullo schermo, e altrimenti si accumula per il resto della sessione. Non tocca alcun file."
+
+msgid "Help"
+msgstr "Aiuto"
+
+msgid "Open the program's own documentation -- the Quick start (what to click, in order) or the Read me (every option, in detail) -- rendered as a readable page with a contents sidebar. Works offline; nothing is downloaded."
+msgstr "Apri la documentazione propria del programma -- l'Avvio rapido (cosa cliccare, in ordine) o il Leggimi (ogni opzione in dettaglio) -- resa come una pagina leggibile con una barra laterale dei contenuti. Funziona offline; niente viene scaricato."
+
+msgid "Log syntax highlighting: %(name)s"
+msgstr "Evidenziazione sintassi del registro: %(name)s"
+
+msgid "Import syntax highlighting theme"
+msgstr "Importa tema di evidenziazione sintassi"
+
+msgid "Import failed"
+msgstr "Importazione non riuscita"
+
+msgid "Couldn't import that theme:\n\n%(error)s"
+msgstr "Impossibile importare quel tema:\n\n%(error)s"
+
+msgid "Imported and applied theme: %(name)s"
+msgstr "Tema importato e applicato: %(name)s"
+
+msgid "Theme imported"
+msgstr "Tema importato"
+
+msgid "Imported \"%(name)s\" and set it as the active log theme."
+msgstr "«%(name)s» importato e impostato come tema attivo del registro."
+
+msgid "Missing input"
+msgstr "Input mancante"
+
+msgid "Select the mods folder to scan"
+msgstr "Seleziona la cartella dei mod da analizzare"
+
+msgid "Save generated subset file as"
+msgstr "Salva il file di sottoinsieme generato come"
+
+msgid "Scanning mods folder..."
+msgstr "Analisi della cartella dei mod…"
+
+msgid "Scan complete -- %(folders)d folder(s), %(plugins)d plugin(s). Subset file loaded."
+msgstr "Scansione completa -- %(folders)d cartella(e), %(plugins)d plugin. File di sottoinsieme caricato."
+
+msgid "Scan complete -- %(folders)d folder(s), %(plugins)d plugin(s). Held in memory (no file written)."
+msgstr "Scansione completa -- %(folders)d cartella(e), %(plugins)d plugin. Tenuto in memoria (nessun file scritto)."
+
+msgid "Add plugin..."
+msgstr "Aggiungi plugin…"
+
+msgid "Include a plugin the Scan missed -- e.g. one sitting outside a recognised mod folder. It joins your custom subset on the next Sort. You can also drag a plugin file onto the list above from your file manager."
+msgstr "Includi un plugin che la Scansione ha mancato -- es. uno fuori da una cartella di mod riconosciuta. Si unisce al tuo sottoinsieme personalizzato al prossimo Ordinamento. Puoi anche trascinare un file di plugin sulla lista sopra dal tuo gestore di file."
+
+msgid "(install tkinterdnd2 to drag a plugin in)"
+msgstr "(installa tkinterdnd2 per trascinare un plugin)"
+
+msgid "Add data folder..."
+msgstr "Aggiungi cartella dati…"
+
+msgid "Include a folder the Scan missed -- e.g. an OpenMW Lua mod with a non-standard layout (no meshes/textures/... folder and no plugin). It joins your data paths on the next Sort; tick 'Sort data= paths too' to place it in the load order. You can also drag a folder onto the list above from your file manager."
+msgstr "Includi una cartella che la Scansione ha mancato -- es. un mod Lua di OpenMW con una struttura non standard (nessuna cartella meshes/textures/… e nessun plugin). Si unisce ai tuoi percorsi dati al prossimo Ordinamento; spunta «Ordina anche i percorsi data=» per collocarla nell'ordine di caricamento. Puoi anche trascinare una cartella sulla lista sopra dal tuo gestore di file."
+
+msgid "(install tkinterdnd2 to drag a folder in)"
+msgstr "(installa tkinterdnd2 per trascinare una cartella)"
+
+msgid "Select a data folder to add"
+msgstr "Seleziona una cartella dati da aggiungere"
+
+msgid "Select plugin(s) to add"
+msgstr "Seleziona i plugin da aggiungere"
+
+msgid "Plugins"
+msgstr "Plugin"
+
+msgid "Added plugin"
+msgstr "Plugin aggiunto"
+
+msgid "Already added"
+msgstr "Già aggiunto"
+
+msgid "Added data folder"
+msgstr "Cartella dati aggiunta"
+
+msgid "  Tick 'Sort data= paths too' to place it."
+msgstr "  Spunta «Ordina anche i percorsi data=» per collocarla."
+
+msgid "Not a plugin or folder: %(path)s"
+msgstr "Non è un plugin né una cartella: %(path)s"
+
+msgid "Nothing to clear."
+msgstr "Niente da svuotare."
+
+msgid "%(n)d manual plugin(s)"
+msgstr "%(n)d plugin manuale(i)"
+
+msgid "%(n)d manual data folder(s)"
+msgstr "%(n)d cartella(e) dati manuale(i)"
+
+msgid "the in-memory scan result"
+msgstr "il risultato di analisi in memoria"
+
+msgid "Clear memory?"
+msgstr "Svuotare la memoria?"
+
+msgid "This forgets everything added by hand this session and any scan result held in memory (not written to a subset file):\n\n%(summary)s\n\nThey will no longer be included on the next Sort. This does not touch the subset file field, remembered paths, or any file on disk. Continue?"
+msgstr "Questo dimentica tutto ciò che è stato aggiunto a mano in questa sessione e qualsiasi risultato di analisi tenuto in memoria (non scritto in un file di sottoinsieme):\n\n%(summary)s\n\nNon verranno più inclusi al prossimo Ordinamento. Questo non tocca né il campo del file di sottoinsieme, né i percorsi ricordati, né alcun file sul disco. Continuare?"
+
+msgid "Cleared: %(summary)s"
+msgstr "Svuotato: %(summary)s"
+
+msgid "%(what)s (%(n)d added, applied on Sort): %(value)s"
+msgstr "%(what)s (%(n)d aggiunti, applicati all'Ordinamento): %(value)s"
+
+msgid "Sorting..."
+msgstr "Ordinamento…"
+
+msgid ", %(count)d yml warning(s)"
+msgstr ", %(count)d avviso(i) yml"
+
+msgid "Sorted %(plugins)d plugin(s), %(warnings)d rule warning(s)%(yml)s. Drag to adjust, then Export."
+msgstr "%(plugins)d plugin ordinati, %(warnings)d avviso(i) di regole%(yml)s. Trascina per regolare, poi Esporta."
+
+msgid "openmw.cfg changed"
+msgstr "openmw.cfg cambiato"
+
+msgid "openmw.cfg has changed on disk since you ran '1. Sort' (did momw-configurator re-run?).\n\nThe order on screen was computed against the OLD contents. It's safer to re-Sort first.\n\nExport anyway?"
+msgstr "openmw.cfg è cambiato sul disco da quando hai eseguito «1. Ordina» (momw-configurator è stato rieseguito?).\n\nL'ordine sullo schermo è stato calcolato contro il contenuto VECCHIO. È più sicuro ri-Ordinare prima.\n\nEsportare comunque?"
+
+msgid "Overwrite customizations.toml?"
+msgstr "Sovrascrivere customizations.toml?"
+
+msgid "This will overwrite:\n%(path)s\n\nin place%(note)s. Continue?"
+msgstr "Questo sovrascriverà:\n%(path)s\n\nsul posto%(note)s. Continuare?"
+
+msgid "Exporting..."
+msgstr "Esportazione…"
+
+msgid "Export done -- cfg written: %(cfg)s, toml written: %(toml)s."
+msgstr "Export fatto -- cfg scritto: %(cfg)s, toml scritto: %(toml)s."
+
+msgid "Building cell map..."
+msgstr "Costruzione della mappa delle celle…"
+
+msgid "\n\nThis REPLACES the existing %(name)s."
+msgstr "\n\nQuesto SOSTITUISCE il %(name)s esistente."
+
+msgid "Build Merged Lands.esp?"
+msgstr "Costruire Merged Lands.esp?"
+
+msgid "A new plugin will be written to:\n%(path)s\n\nIt carries terrain only -- no references, objects or scripts -- so everything placed in those cells stays where it is. Your mods are NOT modified, and deleting the merged plugin restores your previous behaviour completely.\n\nLoad it LAST, and back up your saves before playing with it the first time.%(existing)s\n\nYes: write it here.   No: choose a different folder."
+msgstr "Un nuovo plugin verrà scritto in:\n%(path)s\n\nPorta solo terreno -- nessun riferimento, oggetto o script -- così tutto ciò che è collocato in quelle celle resta dov'è. I tuoi mod NON vengono modificati, ed eliminare il plugin unito ripristina completamente il tuo comportamento precedente.\n\nCaricalo per ULTIMO, e fai il backup dei salvataggi prima di giocarci la prima volta.%(existing)s\n\nSì: scriverlo qui.   No: scegliere un'altra cartella."
+
+msgid "Merging land..."
+msgstr "Unione del terreno…"
+
+msgid "Folder not found"
+msgstr "Cartella non trovata"
+
+msgid "%(path)s no longer exists. Please choose where to write."
+msgstr "%(path)s non esiste più. Scegli dove scrivere."
+
+msgid "Data Files not found"
+msgstr "Data Files non trovato"
+
+msgid "Could not work out which folder holds your plugins, so there is no sensible place to put the merged plugin. Use 'Merged Lands folder...' to choose one."
+msgstr "Impossibile capire quale cartella contiene i tuoi plugin, quindi non c'è un posto sensato per il plugin unito. Usa «Cartella di Merged Lands…» per sceglierne uno."
+
+msgid "Where should Merged Lands.esp be written?"
+msgstr "Dove va scritto Merged Lands.esp?"
+
+msgid "Not a data folder"
+msgstr "Non è una cartella dati"
+
+msgid "%(path)s is not one of the folders OpenMW reads, so it will not find the merged plugin there.\n\nAdd this line to openmw.cfg:\n\ndata=\"%(path)s\"\n\nand put 'content=%(name)s' last."
+msgstr "%(path)s non è una delle cartelle che OpenMW legge, quindi non vi troverà il plugin unito.\n\nAggiungi questa riga a openmw.cfg:\n\ndata=\"%(path)s\"\n\ne metti «content=%(name)s» per ultimo."
+
+msgid " MERGE LANDS"
+msgstr " UNIONE DEI TERRENI"
+
+msgid "Merge produced nothing to write."
+msgstr "L'unione non ha prodotto niente da scrivere."
+
+msgid "Merged Lands written: %(cells)d cell(s)."
+msgstr "Merged Lands scritto: %(cells)d cella(e)."
+
+msgid "Merge failed -- see log."
+msgstr "Unione non riuscita -- vedi il registro."
+
+msgid "%(contested)d vertex/vertices were edited by more than one mod; the later one in your load order won each."
+msgstr "%(contested)d vertice(i) sono stati modificati da più di un mod; quello più recente nel tuo ordine di caricamento ha vinto ciascuno."
+
+msgid "%(major)d were blended far from a mod's intent where a .mergedlands.toml asked to Resolve."
+msgstr "%(major)d sono stati fusi lontano dall'intento di un mod dove un .mergedlands.toml chiedeva Resolve."
+
+msgid "Merged Lands built"
+msgstr "Merged Lands costruito"
+
+msgid "Written to:\n%(path)s\n\nEnable it and place it LAST in your load order.\n\n%(cells)d land record(s), %(textures)d land texture(s).\n%(detail)s"
+msgstr "Scritto in:\n%(path)s\n\nAbilitalo e mettilo per ULTIMO nel tuo ordine di caricamento.\n\n%(cells)d record di terreno, %(textures)d texture di terreno.\n%(detail)s"
+
+msgid "Pick a plugin to write a .mergedlands.toml for"
+msgstr "Scegli un plugin per cui scrivere un .mergedlands.toml"
+
+msgid "Morrowind plugins"
+msgstr "Plugin di Morrowind"
+
+msgid "Existing .mergedlands.toml could not be read"
+msgstr "Impossibile leggere il .mergedlands.toml esistente"
+
+msgid "%(name)s will be replaced from defaults:\n\n%(err)s"
+msgstr "%(name)s verrà sostituito dai valori predefiniti:\n\n%(err)s"
+
+msgid "Merge settings: %(name)s"
+msgstr "Impostazioni di unione: %(name)s"
+
+msgid "Choose how %(name)s's landscape edits merge. Uncheck a layer to keep this plugin from touching it; set a strategy for how its edits resolve where they collide with another mod. The defaults behave as if there were no file."
+msgstr "Scegli come si uniscono le modifiche al paesaggio di %(name)s. Deseleziona un livello per impedire a questo plugin di toccarlo; imposta una strategia per come si risolvono le sue modifiche dove collidono con un altro mod. I valori predefiniti si comportano come se non ci fosse alcun file."
+
+msgid "meta_type:"
+msgstr "meta_type:"
+
+msgid "Patch = a hand-written settings file (the usual choice). Auto = default behaviour. MergedLands marks a plugin the tool generated so a re-run ignores it -- do not set that on an ordinary mod."
+msgstr "Patch = un file di impostazioni scritto a mano (la scelta abituale). Auto = comportamento predefinito. MergedLands contrassegna un plugin generato dallo strumento così una riesecuzione lo ignora -- non impostarlo su un mod ordinario."
+
+msgid "Layers"
+msgstr "Livelli"
+
+msgid "include"
+msgstr "includi"
+
+msgid "layer"
+msgstr "livello"
+
+msgid "conflict strategy"
+msgstr "strategia di conflitto"
+
+msgid "Vertex heights -- and the normals stored with them."
+msgstr "Altezze dei vertici -- e le normali memorizzate con esse."
+
+msgid "Baked vertex colours (terrain lighting)."
+msgstr "Colori dei vertici precalcolati (illuminazione del terreno)."
+
+msgid "Which land texture paints each square."
+msgstr "Quale texture di terreno dipinge ogni quadrato."
+
+msgid "The low-resolution world-map heightmap."
+msgstr "La mappa delle altezze a bassa risoluzione della mappa del mondo."
+
+msgid "Auto = later plugin wins for entries it changed Â· Overwrite = this plugin wins collisions Â· Ignore = keep the earlier edit Â· Resolve = blend conflicting numbers Â· Curvature = structure-weighted blend (ours)."
+msgstr "Auto = il plugin successivo vince per le voci che ha cambiato · Overwrite = questo plugin vince le collisioni · Ignore = mantieni la modifica precedente · Resolve = fondi i numeri in conflitto · Curvature = fusione pesata sulla struttura (la nostra)."
+
+msgid "Preview:"
+msgstr "Anteprima:"
+
+msgid "Write .mergedlands.toml"
+msgstr "Scrivi .mergedlands.toml"
+
+msgid "Could not write .mergedlands.toml"
+msgstr "Impossibile scrivere .mergedlands.toml"
+
+msgid "Wrote %(name)s."
+msgstr "%(name)s scritto."
+
+msgid "Merge settings written"
+msgstr "Impostazioni di unione scritte"
+
+msgid "Wrote:\n%(path)s\n\nRun Merge Lands to apply it."
+msgstr "Scritto:\n%(path)s\n\nEsegui Merge Lands per applicarlo."
+
+msgid " CELL MAP"
+msgstr " MAPPA DELLE CELLE"
+
+msgid "native esp reader"
+msgstr "lettore esp nativo"
+
+msgid "  %(exterior)d exterior + %(interior)d interior cell(s) touched across %(scanned)d plugin(s)."
+msgstr "  %(exterior)d cella(e) esterna(e) + %(interior)d interna(e) toccate su %(scanned)d plugin."
+
+msgid "  Map written to: %(path)s"
+msgstr "  Mappa scritta in: %(path)s"
+
+msgid "Cell map ready (%(exterior)d exterior, %(interior)d interior)."
+msgstr "Mappa delle celle pronta (%(exterior)d esterne, %(interior)d interne)."
+
+msgid "Open in browser"
+msgstr "Apri nel browser"
+
+msgid "(inline render failed -- use 'Open in browser'. The 3D and nav views need a real browser engine.)"
+msgstr "(il rendering in linea è fallito -- usa «Apri nel browser». Le viste 3D e di navigazione richiedono un vero motore di browser.)"
+
+msgid "Save HTML..."
+msgstr "Salva HTML…"
+
+msgid "(inline render failed - use 'Open in browser' for the full map)"
+msgstr "(il rendering in linea è fallito -- usa «Apri nel browser» per la mappa completa)"
+
+msgid "Save cell map"
+msgstr "Salva mappa delle celle"
+
+msgid "Cell map saved: %(path)s"
+msgstr "Mappa delle celle salvata: %(path)s"
+
+msgid "If upstream moves or a new fork takes over, point the updaters at the new location here. Blank = built-in defaults. Downloads are always validated before anything is overwritten."
+msgstr "Se la fonte a monte si sposta o un nuovo fork prende il sopravvento, punta gli aggiornatori alla nuova posizione qui. Vuoto = valori predefiniti integrati. I download vengono sempre validati prima di sovrascrivere qualcosa."
+
+msgid "mlox rules URL template:"
+msgstr "Modello di URL delle regole mlox:"
+
+msgid "Where 'Update Rules...' downloads from. Must contain {name}, which is replaced with mlox_base.txt / mlox_user.txt per file.\nDefault: %(url)s"
+msgstr "Da dove scarica «Aggiorna regole…». Deve contenere {name}, che viene sostituito con mlox_base.txt / mlox_user.txt per file.\nPredefinito: %(url)s"
+
+msgid "default: %(url)s"
+msgstr "predefinito: %(url)s"
+
+msgid "plugin-order.yml URL:"
+msgstr "URL di plugin-order.yml:"
+
+msgid "Where the plugin-order.yml 'Update...' button downloads from. Blank tries the built-in candidates in order.\nDefault: %(url)s"
+msgstr "Da dove scarica il pulsante «Aggiorna…» di plugin-order.yml. Vuoto prova i candidati integrati in ordine.\nPredefinito: %(url)s"
+
+msgid "default: %(url)s..."
+msgstr "predefinito: %(url)s…"
+
+msgid "Download sources"
+msgstr "Scarica origini"
+
+msgid "The rules URL template must contain {name} (it's replaced with the rule filename)."
+msgstr "Il modello di URL delle regole deve contenere {name} (viene sostituito con il nome del file delle regole)."
+
+msgid "Reset to defaults"
+msgstr "Ripristina valori predefiniti"
+
+msgid "Save & Close"
+msgstr "Salva e chiudi"
+
+msgid "New mlox rule"
+msgstr "Nuova regola mlox"
+
+msgid "rules file:"
+msgstr "file delle regole:"
+
+msgid "Personal rules file the rule is appended to (created with a header if new). Use your OWN file, not mlox_base/mlox_user -- those get overwritten by 'Update Rules...'. It's auto-added to the rule-files list LAST, so your rules win conflicts."
+msgstr "File delle regole personale a cui la regola viene aggiunta (creato con un'intestazione se nuovo). Usa il TUO file, non mlox_base/mlox_user -- quelli vengono sovrascritti da «Aggiorna regole…». Viene aggiunto automaticamente per ULTIMO alla lista dei file delle regole, così le tue regole vincono i conflitti."
+
+msgid "Rule type"
+msgstr "Tipo di regola"
+
+msgid "Plugins (order matters for [Order])"
+msgstr "Plugin (l'ordine conta per [Order])"
+
+msgid "From plugin panel"
+msgstr "Dal pannello dei plugin"
+
+msgid "Add the rows currently SELECTED in the main plugin-order panel, in their displayed order (Ctrl/Shift-click there to multi-select first)."
+msgstr "Aggiungi le righe attualmente SELEZIONATE nel pannello principale dell'ordine dei plugin, nel loro ordine visualizzato (Ctrl/Maiusc-clic per selezionarne più d'una prima)."
+
+msgid "Group as ANY"
+msgstr "Raggruppa come ANY"
+
+msgid "Wrap the SELECTED plugins in an [ANY ...] group, for a rule that is satisfied by whichever of several versions someone has installed -- the shape the guidelines use for mods with an XB edition, a Tribunal edition and so on.\n\nSelect the grouped entry and press again to ungroup."
+msgstr "Racchiudi i plugin SELEZIONATI in un gruppo [ANY …], per una regola soddisfatta da una qualsiasi di più versioni installate -- la forma che le linee guida usano per mod con edizione XB, edizione Tribunal, ecc.\n\nSeleziona la voce raggruppata e premi di nuovo per separare."
+
+msgid "Type a plugin filename and press Enter. mlox wildcards are allowed: ? for one character, * for any run, <VER> for a version number -- though the guidelines ask for these to be used sparingly, since expanding them is slow."
+msgstr "Digita un nome di file di plugin e premi Invio. I caratteri jolly mlox sono consentiti: ? per un carattere, * per qualsiasi sequenza, <VER> per un numero di versione -- anche se le linee guida chiedono di usarli con parsimonia, poiché espanderli è lento."
+
+msgid "Add"
+msgstr "Aggiungi"
+
+msgid "Message and source"
+msgstr "Messaggio e origine"
+
+msgid "message:"
+msgstr "messaggio:"
+
+msgid "What to tell the person, and what to do about it. Ordering rules carry no message; the warning rules are much less useful without one.\n\nA message containing ']' is written in the block form automatically, because a ']' would otherwise close the rule label early."
+msgstr "Cosa dire alla persona, e cosa farne. Le regole di ordine non portano un messaggio; le regole di avviso sono molto meno utili senza uno.\n\nUn messaggio che contiene «]» viene scritto automaticamente in forma di blocco, perché un «]» chiuderebbe altrimenti l'etichetta della regola troppo presto."
+
+msgid "(Ref:) source:"
+msgstr "(Rif.:) origine:"
+
+msgid "Where this rule's claim comes from: a readme filename, a forum post, a URL. The guidelines ask for one on every rule so that someone else can check it, or correct it.\n\nA URL gets whitespace before the closing parenthesis automatically -- pages that auto-link URLs otherwise swallow the ')' into the link."
+msgstr "Da dove viene l'affermazione di questa regola: un nome di file readme, un post di forum, un URL. Le linee guida ne chiedono uno su ogni regola così che qualcun altro possa verificarla, o correggerla.\n\nUn URL riceve automaticamente uno spazio prima della parentesi di chiusura -- le pagine che collegano automaticamente gli URL inghiottono altrimenti il «)» nel collegamento."
+
+msgid "@section:"
+msgstr "@section:"
+
+msgid "Optional heading written above the rule. The rule-base groups rules into sections, roughly one per mod, to keep the file navigable."
+msgstr "Intestazione facoltativa scritta sopra la regola. La base delle regole raggruppa le regole in sezioni, circa una per mod, per mantenere il file navigabile."
+
+msgid "highlight:"
+msgstr "evidenziazione:"
+
+msgid "none"
+msgstr "nessuno"
+
+msgid "%(mark)s = %(meaning)s"
+msgstr "%(mark)s = %(meaning)s"
+
+msgid "; comment:"
+msgstr "; commento:"
+
+msgid "A ';' comment written above the rule. mlox strips these before reading."
+msgstr "Un commento «;» scritto sopra la regola. mlox li rimuove prima della lettura."
+
+msgid "Preview"
+msgstr "Anteprima"
+
+msgid "Append rule"
+msgstr "Aggiungi la regola"
+
+msgid "Write the rule to the file above. Refused while there is an error: mlox silently discards a rule it cannot use, so this is the only place you would find out.\n\nWarnings do not block -- they are the guidelines' advice, not the parser's requirements."
+msgstr "Scrivi la regola nel file sopra. Rifiutato finché c'è un errore: mlox scarta silenziosamente una regola che non può usare, quindi questo è l'unico posto dove lo scopriresti.\n\nGli avvisi non bloccano -- sono il consiglio delle linee guida, non i requisiti del parser."
+
+msgid "Rule guide"
+msgstr "Guida alle regole"
+
+msgid "Open the rule reference: what each rule kind says, how expressions nest, and the conventions the rule-base follows.\n\nIt opens in your browser, so it can sit beside this window while you work."
+msgstr "Apri il riferimento delle regole: cosa dice ogni tipo di regola, come si annidano le espressioni e le convenzioni che la base delle regole segue.\n\nSi apre nel tuo browser, così può stare accanto a questa finestra mentre lavori."
+
+msgid "No problems. This rule follows the guidelines.\n"
+msgstr "Nessun problema. Questa regola segue le linee guida.\n"
+
+msgid "Select row(s) in the plugin-order panel first."
+msgstr "Seleziona prima una o più righe nel pannello dell'ordine dei plugin."
+
+msgid "Personal rules file"
+msgstr "File delle regole personale"
+
+msgid "New rule"
+msgstr "Nuova regola"
+
+msgid "Set a rules file first."
+msgstr "Imposta prima un file delle regole."
+
+msgid "Don't append personal rules to mlox_base.txt / mlox_user.txt -- 'Update Rules...' overwrites those. Pick your own file (e.g. mlox_my_rules.txt)."
+msgstr "Non aggiungere regole personali a mlox_base.txt / mlox_user.txt -- «Aggiorna regole…» le sovrascrive. Scegli il tuo file (es. mlox_my_rules.txt)."
+
+msgid "Rule conflicts with the curated order"
+msgstr "La regola è in conflitto con l'ordine curato"
+
+msgid "This [Order] rule contradicts the frozen curated (MOMW) order for:\n\n%(pairs)s\n\nmlox will DISCARD those orderings (it never reorders the curated list), so the rule won't take effect for them. Write it anyway?"
+msgstr "Questa regola [Order] contraddice l'ordine curato (MOMW) congelato per:\n\n%(pairs)s\n\nmlox SCARTERÀ quegli ordinamenti (non riordina mai la lista curata), quindi la regola non avrà effetto per essi. Scriverla comunque?"
+
+msgid "Rule appended to %(file)s. Re-run '1. Sort' to apply it."
+msgstr "Regola aggiunta a %(file)s. Riesegui «1. Ordina» per applicarla."
+
+msgid "Update %(name)s"
+msgstr "Aggiorna %(name)s"
+
+msgid "Save %(name)s as"
+msgstr "Salva %(name)s come"
+
+msgid "the file doesn't exist yet -- it will be created"
+msgstr "il file non esiste ancora -- verrà creato"
+
+msgid "your copy is ~%(days)d day(s) old"
+msgstr "la tua copia ha ~%(days)d giorno(i)"
+
+msgid "Download the current %(name)s from MOMW?\n\n%(age)s.\n\nThe download is validated before anything is written; a timestamped .bak of the old file is kept."
+msgstr "Scaricare il %(name)s attuale da MOMW?\n\n%(age)s.\n\nIl download viene validato prima di scrivere qualcosa; viene conservata una .bak con marca temporale del vecchio file."
+
+msgid "Downloading %(name)s..."
+msgstr "Download di %(name)s…"
+
+msgid "Run '1. Sort' first so there's a load order to check against."
+msgstr "Esegui prima «1. Ordina» così c'è un ordine di caricamento con cui confrontare."
+
+msgid "Choose an OpenMW save"
+msgstr "Scegli un salvataggio di OpenMW"
+
+msgid "Save check failed: %(error)s"
+msgstr "Controllo del salvataggio fallito: %(error)s"
+
+msgid "Save check: %(count)d missing dependency! See the log."
+msgid_plural "Save check: %(count)d missing dependencies! See the log."
+msgstr[0] "Controllo del salvataggio: %(count)d dipendenza mancante! Vedi il registro."
+msgstr[1] "Controllo del salvataggio: %(count)d dipendenze mancanti! Vedi il registro."
+
+msgid "Save Check"
+msgstr "Controllo salvataggio"
+
+msgid "Save check: all %(count)d dependencies present."
+msgstr "Controllo del salvataggio: tutte le %(count)d dipendenze presenti."
+
+msgid "%(file)s: all %(count)d content files it needs are in the current load order. Safe to export."
+msgstr "%(file)s: tutti i %(count)d file di contenuto di cui ha bisogno sono nell'ordine di caricamento attuale. Sicuro da esportare."
+
+msgid "Quick start"
+msgstr "Avvio rapido"
+
+msgid "Read me"
+msgstr "Leggimi"
+
+msgid "Writing mlox rules"
+msgstr "Scrivere regole mlox"
+
+msgid "Documentation not found"
+msgstr "Documentazione non trovata"
+
+msgid "%(name)s was not found next to the program.\n\nIt ships alongside the app; if this is a build made without it, the same document is in the project folder."
+msgstr "%(name)s non è stato trovato accanto al programma.\n\nViene distribuito con l'app; se questa è una build fatta senza di esso, lo stesso documento è nella cartella del progetto."
+
+msgid "Could not open documentation"
+msgstr "Impossibile aprire la documentazione"
+
+msgid "%(name)s could not be rendered:\n%(error)s"
+msgstr "%(name)s non è stato reso:\n%(error)s"
+
+msgid "Set openmw.cfg (or run a Sort) so I know where to look."
+msgstr "Imposta openmw.cfg (o esegui un Ordinamento) così so dove guardare."
+
+msgid "Scanning for backups..."
+msgstr "Ricerca dei backup…"
+
+msgid "Found %(count)d backup file."
+msgid_plural "Found %(count)d backup files."
+msgstr[0] "%(count)d file di backup trovato."
+msgstr[1] "%(count)d file di backup trovati."
+
+msgid "Backup scan failed: %(error)s"
+msgstr "Analisi dei backup fallita: %(error)s"
+
+msgid "%(count)d backup file. Restore copies the backup over its original; Delete removes the backup file itself."
+msgid_plural "%(count)d backup files. Restore copies the backup over its original; Delete removes the backup file itself."
+msgstr[0] "%(count)d file di backup. Ripristina copia il backup sul suo originale; Elimina rimuove il file di backup stesso."
+msgstr[1] "%(count)d file di backup. Ripristina copia il backup sul suo originale; Elimina rimuove il file di backup stesso."
+
+msgid "Restore"
+msgstr "Ripristina"
+
+msgid "Copy %(count)d backup over its original (overwriting it)?"
+msgid_plural "Copy %(count)d backups over their originals (overwriting them)?"
+msgstr[0] "Copiare %(count)d backup sul suo originale (sovrascrivendolo)?"
+msgstr[1] "Copiare %(count)d backup sui loro originali (sovrascrivendoli)?"
+
+msgid "Restored %(count)d backup%(failed)s. Re-run '1. Sort' to refresh checks."
+msgid_plural "Restored %(count)d backups%(failed)s. Re-run '1. Sort' to refresh checks."
+msgstr[0] "%(count)d backup ripristinato%(failed)s. Riesegui «1. Ordina» per aggiornare i controlli."
+msgstr[1] "%(count)d backup ripristinati%(failed)s. Riesegui «1. Ordina» per aggiornare i controlli."
+
+msgid ", %(fail)d failed"
+msgstr ", %(fail)d falliti"
+
+msgid "Delete"
+msgstr "Elimina"
+
+msgid "Permanently delete %(count)d backup file?"
+msgid_plural "Permanently delete %(count)d backup files?"
+msgstr[0] "Eliminare definitivamente %(count)d file di backup?"
+msgstr[1] "Eliminare definitivamente %(count)d file di backup?"
+
+msgid "Deleted %(count)d backup file."
+msgid_plural "Deleted %(count)d backup files."
+msgstr[0] "%(count)d file di backup eliminato."
+msgstr[1] "%(count)d file di backup eliminati."
+
+msgid "Restore Selected"
+msgstr "Ripristina selezione"
+
+msgid "Delete Selected"
+msgstr "Elimina selezione"
+
+msgid "Refresh"
+msgstr "Aggiorna"
+
+msgid "Linting plugins..."
+msgstr "Analisi dei plugin…"
+
+msgid " LINT (tes3lint-style checks, native)"
+msgstr " ANALISI (controlli in stile tes3lint, nativi)"
+
+msgid "\n  No lint findings. Clean bill of health."
+msgstr "\n  Nessun rilievo dall'analisi. Tutto a posto."
+
+msgid "Lint: %(count)d finding. See the log."
+msgid_plural "Lint: %(count)d findings. See the log."
+msgstr[0] "Analisi: %(count)d rilievo. Vedi il registro."
+msgstr[1] "Analisi: %(count)d rilievi. Vedi il registro."
+
+msgid "Lint: no findings."
+msgstr "Analisi: nessun rilievo."

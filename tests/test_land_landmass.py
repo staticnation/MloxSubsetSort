@@ -17,6 +17,7 @@ from wraithguard.land.landmass import (
     PluginRecords,
     _mask_layers,
     build_reference,
+    merge_master_layers,
     plugin_differences,
     survey,
 )
@@ -30,6 +31,20 @@ from wraithguard.land.textures import (
     translate_indices,
     vtex_of,
 )
+
+
+def _tex_record(coords: tuple[int, int], fill: int) -> dict[str, object]:
+    """A Landscape record whose 16x16 texture grid is every cell set to ``fill``."""
+    import base64
+    import struct
+
+    data = base64.b64encode(struct.pack("<256H", *([fill] * 256))).decode()
+    return {
+        "type": "Landscape",
+        "grid": list(coords),
+        "landscape_flags": "USES_TEXTURES",
+        "texture_indices": {"data": data},
+    }
 
 
 def ltex(identifier: str, index: int, file_name: str | None = None) -> dict[str, object]:
@@ -289,6 +304,54 @@ class TestPluginDifferences:
         plugin_differences(reference, PluginRecords("mod.esp", [ltex("B", 0)]), known)
         assert len(known) == 2
 
+    def test_an_unreadable_record_is_skipped(self) -> None:
+        """A landscape record that cannot be decoded contributes no change."""
+        reference, known = build_reference([])
+        changes = plugin_differences(
+            reference,
+            PluginRecords("mod.esp", [{"type": "Landscape"}]),  # no grid -> undecodable
+            known,
+        )
+        assert changes == []
+
+    def test_a_texture_edit_is_a_change_even_with_an_unknown_index(self) -> None:
+        """A plugin repainting a cell is a change; an undefined index is warned.
+
+        The plugin paints VTEX 5 with no LTEX behind it (a missing master), so
+        the index is left untranslated but the cell still counts as modified.
+        """
+        reference, known = build_reference([PluginRecords("m.esm", [_tex_record((0, 0), 0)])])
+        changes = plugin_differences(
+            reference, PluginRecords("mod.esp", [_tex_record((0, 0), 5)]), known
+        )
+        assert len(changes) == 1
+        assert changes[0].is_modified
+
+
+class TestMergeMasterLayers:
+    """Masters combine per layer, not per whole record."""
+
+    def test_a_declared_carried_layer_is_folded_in(self) -> None:
+        """A later master's declared, present layer replaces the earlier value."""
+        existing = LandscapeLayers(coords=(0, 0), declared=LandData(0))
+        incoming = LandscapeLayers(
+            coords=(0, 0), declared=LandData.VERTEX_HEIGHTS, heights=[1, 2, 3, 4]
+        )
+        merge_master_layers(existing, incoming)
+        assert existing.heights == [1, 2, 3, 4]
+        assert existing.declared & LandData.VERTEX_HEIGHTS
+
+    def test_a_declared_but_absent_layer_is_not_copied(self) -> None:
+        """Declaring a layer without carrying it leaves the earlier value alone."""
+        existing = LandscapeLayers(
+            coords=(0, 0), declared=LandData.VERTEX_HEIGHTS, heights=[9, 9, 9, 9]
+        )
+        incoming = LandscapeLayers(
+            coords=(0, 0), declared=LandData.VERTEX_HEIGHTS, heights=None
+        )
+        merge_master_layers(existing, incoming)
+        assert existing.heights == [9, 9, 9, 9]  # untouched
+
 
 class TestSurvey:
     """Grouping every plugin's changes by cell."""
@@ -297,6 +360,25 @@ class TestSurvey:
         """No mods, no contention."""
         reference, known = build_reference([])
         assert survey(reference, [], known) == {}
+
+    def test_two_plugins_editing_one_cell_share_its_contention(self) -> None:
+        """A second plugin editing the same cell is appended to the same entry.
+
+        This exercises the ``get``-then-append path where the cell's contention
+        already exists from the first plugin.
+        """
+        reference, known = build_reference([PluginRecords("m.esm", [_tex_record((0, 0), 0)])])
+        result = survey(
+            reference,
+            [
+                PluginRecords("a.esp", [_tex_record((0, 0), 5)]),
+                PluginRecords("b.esp", [_tex_record((0, 0), 6)]),
+            ],
+            known,
+        )
+        assert list(result) == [(0, 0)]
+        assert result[(0, 0)].plugins == ["a.esp", "b.esp"]
+        assert result[(0, 0)].is_contested
 
     def test_layers_can_be_declined(self) -> None:
         """``allowed`` lets a caller merge terrain without touching colours."""
@@ -367,6 +449,38 @@ class TestCellContention:
         )
         assert cell.plugins == ["a.esp", "b.esp"]
 
+    def test_new_land_is_flagged_when_any_change_is_new(self) -> None:
+        """A change on terrain the masters never had marks the cell as new land."""
+        from wraithguard.land.diff import LandscapeDiff
+
+        old = CellContention(coords=(0, 0), changes=[LandscapeDiff((0, 0), "a.esp")])
+        new = CellContention(
+            coords=(0, 0), changes=[LandscapeDiff((0, 0), "a.esp", new_land=True)]
+        )
+        assert old.is_new_land is False
+        assert new.is_new_land is True
+
+    def test_height_overlap_skips_changes_with_no_heights(self) -> None:
+        """A change that edited no heights contributes nothing to the overlap."""
+        from wraithguard.land.diff import LandscapeDiff, RelativeGrid
+
+        def grid_moving(index: int) -> RelativeGrid:
+            reference = [0] * (65 * 65)
+            plugin = list(reference)
+            plugin[index] = 1
+            return RelativeGrid.from_difference(reference, plugin, side=65)
+
+        cell = CellContention(
+            coords=(0, 0),
+            changes=[
+                LandscapeDiff((0, 0), "a.esp", heights=None),  # no height edit -> skipped
+                LandscapeDiff((0, 0), "b.esp", heights=grid_moving(10)),
+            ],
+        )
+        contested, mergeable = cell.height_overlap()
+        assert contested == 0
+        assert mergeable == 1
+
 
 class TestUnknownTextureFallback:
     """A merged cell can paint an index no LTEX defines (missing master).
@@ -415,3 +529,20 @@ class TestUnknownTextureFallback:
     def test_fallback_with_nothing_painted_is_no_texture(self) -> None:
         """An empty merge has only NO_TEXTURE to fall back to."""
         assert fallback_texture_index({NO_TEXTURE: NO_TEXTURE}) == NO_TEXTURE
+
+
+class TestLandscapeRecordFilter:
+    """``_landscape_records`` keeps only live landscape records."""
+
+    def test_non_landscape_and_deleted_records_are_dropped(self) -> None:
+        """A non-LAND record and a deleted LAND are both skipped."""
+        from wraithguard.land.landmass import LANDSCAPE_TYPE, _landscape_records
+
+        kept = _landscape_records(
+            [
+                {"type": "Npc"},
+                {"type": LANDSCAPE_TYPE, "flags": "DELETED"},
+                {"type": LANDSCAPE_TYPE, "id": "live"},
+            ]
+        )
+        assert [r.get("id") for r in kept] == ["live"]

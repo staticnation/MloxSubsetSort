@@ -129,6 +129,22 @@ class TestStrategies:
         )
         assert merged.delta_at(10, 0) > (20 + 800) / 2
 
+    def test_two_matching_edits_are_a_minor_conflict(self) -> None:
+        """When both plugins make the same small edit, the merge is minor.
+
+        The vertex is still contested -- both moved it -- but averaging changes
+        nothing, so it is counted as a minor resolution rather than a major one.
+        """
+        _merged, report = merge_layer(
+            LandData.VERTEX_HEIGHTS,
+            grid({10: 3}),
+            grid({10: 3}),
+            strategy=ConflictStrategy.RESOLVE,
+        )
+        assert report.contested == 1
+        assert report.minor == 1
+        assert report.major == 0
+
 
 class TestAutoStrategy:
     """AUTO picks per layer, and the texture case is the one that matters."""

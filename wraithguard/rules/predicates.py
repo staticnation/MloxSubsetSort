@@ -441,7 +441,11 @@ def check_predicates(
                 missing = [n for n in ast[1:] if not evaluate_node(n, active_set, index)]
                 if missing:
                     warning_msg = f"[REQUIRES] {message}"
-                    if target_names:
+                    # target_names is empty only if ast[0] were true yet named no
+                    # plugin -- i.e. a /message/ operand. The tokeniser merges a
+                    # leading /message/ with the operand after it, so it can never
+                    # be the first of two-plus operands here: always attributed.
+                    if target_names:  # pragma: no branch
                         warning_msg += f"\n    Needed by: {annotate_all(target_names)}"
                     warning_msg += f"\n    Missing: {', '.join(describe_node(n) for n in missing)}"
                     warnings.append(warning_msg)
@@ -463,7 +467,10 @@ def check_predicates(
                 if patch_active and missing_originals:
                     names = get_triggered_plugins(ast[0], active_set, index)
                     warning_msg = f"[PATCH] {message}"
-                    if names:
+                    # As in [Requires]: a true-but-unattributed ast[0] would be a
+                    # /message/, which the tokeniser cannot leave as the first of
+                    # two-plus operands, so the patch is always attributed here.
+                    if names:  # pragma: no branch
                         warning_msg += f"\n    Patch present: {annotate_all(names)}"
                     warning_msg += "\n    But not what it patches: " + ", ".join(
                         describe_node(n) for n in missing_originals
@@ -481,7 +488,7 @@ def check_predicates(
                     warning_msg += f"\n    Missing patch: {describe_node(ast[0])}"
                     warnings.append(warning_msg)
 
-        elif keyword == "Note":
+        elif keyword == "Note":  # pragma: no branch - exhaustive: one of the four kept keywords
             # notes fire when everything listed is simultaneously true
             if all(evaluate_node(n, active_set, index) for n in ast):
                 triggered_by = set()

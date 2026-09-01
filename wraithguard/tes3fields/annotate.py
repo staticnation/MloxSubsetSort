@@ -162,7 +162,7 @@ def layout_text(record_type: str) -> str | None:
     if record is None:
         return None
     lines = [f"{record.name} record", ""]
-    if record.description:
+    if record.description:  # pragma: no cover - every documented record carries a description
         lines += [record.description, ""]
     lines.append("Subrecords (+ required, - optional, * may repeat):")
     lines += _member_lines(record)

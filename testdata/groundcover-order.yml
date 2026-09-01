@@ -1,0 +1,459 @@
+#
+# TODO: describe the format
+#
+
+- for_mod: OAAB Saplings
+  file_name: OAAB_Saplings.esm
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "graphics-overhaul"
+    - "morrowind-starter-pack"
+    - "of-ash-and-blight-wip"
+
+- for_mod: OAAB Saplings
+  file_name: OAAB_Saplings BCOM patch.esp
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "graphics-overhaul"
+  depends:
+    - file_name: OAAB_Saplings.esm
+
+- for_mod: OAAB Saplings
+  file_name: OAAB_Saplings Concept Arts plantations patch.esp
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "graphics-overhaul"
+  depends:
+    - file_name: OAAB_Saplings.esm
+
+- for_mod: OAAB Saplings
+  file_name: OAAB_Saplings Great Seawall of Vivec patch.esp
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "graphics-overhaul"
+  depends:
+    - file_name: OAAB_Saplings.esm
+
+- for_mod: OAAB Saplings
+  file_name: OAAB_Saplings Minor Plantations Redone patch.esp
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "graphics-overhaul"
+  depends:
+    - file_name: OAAB_Saplings.esm
+
+- for_mod: OAAB Saplings
+  file_name: OAAB_Saplings BrotherJunipersTwinLamps patch.esp
+  on_lists:
+    - "total-overhaul"
+    - "expanded-vanilla"
+    - "total-overhaul-wip"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_RI_TR_TOTSP.esp"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_RI_TOTSP.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+    - "just-beautiful-morrowind"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_RI_TR_BM.esp"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_RI_BM.esp"
+  on_lists:
+    - "just-good-morrowind"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_RI_CYR.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "just-beautiful-morrowind"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_SE_TOTSP.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+    - "just-beautiful-morrowind"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_SE_TR_TOTSP.esp"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_SE_TR_BM.esp"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_SE_BM.esp"
+  on_lists:
+    - "just-good-morrowind"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_SE_CYR.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "just-beautiful-morrowind"
+
+- for_mod: "Skyrim: Home Of The Nords"
+  file_name: "Sky_Main_Grass.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "just-beautiful-morrowind"
+    - "morrowind-starter-pack"
+
+- for_mod: "Project Cyrodiil Grass"
+  file_name: "Cyr_Grass.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "just-beautiful-morrowind"
+    - "morrowind-starter-pack"
+
+- for_mod: Wyrmhaven
+  file_name: Wyrmhaven - Grass.esp
+
+- for_mod: "Vurt's Groundcover"
+  file_name: "Vurt's Groundcover - BC, AI, WG, GL.esp"
+
+- for_mod: "Vurt's Groundcover"
+  file_name: "Vurt's Groundcover - Reeds.esp"
+
+- for_mod: "Vurt's Groundcover"
+  file_name: "Vurt's Groundcover - Solstheim.esp"
+
+- for_mod: "Vurt's Groundcover"
+  file_name: "Vurt's Groundcover - The Ashlands.esp"
+
+- for_mod: "Vurt's Groundcover for OpenMW"
+  file_name: "Vurt's Groundcover - BC, AI, WG, GL.esp"
+
+- for_mod: "Vurt's Groundcover for OpenMW"
+  file_name: "Vurt's Groundcover - Reeds.esp"
+
+- for_mod: "Vurt's Groundcover for OpenMW"
+  file_name: "Vurt's Groundcover - Solstheim.esp"
+
+- for_mod: "Vurt's Groundcover for OpenMW"
+  file_name: "Vurt's Groundcover - The Ashlands.esp"
+
+- for_mod: "Ozzy's Grass Merged (OpenMW compatible)"
+  file_name: "Ozzy's Grass - Merged.esp"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_AC.esp"
+  on_lists:
+    - "morrowind-starter-pack"
+    - "just-good-morrowind"
+
+- for_mod: Tel Aruhn Chronicles
+  file_name: REM_AC_LLCS_TelAruhn.ESP
+  on_lists:
+    - "of-ash-and-blight-wip"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_AI.esp"
+  on_lists:
+    - "morrowind-starter-pack"
+    - "just-good-morrowind"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_AL.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+    - "morrowind-starter-pack"
+    - "just-good-morrowind"
+    - "just-beautiful-morrowind"
+
+- for_mod: Ald'ruhn - City of Ash
+  file_name: Rem_AL_spAldruhn.esp
+  on_lists:
+    - "of-ash-and-blight-wip"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_BC.esp"
+  on_lists:
+    - "morrowind-starter-pack"
+    - "just-good-morrowind"
+    - "of-ash-and-blight-wip"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_GL.esp"
+  on_lists:
+    - "morrowind-starter-pack"
+    - "just-good-morrowind"
+    - "just-beautiful-morrowind"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_Solstheim.esp"
+  on_lists:
+    - "morrowind-starter-pack"
+    - "just-good-morrowind"
+    - "of-ash-and-blight-wip"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_WG.esp"
+  on_lists:
+    - "morrowind-starter-pack"
+    - "just-good-morrowind"
+    - "of-ash-and-blight-wip"
+
+- for_mod: "Solstheim Tomb of the Snow Prince"
+  file_name: "Rem-TOTSP.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+    - "just-beautiful-morrowind"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_AC_TR.esp"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_AI_TR.esp"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_AT_TR.esp"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_BC_TR.esp"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_GL_TR.esp"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_RR_TR.esp"
+
+- for_mod: "Remiros' Groundcover"
+  file_name: "Rem_WG_TR.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass AC.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass AI.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass AL.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass BC.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass GL.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass WG.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass TR AC.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass TR AI.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass TR AL.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass TR AT.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass TR BC.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass TR GL.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass TR SV.esp"
+
+- for_mod: "Aesthesia Groundcover - grass mod"
+  file_name: "Grass TR WG.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesAdGrass_AC.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesAdGrass_AI.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesAdGrass_AL.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesAdGrass_BC.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesAdGrass_WG.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesGrass_GL.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesGrass_SV.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesAdGrass_TR_AC.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesAdGrass_TR_AI.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesAdGrass_TR_AL.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesAdGrass_TR_BC.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesAdGrass_TR_WG.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesGrass_TR_GL.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "AesGrass_TR_SV.esp"
+
+- for_mod: "Aesthesia Groundcover Reworked"
+  file_name: "Rem_TR_AT.esp"
+
+- for_mod: "Turn Normal Grass and Kelp into Groundcover"
+  file_name: "hm-grass-mainland-GROUNDCOVER.esp"
+
+- for_mod: "Beautiful Cities of Morrowind"
+  file_name: "REM_AC.ESP"
+  on_lists:
+    - "just-beautiful-morrowind"
+
+- for_mod: "Beautiful Cities of Morrowind"
+  file_name: "Rem_AI.esp"
+  on_lists:
+    - "just-beautiful-morrowind"
+
+- for_mod: "Beautiful Cities of Morrowind"
+  file_name: "Rem_BC.esp"
+  on_lists:
+    - "just-beautiful-morrowind"
+
+- for_mod: "Beautiful Cities of Morrowind"
+  file_name: "Rem_GL_Trackless_GL.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+
+- for_mod: "Beautiful Cities of Morrowind"
+  file_name: "Rem_WG.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+    - "just-beautiful-morrowind"
+
+- for_mod: "MOMW Patches"
+  file_name: "REM_AC.ESP"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+
+- for_mod: "OAAB Grazelands"
+  file_name: "Rem_GL.esp"
+  on_lists:
+    - "of-ash-and-blight-wip"
+
+- for_mod: "OAAB Grazelands"
+  file_name: "Rem_GL - OAAB Landscape.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+    - "of-ash-and-blight-wip"
+
+- for_mod: "Concept Arts plantations"
+  file_name: "Rem_AI.ESP"
+
+- for_mod: "MOMW Patches"
+  file_name: "Rem_BC.esp"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+
+- for_mod: MOMW Patches
+  file_name: Rem_BC Brother Junipers Twin Lamps patch.esp
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+
+- for_mod: "MOMW Patches"
+  file_name: "Rem_AI.ESP"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+
+- for_mod: "Ascadian Farmyard Overhaul"
+  file_name: "Rem_AI.esp"
+  on_lists:
+    - "of-ash-and-blight-wip"
+
+- for_mod: "Ascadian Farmyard Overhaul"
+  file_name: "AscadianFarmhouses_RemGrass.ESP"
+
+- for_mod: "Grass for Tamriel Rebuilt (Aesthesia or Remiros')"
+  file_name: "Grass-Rem-TRv24_12.esp"
+
+- for_mod: "Lush Synthesis"
+  file_name: "lush3_TR_merged.esp"
+
+- for_mod: Grass for Old TCs
+  file_name: Grass_Arktwend.esp
+  on_lists:
+    - "arktwend-enhanced-wip"
+
+- for_mod: Groundcoverify
+  file_name: groundcover.omwaddon
+
+- for_mod: "MOMW Tools Pack"
+  file_name: groundcover.omwaddon
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+    - "morrowind-starter-pack"
+    - "just-good-morrowind"
+    - "just-beautiful-morrowind"
+    - "of-ash-and-blight-wip"

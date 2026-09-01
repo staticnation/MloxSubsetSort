@@ -717,3 +717,24 @@ class TestAuditFindings:
         rule = Rule("Note", expressions=[Plugin("A.esp")], message="m", priority=level, ref="r")
 
         assert not errors(validate(rule))
+
+
+class TestExpressionValidationEdges:
+    """Corners of the per-expression checker."""
+
+    def test_a_blank_name_is_not_a_plugin(self) -> None:
+        """An empty candidate is rejected before any pattern is considered."""
+        from wraithguard.rules.authoring import _looks_like_plugin
+
+        assert _looks_like_plugin("   ") is False
+
+    def test_an_empty_group_is_an_error(self) -> None:
+        """An [ALL]/[ANY] with no operands cannot be evaluated."""
+        rule = Rule("Note", expressions=[all_of()], message="m", ref="r")
+        problems = errors(validate(rule))
+        assert any("needs at least one expression" in p.message for p in problems)
+
+    def test_a_valid_size_expression_passes_the_size_check(self) -> None:
+        """A non-negative [SIZE] is accepted, exercising the pass-through branch."""
+        rule = Rule("Note", expressions=[Size(0, "Foo.esp")], message="m", ref="r")
+        assert not any("byte count" in p.message for p in validate(rule))

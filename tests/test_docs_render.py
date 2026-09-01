@@ -75,6 +75,22 @@ class TestInline:
         """Used by CHANGELOG and CODE_REVIEW to mark items as done."""
         assert inline("~~done~~") == "<del>done</del>"
 
+    def test_underscore_emphasis(self) -> None:
+        """A whole word wrapped in single underscores is italics."""
+        assert inline("_italic_") == "<em>italic</em>"
+
+    def test_an_image_with_a_safe_source_renders_a_tag(self) -> None:
+        """An image with an http(s) source becomes an <img> with escaped alt."""
+        rendered = inline("![a cat](https://example.com/cat.png)")
+        assert '<img src="https://example.com/cat.png"' in rendered
+        assert 'alt="a cat"' in rendered
+
+    def test_an_image_with_a_dangerous_source_falls_back_to_alt(self) -> None:
+        """An image whose source is a rejected scheme shows only its alt text."""
+        rendered = inline("![just text](javascript:alert(1))")
+        assert "<img" not in rendered
+        assert "just text" in rendered
+
     def test_links_render(self) -> None:
         """A link that does not work is worse than plain text."""
         assert inline("[text](https://example.com)") == '<a href="https://example.com">text</a>'
@@ -121,6 +137,37 @@ class TestBlocks:
         """Two "Notes" sections must not both own ``#notes``."""
         _body, headings = render_markdown("## Notes\n\n## Notes\n")
         assert [h[2] for h in headings] == ["notes", "notes-2"]
+
+    def test_a_paragraph_ends_at_a_fence(self) -> None:
+        """A code fence on the next line closes the paragraph before it."""
+        body = body_of("a paragraph\n```\ncode\n```\n")
+        assert "<p>a paragraph</p>" in body
+        assert "<pre>" in body
+
+    def test_a_paragraph_ends_at_a_blockquote(self) -> None:
+        """A blockquote marker closes the paragraph above it."""
+        body = body_of("a paragraph\n> quoted\n")
+        assert "<p>a paragraph</p>" in body
+        assert "<blockquote>" in body
+
+    def test_a_paragraph_ends_at_a_table(self) -> None:
+        """A table that starts on the next line closes the paragraph above it."""
+        body = body_of("a paragraph\n| h1 | h2 |\n| --- | --- |\n| a | b |\n")
+        assert "<p>a paragraph</p>" in body
+        assert "<table>" in body
+
+    def test_a_paragraph_ends_at_a_bullet_list(self) -> None:
+        """A bullet on the next line closes the paragraph above it."""
+        body = body_of("a paragraph\n- item\n")
+        assert "<p>a paragraph</p>" in body
+        assert "<ul>" in body
+
+    def test_switching_marker_type_starts_a_new_list(self) -> None:
+        """A numbered item right after a bullet ends the bulleted list and opens
+        an ordered one, rather than mixing them into one."""
+        body = body_of("- bullet item\n1. numbered item\n")
+        assert "<ul>" in body
+        assert "<ol>" in body
 
     def test_fenced_code_is_verbatim(self) -> None:
         """Markup inside a code block is content, not markup."""

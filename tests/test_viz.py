@@ -33,7 +33,7 @@ from wraithguard.viz import (
     cells_with_conflicts,
 )
 from wraithguard.viz.geometry import Cell, bounds, group_by_cell, is_interior, parse_grid
-from wraithguard.viz.heightdelta import HeightDeltaError
+from wraithguard.viz.heightdelta import HeightDeltaError, _subtract
 from wraithguard.viz.html import escape, table
 from wraithguard.viz.palette import (
     NEUTRAL,
@@ -44,6 +44,7 @@ from wraithguard.viz.palette import (
     severity_legend_rows,
     tint_ramp,
 )
+from wraithguard.viz.pathgrid import _points_and_edges, _project
 from wraithguard.viz.terrain3d import _STRIDE, Terrain3DError
 
 
@@ -457,6 +458,42 @@ class TestHeightDelta:
         """One surface alone has nothing to diff against."""
         with pytest.raises(HeightDeltaError):
             build_height_delta({"only.esp": (vhgt(), 0.0)}, winner_name="only.esp")
+
+    def test_an_undecodable_sibling_is_skipped_not_fatal(self):
+        """A non-winner surface that will not decode is dropped, not raised on."""
+        page = build_height_delta(
+            {
+                "a": (vhgt(), 0.0),
+                "bad": ("not base64 at all!!", 0.0),  # skipped
+                "b": (vhgt({100: 5}), 0.0),
+            },
+            winner_name="b",
+        )
+        # The page still renders from the two decodable surfaces.
+        assert "data-step=" in page
+
+    def test_subtract_rejects_grids_of_different_shapes(self):
+        """The vertex-by-vertex diff needs both grids the same shape."""
+        with pytest.raises(HeightDeltaError):
+            _subtract([[0.0, 0.0]], [[0.0]])
+
+    def test_subtract_gives_signed_deltas(self):
+        """Winner-minus-loser is positive where the winner is higher."""
+        assert _subtract([[3.0, 1.0]], [[1.0, 4.0]]) == [[2.0, -3.0]]
+
+
+class TestPathgridProjection:
+    """The path-grid graph's coordinate projection and point/edge decode."""
+
+    def test_project_of_no_points_is_a_trivial_extent(self):
+        """With no nodes there is nothing to project, and the scale is 1:1."""
+        assert _project([]) == ([], 1.0, 1.0)
+
+    def test_points_and_edges_without_a_points_list_has_no_nodes(self):
+        """Given no points, the edges still decode but carry no positioned nodes."""
+        value = struct.pack("<3I", 2, 0, 1)  # length prefix 2, then edges 0 and 1
+        coords, _edges = _points_and_edges(value, None)
+        assert coords == []
 
 
 class TestPathGrid:

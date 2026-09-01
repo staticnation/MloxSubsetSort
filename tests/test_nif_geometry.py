@@ -16,6 +16,7 @@ import struct
 from wraithguard.nif.geometry import (
     Mesh,
     Transform,
+    _triple,
     block_tree,
     bounds,
     find_roots,
@@ -557,3 +558,313 @@ class TestVertexColoursSurviveTheReader:
             ("NiTriShapeData", shape_data(SQUARE, ONE_TRIANGLE)),
         )
         assert world_meshes(read_nif_bytes(data, geometry=True))[0].vertex_colors == []
+
+
+class TestTripleCoercion:
+    """``_triple`` turns a retained vector into a colour, or nothing."""
+
+    def test_a_three_element_sequence_becomes_floats(self) -> None:
+        """A length-3 list/tuple coerces element-wise to floats."""
+        assert _triple([1, 2, 3]) == (1.0, 2.0, 3.0)
+        assert _triple((4, 5, 6)) == (4.0, 5.0, 6.0)
+
+    def test_a_missing_or_wrong_shaped_value_is_none(self) -> None:
+        """Anything that is not a 3-element sequence yields no colour."""
+        assert _triple(None) is None
+        assert _triple([1, 2]) is None
+        assert _triple("nope") is None
+
+
+class TestBlockTreeNotes:
+    """The one-line summary each block row shows in the viewer's tree."""
+
+    def _source_texture(self, path: str) -> bytes:
+        return (
+            text("tex")
+            + struct.pack("<ii", -1, -1)  # extra, controller
+            + struct.pack("<B", 1)  # use_external
+            + text(path)  # the external filename
+            + struct.pack("<III", 0, 0, 0)  # pixel layout, mipmaps, alpha
+            + struct.pack("<B", 1)  # is static
+        )
+
+    def test_an_external_source_texture_names_its_file(self) -> None:
+        """A NiSourceTexture row shows the texture it points at."""
+        parsed = read_nif_bytes(
+            nif(("NiSourceTexture", self._source_texture("textures/rock.dds"))), geometry=True
+        )
+        assert block_tree(parsed)[0].note == "textures/rock.dds"
+
+    def test_a_skin_instance_reads_as_skinned(self) -> None:
+        """A NiSkinInstance row is summarised as skinned geometry."""
+        parsed = read_nif_bytes(
+            nif(("NiSkinInstance", struct.pack("<iiI", -1, -1, 0))), geometry=True
+        )
+        assert block_tree(parsed)[0].note == "skinned"
+
+    def test_a_controller_reads_as_animated(self) -> None:
+        """Any *Controller row is summarised as animation."""
+        body = (
+            struct.pack("<i", -1)  # next_controller
+            + struct.pack("<H", 0)  # flags
+            + struct.pack("<4f", 0.0, 0.0, 0.0, 0.0)  # frequency, phase, start, stop
+            + struct.pack("<i", -1)  # target
+            + bytes(111)  # emitter parameters
+            + struct.pack("<H", 0)  # num_particles
+            + struct.pack("<H", 0)  # num_live_particles
+            + bytes(13)  # unidentified tail
+        )
+        parsed = read_nif_bytes(nif(("NiParticleSystemController", body)), geometry=True)
+        assert block_tree(parsed)[0].note == "animated"
+
+    def test_a_shape_with_no_data_block_yields_no_mesh(self) -> None:
+        """A NiTriShape whose data link is empty produces nothing to draw."""
+        data = nif(("NiTriShape", av_body("s", tail=struct.pack("<ii", -1, -1))))
+        assert world_meshes(read_nif_bytes(data, geometry=True)) == []
+
+    def test_a_scene_deeper_than_the_limit_stops(self) -> None:
+        """A chain longer than the depth cap is truncated with a warning, not a hang."""
+        # 66 nodes each parenting the next -> past the 64-deep limit.
+        blocks = [("NiNode", av_body(f"n{i}", children=(i + 1,))) for i in range(65)]
+        blocks.append(("NiNode", av_body("leaf")))
+        parsed = read_nif_bytes(nif(*blocks), geometry=True)
+        assert parsed.complete
+        # Traversal must return rather than recurse without bound.
+        assert world_meshes(parsed) == []
+
+    def test_block_tree_skips_invalid_child_links(self) -> None:
+        """A child index that is negative or points at nothing adds no subtree."""
+        parsed = read_nif_bytes(
+            nif(("NiNode", av_body("r", children=(99, 99)))), geometry=True  # nonexistent
+        )
+        roots = block_tree(parsed)
+        assert roots[0].type_name == "NiNode"
+        assert roots[0].children == []  # the missing children were skipped
+
+    def test_block_tree_skips_a_negative_child_index(self) -> None:
+        """A child link of -1 (no child) is passed over rather than followed."""
+        parsed = read_nif_bytes(nif(("NiNode", av_body("r", children=(-1,)))), geometry=True)
+        assert block_tree(parsed)[0].children == []
+
+    def test_block_tree_skips_an_attachment_link_to_nothing(self) -> None:
+        """A data link pointing at a missing block adds no subtree."""
+        # A shape whose data link is block 99, which does not exist.
+        parsed = read_nif_bytes(
+            nif(("NiTriShape", av_body("s", tail=struct.pack("<ii", 99, -1)))), geometry=True
+        )
+        assert block_tree(parsed)[0].children == []
+
+    def test_world_meshes_survives_a_cycle_and_a_negative_child(self) -> None:
+        """Traversal stops on a revisited block and passes over a -1 child link."""
+        parsed = read_nif_bytes(
+            nif(
+                ("NiNode", av_body("root", children=(1, -1))),  # a root; the -1 child is skipped
+                ("NiNode", av_body("a", children=(2,))),
+                ("NiNode", av_body("b", children=(1,))),  # b -> a -> b, a cycle below the root
+            ),
+            geometry=True,
+        )
+        # No geometry, and crucially it returns rather than recursing forever.
+        assert world_meshes(parsed) == []
+
+
+def _external_source(path: str) -> bytes:
+    return (
+        text("tex")
+        + struct.pack("<ii", -1, -1)
+        + struct.pack("<B", 1)
+        + text(path)
+        + struct.pack("<III", 0, 0, 0)
+        + struct.pack("<B", 1)
+    )
+
+
+class TestReaderFieldKinds:
+    """Exotic subrecord shapes and the malformed-header stop."""
+
+    def test_a_match_group_array_is_read(self) -> None:
+        """A NiTriShapeData carrying a match group parses without desync."""
+        body = (
+            struct.pack("<H", 1)  # num_vertices
+            + struct.pack("<I", 1)  # has_vertices
+            + struct.pack("<3f", 0.0, 0.0, 0.0)  # one vertex
+            + struct.pack("<I", 0)  # has_normals
+            + struct.pack("<4f", 0.0, 0.0, 0.0, 1.0)  # center + radius
+            + struct.pack("<I", 0)  # has_vertex_colors
+            + struct.pack("<HI", 0, 0)  # num_uv_sets, has_uv
+            + struct.pack("<HI", 0, 0)  # num_triangles, num_triangle_points
+            + struct.pack("<H", 1)  # one match group
+            + struct.pack("<H", 1)  # with one member
+            + struct.pack("<H", 0)  # member index
+        )
+        parsed = read_nif_bytes(nif(("NiTriShapeData", body)), geometry=True)
+        assert parsed.complete
+        assert parsed.blocks[0].type_name == "NiTriShapeData"
+
+    def test_an_implausible_block_type_length_is_a_malformed_stop(self) -> None:
+        """A block-type string claiming an absurd length is a malformed stop."""
+        # 0xFFFFFFFF bytes is not a plausible type name -- flagged as malformed.
+        data = HEADER + struct.pack("<II", 0x04000002, 1) + struct.pack("<I", 0xFFFFFFFF)
+        parsed = read_nif_bytes(data)
+        assert parsed.stopped_malformed
+        assert not parsed.complete
+
+    def _reads_cleanly(self, type_name: str, body: bytes) -> None:
+        parsed = read_nif_bytes(nif((type_name, body)), geometry=True)
+        assert parsed.complete, f"{type_name} did not parse"
+        assert parsed.blocks[0].type_name == type_name
+
+    def test_a_visibility_key_array_reads(self) -> None:
+        """NiVisData carries a run of visibility keys."""
+        self._reads_cleanly("NiVisData", struct.pack("<I", 0))
+
+    def test_a_vector_key_group_reads(self) -> None:
+        """NiPosData carries a vector key group."""
+        self._reads_cleanly("NiPosData", struct.pack("<I", 0))
+
+    def test_a_colour_key_group_reads(self) -> None:
+        """NiColorData carries a colour key group."""
+        self._reads_cleanly("NiColorData", struct.pack("<I", 0))
+
+    def test_a_strip_array_reads(self) -> None:
+        """NiTriStripsData ends in a triangle-strip array."""
+        body = (
+            struct.pack("<H", 0)  # num_vertices
+            + struct.pack("<I", 0)  # has_vertices
+            + struct.pack("<I", 0)  # has_normals
+            + struct.pack("<4f", 0.0, 0.0, 0.0, 1.0)  # center + radius
+            + struct.pack("<I", 0)  # has_vertex_colors
+            + struct.pack("<HI", 0, 0)  # num_uv_sets, has_uv
+            + struct.pack("<H", 0)  # num_triangles
+            + struct.pack("<H", 0)  # strip count
+        )
+        self._reads_cleanly("NiTriStripsData", body)
+
+    def test_a_skin_partition_with_a_triangle_list_reads(self) -> None:
+        """NiSkinPartition's one partition carries a triangle list."""
+        body = (
+            struct.pack("<I", 1)  # one partition
+            + struct.pack("<5H", 0, 1, 0, 0, 0)  # verts, tris=1, bones, strips, per-vertex
+            + bytes(6)  # one triangle
+            + struct.pack("<B", 0)  # no bone palette
+        )
+        self._reads_cleanly("NiSkinPartition", body)
+
+    def test_a_float_array_reads(self) -> None:
+        """NiVertWeightsExtraData carries a per-vertex float array."""
+        self._reads_cleanly(
+            "NiVertWeightsExtraData",
+            struct.pack("<i", -1) + struct.pack("<I", 0) + struct.pack("<H", 0),
+        )
+
+    def test_a_text_key_array_reads(self) -> None:
+        """NiTextKeyExtraData carries a text-key array."""
+        self._reads_cleanly(
+            "NiTextKeyExtraData",
+            struct.pack("<i", -1) + struct.pack("<I", 0) + struct.pack("<I", 0),
+        )
+
+    def test_a_skin_partition_with_strips_and_a_palette_reads(self) -> None:
+        """The strip-list and bone-palette branches of a partition are walked."""
+        body = (
+            struct.pack("<I", 1)  # one partition
+            + struct.pack("<5H", 0, 0, 0, 1, 0)  # tris=0 but one strip length
+            + struct.pack("<H", 0)  # the single strip length
+            + struct.pack("<B", 1)  # has a bone palette
+        )
+        self._reads_cleanly("NiSkinPartition", body)
+
+    def test_a_keyframe_manager_sequence_with_an_external_file_reads(self) -> None:
+        """NiKeyframeManager holds sequences, one naming an external keyframe file."""
+        body = (
+            struct.pack("<i", -1)  # next_controller
+            + struct.pack("<H", 0)  # flags
+            + struct.pack("<4f", 0.0, 0.0, 0.0, 0.0)  # frequency, phase, start, stop
+            + struct.pack("<i", -1)  # target
+            + struct.pack("<I", 1)  # one sequence
+            + text("seq")
+            + struct.pack("<B", 1)  # has external keyframe file
+            + text("anim.kf")
+            + struct.pack("<I", 1)  # one controller pair
+            + text("pair")
+            + struct.pack("<i", -1)  # the pair's controller link
+        )
+        self._reads_cleanly("NiKeyframeManager", body)
+
+
+class TestTextureSlots:
+    """Reading the base and decal texture references off a shape."""
+
+    def test_the_base_texture_is_read_from_the_texturing_property(self) -> None:
+        """A shape's base slot resolves to the NiSourceTexture it links."""
+        texprop = (
+            text("tp")
+            + struct.pack("<ii", -1, -1)
+            + struct.pack("<H", 0)  # flags
+            + struct.pack("<I", 2)  # apply mode
+            + struct.pack("<I", 1)  # texture_count
+            + struct.pack("<I", 1)  # base slot present
+            + struct.pack("<i", 3)  # -> NiSourceTexture at block 3
+            + bytes(18)  # slot descriptor
+        )
+        data = nif(
+            ("NiTriShape", shape_with((2,))),
+            ("NiTriShapeData", shape_data(SQUARE, ONE_TRIANGLE)),
+            ("NiTexturingProperty", texprop),
+            ("NiSourceTexture", _external_source("textures/base.dds")),
+        )
+        mesh = world_meshes(read_nif_bytes(data, geometry=True))[0]
+        assert mesh.texture == "textures/base.dds"
+
+    def test_an_embedded_source_texture_leaves_the_slot_empty(self) -> None:
+        """A base slot whose source has no external filename yields no texture."""
+        embedded = (
+            text("tex")
+            + struct.pack("<ii", -1, -1)  # extra, controller
+            + struct.pack("<B", 0)  # use_external = 0 (internal pixels)
+            + struct.pack("<B", 0)  # internal texture flag
+            + struct.pack("<i", -1)  # internal pixel-data link
+            + struct.pack("<III", 0, 0, 0)
+            + struct.pack("<B", 1)
+        )
+        texprop = (
+            text("tp")
+            + struct.pack("<ii", -1, -1)
+            + struct.pack("<H", 0)
+            + struct.pack("<I", 2)
+            + struct.pack("<I", 1)  # texture_count
+            + struct.pack("<I", 1)  # base slot present
+            + struct.pack("<i", 3)  # -> the embedded NiSourceTexture at block 3
+            + bytes(18)
+        )
+        data = nif(
+            ("NiTriShape", shape_with((2,))),
+            ("NiTriShapeData", shape_data(SQUARE, ONE_TRIANGLE)),
+            ("NiTexturingProperty", texprop),
+            ("NiSourceTexture", embedded),
+        )
+        mesh = world_meshes(read_nif_bytes(data, geometry=True))[0]
+        assert mesh.texture == ""  # embedded pixels have no name to offer
+
+    def test_a_decal_slot_is_collected(self) -> None:
+        """A decal in slot 6 is walked and its texture path returned."""
+        empty_slots = struct.pack("<I", 0) * 6  # base..bump all absent
+        texprop = (
+            text("tp")
+            + struct.pack("<ii", -1, -1)
+            + struct.pack("<H", 0)
+            + struct.pack("<I", 2)
+            + struct.pack("<I", 7)  # seven slots: index 6 is decal_0
+            + empty_slots
+            + struct.pack("<I", 1)  # decal_0 present
+            + struct.pack("<i", 3)  # -> NiSourceTexture at block 3
+            + bytes(18)
+        )
+        data = nif(
+            ("NiTriShape", shape_with((2,))),
+            ("NiTriShapeData", shape_data(SQUARE, ONE_TRIANGLE)),
+            ("NiTexturingProperty", texprop),
+            ("NiSourceTexture", _external_source("textures/decal.dds")),
+        )
+        mesh = world_meshes(read_nif_bytes(data, geometry=True))[0]
+        assert "textures/decal.dds" in mesh.decals

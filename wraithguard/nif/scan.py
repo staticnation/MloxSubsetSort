@@ -133,7 +133,7 @@ def scan_block_types(data: bytes) -> ScanResult:
     names: list[str] = []
     for run in _CANDIDATE.finditer(data, newline + 9):
         start = run.start()
-        if start < 4:
+        if start < 4:  # pragma: no cover - the search begins past the 40-byte header
             continue
         (prefix,) = struct.unpack_from("<I", data, start - 4)
         if not _MIN_NAME <= prefix < _MAX_NAME:

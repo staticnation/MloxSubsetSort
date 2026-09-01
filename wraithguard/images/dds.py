@@ -538,7 +538,9 @@ def read_dds(data: bytes) -> Image:
             label = f"{bit_count}-bit uncompressed"
         else:
             raise DdsError(f"unsupported DDS pixel format flags {pf_flags:#010x}")
-    except struct.error as exc:
+    except struct.error as exc:  # pragma: no cover - the length guard above means every
+        # unpack_from here has the bytes it needs; kept as a defensive net (see the
+        # docstring: these mod-archive files must fail as a finding, never a struct.error).
         raise DdsError(f"DDS header is truncated: {exc}") from exc
     LOG.debug("decoded %dx%d %s", width, height, label)
     return Image(width, height, bytes(pixels))

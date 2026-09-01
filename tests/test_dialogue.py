@@ -8,6 +8,8 @@ exactly what the tool sees in practice.
 
 from __future__ import annotations
 
+import pytest
+
 from wraithguard.tes3fields.dialogue import (
     DIAL_TYPE,
     INFO_TYPE,
@@ -228,3 +230,128 @@ class TestScriptTokens:
     def test_empty_source_yields_no_tokens(self) -> None:
         """An empty script tokenises to nothing."""
         assert script_tokens("") == []
+
+
+class TestDescribeFilterVariableTypes:
+    """Each variable/identity filter type reads as its own English clause."""
+
+    @pytest.mark.parametrize(
+        ("ftype", "comparison", "ident", "value", "expected"),
+        [
+            ("Global", "Equal", "gv", 1, "global gv = 1"),
+            ("Local", "Equal", "lv", 1, "local lv = 1"),
+            ("Journal", "GreaterEqual", "q", 10, "quest q >= 10"),
+            ("Item", "GreaterEqual", "gold_001", 100, "player inventory gold_001 >= 100"),
+            ("Dead", "Equal", "npc", 0, "NPC npc is not dead"),
+            ("Dead", "Greater", "npc", 2, "NPC death count for npc > 2"),
+            ("NotLocal", "Equal", "lv", 1, "not local lv = 1"),
+            ("NotId", "Equal", "foo", 0, "NPC is not foo"),
+            ("NotFaction", "Equal", "bar", 1, "NPC is a member of faction bar"),
+            ("NotId", "Greater", "baz", 5, "NotId baz > 5"),
+            ("Weird_New_Type", "Equal", "x", 1, "Weird_New_Type x = 1"),
+        ],
+    )
+    def test_variable_filter_reads_as_a_clause(
+        self, ftype: str, comparison: str, ident: str, value: int, expected: str
+    ) -> None:
+        """The described clause matches the type's own wording."""
+        clause = describe_filter(_filter(ftype, comparison=comparison, ident=ident, value=value))
+        assert clause == expected
+
+    def test_a_function_name_without_camel_case_is_kept_verbatim(self) -> None:
+        """A function name the CamelCase splitter cannot read is shown as-is."""
+        clause = describe_filter(_filter("Function", function="___", comparison="Equal", value=1))
+        assert clause is not None
+        assert "___" in clause
+
+    def test_an_overridden_function_name_uses_its_pretty_form(self) -> None:
+        """A name in the override table renders with its curated spelling."""
+        clause = describe_filter(
+            _filter("Function", function="PcCorprus", comparison="Equal", value=1)
+        )
+        assert clause is not None
+        assert "PC Corprus" in clause
+
+    def test_a_bare_numeric_value_is_read_directly(self) -> None:
+        """A value that is a plain number, not an adjacently-tagged object, works."""
+        flt = {
+            "index": 0,
+            "filter_type": "Function",
+            "function": "PcClothingModifier",
+            "comparison": "Greater",
+            "id": "",
+            "value": 5,  # bare number, not {"type": ..., "data": ...}
+        }
+        clause = describe_filter(flt)
+        assert clause is not None
+        assert "5" in clause
+
+    def test_a_whole_float_value_drops_its_trailing_zero(self) -> None:
+        """A float like 3.0 renders as 3, not 3.0."""
+        flt = {
+            "index": 0,
+            "filter_type": "Function",
+            "function": "PcClothingModifier",
+            "comparison": "Greater",
+            "id": "",
+            "value": {"type": "Float", "data": 3.0},
+        }
+        clause = describe_filter(flt)
+        assert clause is not None
+        assert "3.0" not in clause
+        assert "3" in clause
+
+
+class TestConditionLines:
+    """The packed-DATA conditions of an INFO record."""
+
+    def test_faction_rank_zero_reads_as_not_a_member(self) -> None:
+        record = {"type": INFO_TYPE, "player_faction": "Legion", "data": {"player_rank": 0}}
+        out = describe_info(record)
+        assert "not a member of faction Legion" in out
+
+    def test_a_positive_faction_rank_reads_as_at_least(self) -> None:
+        record = {"type": INFO_TYPE, "player_faction": "Legion", "data": {"player_rank": 3}}
+        assert "rank in faction Legion is at least 3" in describe_info(record)
+
+    def test_a_faction_with_no_rank_reads_as_a_member(self) -> None:
+        record = {"type": INFO_TYPE, "player_faction": "Legion", "data": {}}
+        assert "is a member of faction Legion" in describe_info(record)
+
+    def test_a_male_speaker_condition(self) -> None:
+        record = {"type": INFO_TYPE, "data": {"speaker_sex": "Male"}}
+        assert "NPC gender is male" in describe_info(record)
+
+    def test_a_female_speaker_condition(self) -> None:
+        record = {"type": INFO_TYPE, "data": {"speaker_sex": "Female"}}
+        assert "NPC gender is female" in describe_info(record)
+
+    def test_a_positive_speaker_rank_condition(self) -> None:
+        record = {"type": INFO_TYPE, "data": {"speaker_rank": 2}}
+        assert "NPC rank is at least 2" in describe_info(record)
+
+    def test_non_dict_and_empty_filters_are_skipped(self) -> None:
+        """A stray non-dict filter and one that yields no clause are both ignored."""
+        record = {
+            "type": INFO_TYPE,
+            "data": {},
+            "filters": [
+                "not a dict",  # skipped: not a mapping
+                _filter("None", comparison="Equal", value=0),  # yields no clause
+                _filter("Item", comparison="Greater", ident="gold_001", value=100),
+            ],
+        }
+        out = describe_info(record)
+        assert "gold_001" in out  # only the real filter contributed a line
+
+
+class TestDescribeDispatch:
+    """The convenience front doors."""
+
+    def test_describe_dialogue_ignores_a_non_dial_record(self) -> None:
+        assert describe_dialogue({"type": INFO_TYPE}) == ""
+
+    def test_describe_record_routes_info_and_dial_and_other(self) -> None:
+        assert describe_record({"type": INFO_TYPE, "text": "hi"}).startswith("<")
+        assert describe_record({"type": DIAL_TYPE, "id": "Background"}).startswith("Dialogue")
+        assert describe_record({"type": "Static", "id": "x"}) == ""

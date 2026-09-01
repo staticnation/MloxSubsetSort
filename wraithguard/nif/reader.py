@@ -510,6 +510,47 @@ def write_nif(nif_file: NifFile) -> bytes:
     return b"".join(parts)
 
 
+def field_spans(type_name: str, raw: bytes) -> dict[str, tuple[int, int]]:
+    """Where each of a block's fields sits within its body bytes.
+
+    Walks ``raw`` exactly as the reader would -- same layout, same field
+    readers -- but records, instead of the values, each field's ``(offset,
+    length)`` relative to the start of the block. That is what an editor needs
+    to splice one field without re-encoding the block: a block carries no
+    internal length, so the only way to find field *k* is to parse fields
+    ``0..k`` and see where they land, which is precisely this walk.
+
+    A gated-off field (its ``has_*`` flag was false, so it occupies no bytes)
+    is recorded with a length of ``0`` rather than omitted, so a caller can
+    tell "absent" from "missing name".
+
+    Args:
+        type_name: The block's type string, to look up its layout.
+        raw: The block's body bytes, as :attr:`Block.raw` keeps them.
+
+    Returns:
+        Field name to ``(offset, length)`` within ``raw``.
+
+    Raises:
+        NifParseError: If ``type_name`` has no known layout, or ``raw`` is too
+            short for it -- the same failure the reader would raise on the same
+            bytes, not a silent partial answer.
+    """
+    layout = block_layout(type_name)
+    if layout is None:
+        raise NifParseError(f"no layout for block type {type_name!r}; cannot locate its fields")
+    cursor = _Cursor(raw)
+    seen: dict[str, Any] = {}
+    spans: dict[str, tuple[int, int]] = {}
+    for entry in layout:
+        name, kind = entry[0], entry[1]
+        gate = entry[2] if len(entry) > 2 else None
+        start = cursor.pos
+        seen[name] = _read_field(cursor, kind, name, seen, gate)
+        spans[name] = (start, cursor.pos - start)
+    return spans
+
+
 def _read_block(
     cursor: _Cursor, layout: Sequence[Field], *, geometry: bool = False
 ) -> dict[str, Any]:
@@ -740,8 +781,9 @@ def _read_compound(
         # read, which is not a number stored anywhere in the file -- so this
         # cannot be expressed as a gated run and needs its own branch.
         strips = int(cursor.unpack("<H", f"{name} strip count")[0])
-        if strips > _MAX_COUNT:
-            raise NifParseError(f"{name}: implausible strip count {strips}")
+        if strips > _MAX_COUNT:  # pragma: no branch - a u16 strip count maxes at 65535,
+            # which is far below _MAX_COUNT (16M), so this cap can never trip.
+            raise NifParseError(f"{name}: implausible strip count {strips}")  # pragma: no cover
         lengths = cursor.unpack(f"<{strips}H", f"{name} strip lengths") if strips else ()
         cursor.take(sum(lengths) * 2, name)
         return strips
@@ -810,7 +852,9 @@ def _read_compound(
         return _read_skin_partitions(cursor, name)
     if kind == "sequence_array":
         return _read_sequences(cursor, name)
-    raise NifParseError(f"layout error: field {name!r} has unknown kind {kind!r}")
+    # Every kind used by BLOCK_LAYOUTS has a branch above; this guards a layout
+    # table naming a kind the reader does not model (a code bug), so it is dead.
+    raise NifParseError(f"layout error: field {name!r} has unknown kind {kind!r}")  # pragma: no cover
 
 
 def _optional_run(

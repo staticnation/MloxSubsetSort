@@ -74,7 +74,10 @@ def _build_edges(
             return True
         if would_create_cycle(adj, a, b, nodes):
             conflicts.append((a, b))
-            if not quiet:
+            # quiet is only True for cfg-order edges, which are a total order added
+            # before any rule edge and so can never be the one that closes a cycle;
+            # the quiet-and-rejected combination is therefore unreachable.
+            if not quiet:  # pragma: no branch
                 trace_sort(f"[sort]   edge REJECTED (would cycle): '{a}' -> '{b}'  [{label}]")
             return False
         adj[a].add(b)
@@ -369,7 +372,10 @@ def _anchor_positions(
         # stays memoized -- until the values stop changing (bounded).
         for n in subset_names:
             _final_pos(n)
-        for _round in range(len(subset_names) + 1):
+        # The fixpoint always converges well inside this bound (a DAG settles in
+        # at most its depth in rounds), so the loop always exits via the break
+        # below, never by exhausting the range.
+        for _round in range(len(subset_names) + 1):  # pragma: no branch
             changed = False
             for n in [x for x in subset_names if derives.get(x)]:
                 old = resolved.pop(n)
@@ -498,7 +504,9 @@ def _kahn_place(
             if indeg[m] == 0:
                 heapq.heappush(ready, (rank(m), m))
 
-    if len(result) != len(nodes):
+    if len(result) != len(nodes):  # pragma: no cover - edges that would cycle are rejected at
+        # insertion (see would_create_cycle in _build_edges), so the graph Kahn
+        # walks is always acyclic and this defensive backstop cannot be reached.
         remaining = nodes - set(result)
         trace_sort(f"[sort] UNPLACED (cycle): {sorted(remaining)}")
         print(
@@ -578,7 +586,7 @@ def build_and_sort(
     seen_lower = set()
     for n in subset_names:
         canon = base_lower_map.get(n.lower(), n)
-        if canon.lower() != n.lower():
+        if canon != n:
             trace_sort(f"[sort] canonicalize subset '{n}' -> cfg spelling '{canon}'")
         if canon.lower() not in seen_lower:
             seen_lower.add(canon.lower())

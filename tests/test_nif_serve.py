@@ -12,10 +12,14 @@ from __future__ import annotations
 import socket
 import urllib.error
 import urllib.request
+from typing import TYPE_CHECKING
 
 import pytest
 
 from wraithguard.viz.serve import Payload, ViewerServer, payloads_for, publish_html_file
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture
@@ -46,6 +50,28 @@ def get(url: str) -> bytes:
         return bytes(response.read())
 
 
+def post(url: str, body: bytes) -> tuple[int, bytes, str]:
+    """POST ``body`` to ``url``, returning (status, response body, disposition).
+
+    Args:
+        url: What to post to.
+        body: The request body.
+
+    Returns:
+        The HTTP status, the response bytes, and the Content-Disposition header.
+    """
+    request = urllib.request.Request(url, data=body, method="POST")  # noqa: S310 - loopback
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:  # noqa: S310 - loopback
+            return (
+                response.status,
+                bytes(response.read()),
+                response.headers.get("Content-Disposition", ""),
+            )
+    except urllib.error.HTTPError as exc:
+        return exc.code, bytes(exc.read()), ""
+
+
 class TestItServesWhatWasRegistered:
     """The ordinary path."""
 
@@ -53,6 +79,45 @@ class TestItServesWhatWasRegistered:
         """With its content type intact."""
         url = server.publish("index.html", Payload(b"<h1>hi</h1>", "text/html"))
         assert get(url) == b"<h1>hi</h1>"
+
+
+class TestPostHandlers:
+    """The one way the server takes input: a registered POST handler."""
+
+    def test_a_handler_runs_on_the_body_and_can_return_a_download(
+        self, server: ViewerServer
+    ) -> None:
+        """A POST reaches the handler, whose payload comes back as an attachment."""
+        url = server.register_post(
+            "apply", lambda body: Payload(body.upper(), "application/octet-stream", "out.bin")
+        )
+        status, out, disposition = post(url, b"hello")
+        assert status == 200
+        assert out == b"HELLO"
+        assert 'filename="out.bin"' in disposition
+
+    def test_a_handler_that_raises_is_a_400_with_the_reason(self, server: ViewerServer) -> None:
+        """A body the handler rejects yields 400 and the reason, not a crash."""
+
+        def picky(_body: bytes) -> Payload:
+            raise ValueError("nope, bad body")
+
+        url = server.register_post("apply", picky)
+        status, body, _ = post(url, b"anything")
+        assert status == 400
+        assert b"nope, bad body" in body
+
+    def test_a_wrong_token_is_a_404(self, server: ViewerServer) -> None:
+        """The token guards POST exactly as it guards GET."""
+        url = server.register_post("apply", Payload)  # Payload(body) is a valid handler
+        status, _, _ = post(url.split("?")[0] + "?t=wrong", b"x")
+        assert status == 404
+
+    def test_an_unregistered_key_is_a_404(self, server: ViewerServer) -> None:
+        """Posting to a key with no handler is a 404, like an unknown payload."""
+        # A real token, but no handler at this key.
+        status, _, _ = post(f"http://127.0.0.1:{server.port}/nope?t={server.token}", b"x")
+        assert status == 404
 
     def test_publishing_before_starting_is_an_error(self) -> None:
         """A URL to a server that is not listening is worse than an exception."""
@@ -207,6 +272,115 @@ class TestLifecycle:
         server.publish("index.html", Payload(b"secret"))
         server.stop()
         assert server.fetch("index.html", server.token) is None
+
+    def test_stopping_without_a_thread_is_safe(self, server: ViewerServer) -> None:
+        """Stopping when the serving thread reference is already gone is fine."""
+        server._thread = None  # no thread to join -> the join is skipped
+        server.stop()
+        assert not server.running
+
+
+class TestPublishHtmlFileFallbacks:
+    """Serving a written page over loopback, with the fallbacks."""
+
+    def test_a_missing_server_falls_back_to_the_file(self, tmp_path: Path) -> None:
+        """No server means the caller keeps the file path."""
+        page = tmp_path / "v.html"
+        page.write_bytes(b"<html>")
+        assert publish_html_file(None, page) is None
+
+    def test_an_unreadable_file_falls_back(self, server: ViewerServer, tmp_path: Path) -> None:
+        """A page that cannot be read yields no URL."""
+        assert publish_html_file(server, tmp_path / "does-not-exist.html") is None
+
+    def test_a_stop_race_falls_back_to_the_file(
+        self, server: ViewerServer, tmp_path: Path, monkeypatch
+    ) -> None:
+        """If the server stops mid-publish, the RuntimeError becomes a fallback."""
+        page = tmp_path / "v.html"
+        page.write_bytes(b"<html>")
+
+        def stopped(_kind: str):
+            raise RuntimeError("the viewer server is not running")
+
+        monkeypatch.setattr(server, "publish_session", stopped)
+        assert publish_html_file(server, page) is None
+
+    def test_a_running_server_serves_the_page(self, server: ViewerServer, tmp_path: Path) -> None:
+        """The ordinary path returns a loopback URL that serves the file."""
+        page = tmp_path / "v.html"
+        page.write_bytes(b"<h1>page</h1>")
+        url = publish_html_file(server, page)
+        assert url is not None
+        assert get(url) == b"<h1>page</h1>"
+
+
+def _raw_status(port: int, path: str, content_length: str) -> int:
+    """Send a hand-built POST with a chosen Content-Length and read the status.
+
+    Args:
+        port: The server port.
+        path: The request path, token included.
+        content_length: The literal ``Content-Length`` header value to send.
+
+    Returns:
+        The numeric HTTP status from the response line.
+    """
+    request = (
+        f"POST {path} HTTP/1.1\r\n"
+        f"Host: 127.0.0.1:{port}\r\n"
+        f"Content-Length: {content_length}\r\n"
+        f"Connection: close\r\n\r\n"
+    ).encode()
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+        sock.sendall(request)
+        line = b""
+        while b"\r\n" not in line:
+            chunk = sock.recv(256)
+            if not chunk:
+                break
+            line += chunk
+    return int(line.split()[1])
+
+
+class TestPostRequestGuards:
+    """Malformed POST framing is answered with a status, not a crash."""
+
+    def test_a_non_numeric_content_length_is_a_400(self, server: ViewerServer) -> None:
+        """A Content-Length that is not a number is a bad request."""
+        server.register_post("apply", Payload)
+        status = _raw_status(server.port, f"/apply?t={server.token}", "not-a-number")
+        assert status == 400
+
+    def test_an_oversized_content_length_is_a_413(self, server: ViewerServer) -> None:
+        """A body larger than the cap is refused before it is read."""
+        server.register_post("apply", Payload)
+        status = _raw_status(server.port, f"/apply?t={server.token}", str(9 * 1024 * 1024))
+        assert status == 413
+
+
+class TestPublishRequiresARunningServer:
+    """Publishing depends on the listener actually being up."""
+
+    def test_publishing_before_start_raises(self) -> None:
+        """A publish with no server behind it is a RuntimeError, not a silent URL."""
+        idle = ViewerServer()
+        with pytest.raises(RuntimeError, match="not running"):
+            idle.publish("index.html", Payload(b"x"))
+
+    def test_registering_a_post_before_start_raises(self) -> None:
+        """Registering a handler before the listener is up is also refused."""
+        idle = ViewerServer()
+        with pytest.raises(RuntimeError, match="not running"):
+            idle.register_post("apply", Payload)
+
+    def test_a_session_namespaces_a_post_handler(self, server: ViewerServer) -> None:
+        """A publish session registers POST handlers under its own prefix."""
+        session = server.publish_session("mesh")
+        url = session.register_post("apply", lambda body: Payload(body.upper()))
+        status, out, _ = post(url, b"hi")
+        assert status == 200
+        assert out == b"HI"
 
 
 class TestPayloadBundle:

@@ -1,34 +1,53 @@
-"""Tests for :func:`wraithguard.proc.no_window_kwargs`.
+"""The Windows console-suppression kwargs helper.
 
-A ``--noconsole`` build flashes a console window per child process unless the
-subprocess call passes ``CREATE_NO_WINDOW``. This is the one thing that stopped
-a Merged Lands run from popping a window per plugin, so it is pinned here and
-its use by the merge/patch encoders is checked in test_land_service.py.
+The interesting behaviour is Windows-only, so the platform and the
+``STARTUPINFO`` API are emulated to exercise the branch that a Linux CI run
+can never reach on its own.
 """
 
 from __future__ import annotations
 
+import subprocess
+
+import pytest
+
 from wraithguard import proc
-from wraithguard.proc import no_window_kwargs
 
 
-class TestNoWindowKwargs:
-    def test_non_windows_is_a_no_op(self, monkeypatch) -> None:
-        """Off Windows there is no console window, so nothing is added."""
-        monkeypatch.setattr(proc.os, "name", "posix")
-        assert no_window_kwargs() == {}
+def test_non_windows_is_a_no_op(monkeypatch) -> None:
+    """Off Windows there is no console window to suppress."""
+    monkeypatch.setattr(proc.os, "name", "posix")
+    assert proc.no_window_kwargs() == {}
 
-    def test_windows_sets_create_no_window(self, monkeypatch) -> None:
-        """CREATE_NO_WINDOW is the flag that suppresses the flash."""
-        monkeypatch.setattr(proc.os, "name", "nt")
-        kwargs = no_window_kwargs()
-        assert kwargs["creationflags"] == 0x08000000
 
-    def test_it_is_splattable_into_subprocess(self, monkeypatch) -> None:
-        """The result must be a plain kwargs dict a caller can ``**`` in."""
-        monkeypatch.setattr(proc.os, "name", "nt")
-        kwargs = no_window_kwargs()
-        assert isinstance(kwargs, dict)
-        # STARTUPINFO is unavailable off Windows, so only creationflags is
-        # guaranteed here -- which is the part that suppresses the window.
-        assert set(kwargs) <= {"creationflags", "startupinfo"}
+def test_windows_sets_the_hidden_startupinfo(monkeypatch) -> None:
+    """On Windows the helper adds CREATE_NO_WINDOW and a hidden STARTUPINFO."""
+
+    class _FakeStartupInfo:
+        def __init__(self) -> None:
+            self.dwFlags = 0
+            self.wShowWindow = 99
+
+    monkeypatch.setattr(proc.os, "name", "nt")
+    monkeypatch.setattr(subprocess, "STARTUPINFO", _FakeStartupInfo, raising=False)
+    monkeypatch.setattr(subprocess, "STARTF_USESHOWWINDOW", 0x1, raising=False)
+
+    kw = proc.no_window_kwargs()
+    assert kw["creationflags"] == 0x08000000
+    si = kw["startupinfo"]
+    assert si.dwFlags == 0x1
+    assert si.wShowWindow == 0
+
+
+def test_windows_without_startupinfo_still_gets_the_flag(monkeypatch) -> None:
+    """A stripped build lacking STARTUPINFO keeps CREATE_NO_WINDOW alone."""
+    monkeypatch.setattr(proc.os, "name", "nt")
+    monkeypatch.delattr(subprocess, "STARTUPINFO", raising=False)
+
+    kw = proc.no_window_kwargs()
+    assert kw == {"creationflags": 0x08000000}
+    assert "startupinfo" not in kw
+
+
+if __name__ == "__main__":  # pragma: no cover
+    pytest.main([__file__, "-v"])

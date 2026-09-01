@@ -45,6 +45,7 @@ from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING, Any, Final
 
 import wraithguard_toolkit as core
+from wraithguard.gui import rtl
 from wraithguard.gui.conflict_colors import THIS_TEXT, all_colors, this_text
 from wraithguard.gui.theme import DARK, apply_titlebar_theme
 from wraithguard.gui.widgets import add_tooltip, group_separator
@@ -208,6 +209,7 @@ class PluginViewMixin:
         nav.column("#0", width=380, stretch=True)
         nav.heading("count", text=_("#"))
         nav.column("count", width=70, anchor="e", stretch=False)
+        rtl.apply_rtl_to_treeview(nav)
         nav_scroll = ttk.Scrollbar(left, orient="vertical", command=nav.yview)
         nav.configure(yscrollcommand=nav_scroll.set)
         nav.grid(row=0, column=0, sticky="nsew")
@@ -836,6 +838,7 @@ class PluginViewMixin:
             wins = _("  (wins)") if index == len(plugins) - 1 else ""
             detail.heading(f"p{index}", text=f"{star}{plugin}{wins}")
             detail.column(f"p{index}", width=220, anchor="w", stretch=True)
+        rtl.apply_rtl_to_treeview(detail)
         detail.delete(*detail.get_children())
 
         if self._conf_session is None:
@@ -1224,6 +1227,7 @@ class PluginViewMixin:
         table.column("count", width=70, anchor="e", stretch=False)
         table.heading("value", text=_("This plugin's value"))
         table.column("value", width=340, stretch=True)
+        rtl.apply_rtl_to_treeview(table)
         table_scroll = ttk.Scrollbar(table_wrap, orient="vertical", command=table.yview)
         table.configure(yscrollcommand=table_scroll.set)
         table.grid(row=0, column=0, sticky="nsew")

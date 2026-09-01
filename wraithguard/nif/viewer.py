@@ -49,6 +49,8 @@ from wraithguard.viz import ViewerError, three_source
 from wraithguard.viz.library import EXTRA_SLOTS_JS
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from wraithguard.nif.geometry import Mesh, TreeNode
     from wraithguard.nif.textures import Resolved, TextureResolver
 
@@ -334,6 +336,7 @@ def build_viewer_page(
     library_url: str = "",
     trees: list[list[TreeNode]] | None = None,
     resolver: TextureResolver | None = None,
+    edit: Mapping[str, object] | None = None,
 ) -> str:
     """Build an HTML page showing one or more meshes.
 
@@ -359,6 +362,12 @@ def build_viewer_page(
             view stands on its own; supplied, it fills the structure pane with
             what a render cannot show -- collision nodes, controllers, and
             every block that never draws.
+        edit: When given, turns the page into an editor. A mapping of
+            ``{"url": <apply endpoint>, "filename": <download name>, "blocks":
+            {index: {"type": ..., "fields": [FieldView-shaped dicts]}}}`` -- the
+            inspector reads it to show each block's fields, and POSTs edits to
+            ``url``. Omitted (the default), the page is the read-only viewer
+            exactly as before, carrying none of the editor code.
 
     Returns:
         The whole HTML document.
@@ -398,12 +407,18 @@ def build_viewer_page(
     else:
         middle = f"<script>\n{library}\n</script>"
     library_block = f"{prologue}\n{middle}\n{epilogue}"
+    if edit:
+        edit_data = json.dumps(edit, separators=(",", ":")).replace("</", "<\\/")
+        editor_block = _EDITOR_JS.replace("__EDIT_DATA__", edit_data)
+    else:
+        editor_block = ""
     return (
         _PAGE.replace("__TITLE__", html.escape(title))
         .replace("__LIBRARY_BLOCK__", library_block)
         .replace("__DATA__", data)
         .replace("__EMPTY__", "true" if empty else "false")
         .replace("__EXTRA_SLOTS__", EXTRA_SLOTS_JS)
+        .replace("__EDIT_JS__", editor_block)
     )
 
 
@@ -463,6 +478,32 @@ _PAGE: Final[str] = r"""<!DOCTYPE html>
  #hint{position:absolute;bottom:8px;right:10px;opacity:.55;pointer-events:none}
  #none{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
    text-align:center;padding:2rem;opacity:.8}
+ #tree li[data-block-index]{cursor:pointer}
+ #tree li.sel{background:#094771;box-shadow:inset 3px 0 0 #6ba3ff}
+ #inspector{display:none;flex-direction:column;width:360px;min-width:220px;max-width:50%;
+   overflow:auto;border-left:1px solid var(--line);background:var(--panel);
+   font-family:Consolas,"Cascadia Mono",monospace;font-size:12px;resize:horizontal}
+ #inspector .insp-head{padding:11px 12px;border-bottom:1px solid var(--line)}
+ #inspector .insp-head .nm{color:#9ecbff;font-weight:600}
+ #inspector .insp-head .sub{color:var(--dim);font-size:11px;margin-top:2px}
+ #inspector .insp-empty{padding:14px 12px;color:var(--dim)}
+ #inspector .sect .sh{padding:8px 12px;color:var(--dim);font-size:11px;letter-spacing:1px;
+   font-weight:600;border-bottom:1px solid var(--line);
+   font-family:"Segoe UI",system-ui,sans-serif}
+ #inspector .sect .body{padding:4px 12px 10px}
+ #inspector .frow{padding:6px 0;border-bottom:1px solid #262b33}
+ #inspector .frow:last-child{border-bottom:0}
+ #inspector .lab{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px}
+ #inspector .fname{color:var(--ink)}
+ #inspector .frow.ro .fname{color:var(--dim)}
+ #inspector .kind{color:var(--dim);font-size:10px;border:1px solid var(--line);border-radius:4px;padding:0 5px}
+ #inspector input.f{width:100%;background:#2c313a;border:1px solid var(--line);border-radius:5px;
+   color:var(--ink);padding:5px 8px;font:inherit}
+ #inspector input.f:focus{outline:none;border-color:#6ba3ff}
+ #inspector .roval{color:var(--dim)}
+ #inspector .frow.dirty input.f{border-color:#c9a227}
+ .panel .save-btn{border-color:#3f6a99;color:#9ecbff}
+ .panel .save-status{color:var(--dim);font-size:12px}
 </style></head><body>
 <div class="panel" id="controls"></div>
 <div id="body">
@@ -471,6 +512,7 @@ _PAGE: Final[str] = r"""<!DOCTYPE html>
     <div id="stats"></div>
     <div id="hint">drag to orbit &middot; shift/right-drag to pan &middot; wheel to zoom</div>
   </div>
+  <div id="inspector"></div>
 </div>
 __LIBRARY_BLOCK__
 <script>
@@ -866,6 +908,7 @@ __EXTRA_SLOTS__
       var ul = document.createElement("ul");
       nodes.forEach(function (node) {
         var li = document.createElement("li");
+        li.setAttribute("data-block-index", node.index);
         var index = document.createElement("span");
         index.className = "ix"; index.textContent = node.index;
         var type = document.createElement("span");
@@ -1479,5 +1522,126 @@ __EXTRA_SLOTS__
   }
 })();
 </script>
+__EDIT_JS__
 </body></html>
 """
+
+
+#: The editor overlay, injected only for an editable view. Kept out of
+#: :data:`_PAGE` and run as its own script so the large, read-only viewer is not
+#: touched by it: it works off the DOM the viewer already built (the block tree's
+#: ``li[data-block-index]`` rows) and a single ``EDIT`` payload, so a
+#: non-editable page carries none of this and behaves exactly as before. It
+#: collects field edits, POSTs them to the server's apply handler, and saves the
+#: returned file. A **raw** string for the same reason :data:`_PAGE` is.
+_EDITOR_JS: Final[str] = r"""<script>
+(function () {
+  var EDIT = __EDIT_DATA__;
+  if (!EDIT || !EDIT.url) return;
+  var insp = document.getElementById("inspector");
+  var treeBox = document.getElementById("tree");
+  var controls = document.getElementById("controls");
+  if (!insp || !treeBox || !controls) return;
+  insp.style.display = "flex";
+  var pending = {};
+
+  var save = document.createElement("button");
+  save.className = "save-btn"; save.textContent = "Save edited .nif";
+  var status = document.createElement("span"); status.className = "save-status";
+  controls.appendChild(save); controls.appendChild(status);
+  save.addEventListener("click", doSave);
+
+  treeBox.addEventListener("click", function (e) {
+    var li = e.target;
+    while (li && li !== treeBox && !li.hasAttribute("data-block-index")) li = li.parentNode;
+    if (!li || li === treeBox) return;
+    select(parseInt(li.getAttribute("data-block-index"), 10), li);
+  });
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c];
+    });
+  }
+  function refreshStatus() {
+    var n = Object.keys(pending).length;
+    status.textContent = n ? (n + " edit" + (n > 1 ? "s" : "") + " pending") : "";
+  }
+  function select(idx, li) {
+    Array.prototype.forEach.call(treeBox.querySelectorAll("li.sel"), function (x) {
+      x.classList.remove("sel");
+    });
+    if (li) li.classList.add("sel");
+    render(idx);
+  }
+  function widget(f) {
+    if (!f.editable) return '<span class="roval">' + esc(f.value === null ? "—" : f.value) + "</span>";
+    if (f.kind === "bool32") {
+      return '<input type="checkbox" data-field="' + esc(f.name) + '" data-kind="bool32"' +
+        (f.value === true ? " checked" : "") + ">";
+    }
+    return '<input class="f" type="text" data-field="' + esc(f.name) + '" data-kind="' +
+      esc(f.kind) + '" value="' + esc(f.value === null ? "" : f.value) + '">';
+  }
+  function rows(fields) {
+    return fields.map(function (f) {
+      return '<div class="frow ' + (f.editable ? "" : "ro") + '"><div class="lab"><span class="fname">' +
+        esc(f.name) + '</span><span class="kind">' + esc(f.kind) + "</span></div>" + widget(f) + "</div>";
+    }).join("");
+  }
+  function render(idx) {
+    var b = EDIT.blocks[idx];
+    if (!b) { insp.innerHTML = '<div class="insp-empty">This block has no editable fields.</div>'; return; }
+    var ed = b.fields.filter(function (f) { return f.editable; });
+    var ro = b.fields.filter(function (f) { return !f.editable; });
+    insp.innerHTML =
+      '<div class="insp-head"><div class="nm">' + esc(b.type) + '</div><div class="sub">block ' +
+      idx + " &middot; " + b.fields.length + " fields</div></div>" +
+      '<div class="sect"><div class="sh">PROPERTIES &middot; EDITABLE (' + ed.length + ')</div><div class="body">' +
+      (rows(ed) || '<div class="insp-empty">No directly-editable fields.</div>') + "</div></div>" +
+      '<div class="sect"><div class="sh">STRUCTURE &middot; READ-ONLY (' + ro.length + ')</div><div class="body">' +
+      rows(ro) + "</div></div>";
+    Array.prototype.forEach.call(insp.querySelectorAll("[data-field]"), function (el) {
+      el.addEventListener("change", function () { onEdit(idx, el); });
+    });
+  }
+  function coerce(el) {
+    var k = el.getAttribute("data-kind");
+    if (k === "bool32") return el.checked;
+    if (k === "f32") return parseFloat(el.value);
+    if (k === "u8" || k === "u16" || k === "u32" || k === "i32" || k === "link") return parseInt(el.value, 10);
+    return el.value;
+  }
+  function onEdit(idx, el) {
+    var name = el.getAttribute("data-field");
+    pending[idx + ":" + name] = {op: "set_field", block: idx, name: name, value: coerce(el)};
+    var frow = el.parentNode;
+    while (frow && frow.className && frow.className.indexOf("frow") < 0) frow = frow.parentNode;
+    if (frow && frow.classList) frow.classList.add("dirty");
+    refreshStatus();
+  }
+  function doSave() {
+    var edits = Object.keys(pending).map(function (k) { return pending[k]; });
+    if (!edits.length) { status.textContent = "no edits to save"; return; }
+    status.textContent = "saving…";
+    fetch(EDIT.url, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({edits: edits})
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t || ("HTTP " + r.status)); });
+      return r.blob();
+    }).then(function (blob) {
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = EDIT.filename || "edited.nif";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      pending = {};
+      Array.prototype.forEach.call(insp.querySelectorAll(".frow.dirty"), function (x) {
+        x.classList.remove("dirty");
+      });
+      status.textContent = "saved ✓";
+    }).catch(function (err) { status.textContent = "error: " + err.message; });
+  }
+})();
+</script>"""

@@ -98,6 +98,22 @@ class TestSimulateReplace:
         assert errs and "more than one line" in errs[0]
         assert "more" in errs[0]
 
+    def test_a_few_matches_are_listed_without_an_and_more_tail(self) -> None:
+        """Two-to-five matches are all shown, so no ``... and N more`` is added."""
+        toml = '[[Customizations]]\n[[Customizations.replace]]\nsource = "A.esp"\ndest = "B.esp"\n'
+        lines = [f"content=A.esp {i}" for i in range(2)]  # only 2 matches
+        sim, errs, _ = simulate_configurator_apply(lines, toml)
+        assert sim == lines  # unchanged
+        assert errs and "more than one line" in errs[0]
+        assert "... and" not in errs[0]  # every match fit, so no truncation note
+
+    def test_a_replace_source_matching_nothing_is_a_silent_no_op(self) -> None:
+        """A source no line contains changes nothing and raises no error."""
+        toml = '[[Customizations]]\n[[Customizations.replace]]\nsource = "Absent.esp"\ndest = "X"\n'
+        sim, errs, _ = simulate_configurator_apply(["content=A.esp"], toml)
+        assert sim == ["content=A.esp"]  # unchanged
+        assert errs == []
+
 
 class TestSimulateInsertAndFilters:
     """Insert ambiguity, the listName filter, and template notes."""

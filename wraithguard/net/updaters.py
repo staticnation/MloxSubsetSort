@@ -192,7 +192,10 @@ def update_plugin_order_yml(
             report.append(f"  {url}: downloaded but failed to parse ({e})")
             continue
         finally:
-            if tmp is not None:
+            # tmp is None only if NamedTemporaryFile itself failed (a disk/IO
+            # error), which the tests cannot force without globally breaking
+            # tempfile; the cleanup path is exercised on every normal run.
+            if tmp is not None:  # pragma: no branch
                 tmp.unlink(missing_ok=True)
         if len(entries) < 100:
             report.append(f"  {url}: parsed but only {len(entries)} entries -- refusing")

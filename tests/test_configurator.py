@@ -158,6 +158,98 @@ append = 'fallback=Weather_x,1'
         assert "# APPENDED LINES #" in lines
 
 
+class TestEmitterVariety:
+    """Anchor kinds, passthrough data inserts, and carried-over append blocks."""
+
+    def test_before_nearstart_and_nearend_hints_are_annotated(self) -> None:
+        """Each ordering-hint kind gets its own explanatory comment."""
+        final = ["Morrowind.esm", "A.esp", "Before.esp", "Near1.esp", "Near2.esp"]
+        subset = {"before.esp", "near1.esp", "near2.esp"}
+        anchors = {
+            "before.esp": ("before", "A.esp"),
+            "near1.esp": ("nearstart", None),
+            "near2.esp": ("nearend", None),
+        }
+        toml = generate_customizations_toml(
+            {},
+            final,
+            subset,
+            {"Before.esp": "Before.esp", "Near1.esp": "Near1.esp", "Near2.esp": "Near2.esp"},
+            custom_anchors=anchors,
+        )
+        assert "must load before 'A.esp'" in toml
+        assert "mlox [NearStart] hint" in toml
+        assert "mlox [NearEnd] hint" in toml
+
+    def test_raw_data_inserts_pass_a_before_anchor_through(self) -> None:
+        """Without --sort-data-paths, a raw insert's ``before`` is written as-is."""
+        toml = generate_customizations_toml(
+            {},
+            ["Morrowind.esm"],
+            set(),
+            {},
+            raw_data_inserts=[{"value": "E:/Mods/New", "before": "E:/Mods/Base"}],
+        )
+        assert "before = 'E:/Mods/Base'" in toml
+
+    def test_append_blocks_from_the_source_are_carried_over(self) -> None:
+        """``append`` and ``appendBlock`` entries in the source TOML survive."""
+        original = {"Customizations": [{"append": [{"append": "foo=bar"}, {"appendBlock": "a\nb"}]}]}
+        toml = generate_customizations_toml(original, ["Morrowind.esm"], set(), {})
+        assert "append = 'foo=bar'" in toml
+        assert "appendBlock" in toml
+
+    def test_case_insensitive_duplicate_removes_are_collapsed(self) -> None:
+        """A remove list is de-duplicated ignoring case, keeping first order."""
+        toml = generate_customizations_toml(
+            {}, ["Morrowind.esm"], set(), {}, remove_content=["Foo.esp", "FOO.esp"]
+        )
+        assert toml.count("Foo.esp") == 1  # the case-variant duplicate was dropped
+
+    def test_a_replace_block_missing_a_source_or_dest_still_emits(self) -> None:
+        """Partial replace blocks emit only the halves they carry."""
+        original = {
+            "Customizations": [
+                {"replace": [{"dest": "only-dest"}]},  # no source
+                {"replace": [{"source": "only-source"}]},  # no dest
+            ]
+        }
+        toml = generate_customizations_toml(original, ["Morrowind.esm"], set(), {})
+        assert "dest = 'only-dest'" in toml
+        assert "source = 'only-source'" in toml
+
+    def test_an_unavoidably_ambiguous_data_anchor_still_emits_with_a_warning(self, capsys) -> None:
+        """When even the full line cannot disambiguate, the anchor is emitted anyway.
+
+        Two identical frozen ``data=`` lines make every candidate anchor match
+        both, so no unique anchor exists in either direction or form; the natural
+        anchor is written and the ambiguity is reported rather than dropping the
+        insert.
+        """
+        drt = [
+            ('data="E:/Dup"', False, "E:/Dup"),
+            ('data="E:/Dup"', False, "E:/Dup"),  # identical -> full line also ambiguous
+            ('data="E:/Mine"', True, "E:/Mine"),  # the user's own, inserted after
+        ]
+        toml = generate_customizations_toml(
+            {}, ["Morrowind.esm"], set(), {}, data_result_tuples=drt, user_data_values=["E:/Mine"]
+        )
+        assert "after = 'E:/Dup'" in toml  # the natural anchor, emitted anyway
+        assert "matches 2 openmw.cfg lines" in capsys.readouterr().out
+
+    def test_an_unavoidably_ambiguous_content_anchor_still_emits(self, capsys) -> None:
+        """A content insert whose only neighbour is a duplicated name emits anyway."""
+        # The insert is at the very start, so it has only a *following* neighbour,
+        # and that name is duplicated -- neither the bare name nor the whole line
+        # is unique, so the content-side "before" fallback fires.
+        final = ["Mine.esp", "Dup.esp", "Dup.esp"]
+        toml = generate_customizations_toml(
+            {}, final, {"mine.esp"}, {"Mine.esp": "Mine.esp"}
+        )
+        assert "Dup.esp" in toml
+        assert "matches 2 openmw.cfg lines" in capsys.readouterr().out
+
+
 class TestRoundTrip:
     def test_emitted_toml_reproduces_the_sorted_order(self):
         """The end-to-end promise: what we emit, applied by the Configurator,

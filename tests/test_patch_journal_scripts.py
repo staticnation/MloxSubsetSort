@@ -13,11 +13,13 @@ import base64
 import struct
 from typing import Any, Final
 
+from wraithguard.patch import journal_scripts as _js
 from wraithguard.patch.journal import Resolved
 from wraithguard.patch.journal_scripts import (
     Attachment,
     Effect,
     JournalCall,
+    _calls_in_bytecode,
     attach,
     calls_from_dialogue,
     calls_from_scripts,
@@ -772,3 +774,110 @@ class TestAttach:
 
     def test_an_empty_call_list_is_fine(self) -> None:
         assert attach([], {"Q": [Resolved("s1", index=10)]}) == []
+
+
+class TestParserEdgeCases:
+    """Guards the well-formed-script tests never reach."""
+
+    def test_a_non_numeric_index_is_ignored(self) -> None:
+        """A Journal call whose index will not parse as a number is skipped."""
+        assert calls_in_text('Journal "Q", notanumber') == []
+
+    def test_an_unclosed_paren_does_not_hang(self) -> None:
+        """A call with an unclosed parenthesis is tolerated, not looped on."""
+        # The matching-paren scan runs off the end and returns; no call is read.
+        assert calls_in_text('if ( GetJournalIndex "Q" >= 10\n') == []
+
+    def test_an_unclosed_condition_paren_is_survived_in_context(self) -> None:
+        """The condition-context scan tolerates a paren that never closes."""
+        got = calls_in_text_with_context('if ( Journal "Q", 10\n')
+        assert got == [("Journal", "Q", 10, ())]
+
+    def test_an_if_without_a_paren_condition_is_tolerated(self) -> None:
+        """An ``if`` not followed by ``(`` opens no condition frame."""
+        got = calls_in_text_with_context('if x\nJournal "Q", 10\n')
+        assert got == [("Journal", "Q", 10, ())]
+
+    def test_a_dangling_endif_with_no_open_condition_is_ignored(self) -> None:
+        """An ``endif`` with nothing on the condition stack pops nothing."""
+        got = calls_in_text_with_context('endif\nJournal "Q", 10\n')
+        assert got == [("Journal", "Q", 10, ())]
+
+    def test_a_final_line_without_a_newline_is_still_read(self) -> None:
+        """A script whose last line has no trailing newline is still a statement."""
+        got = statements_in_text_with_context('AddItem "g", 1')
+        assert got[0][0] == "AddItem"
+
+    def test_a_blank_statement_line_yields_nothing(self) -> None:
+        """A line that is only whitespace produces no statement."""
+        assert statements_in_text_with_context("   \n") == []
+
+    def test_a_bare_arrow_target_is_too_malformed_to_name(self) -> None:
+        """``target->`` with nothing after it names no function."""
+        assert statements_in_text_with_context("SomeTarget->\n") == []
+
+    def test_whitespace_after_the_arrow_is_skipped(self) -> None:
+        """A space between ``->`` and the function name is stepped over."""
+        got = statements_in_text_with_context('ref-> AddItem "gold_001", 1\n')
+        assert got[0][:2] == ("AddItem", "ref")
+
+
+class TestBytecodeCalls:
+    """Reading journal calls from a Script record's compiled bytecode."""
+
+    def test_a_non_string_bytecode_field_is_ignored(self) -> None:
+        """Only a base64 string is bytecode; anything else yields nothing."""
+        assert _calls_in_bytecode(None, "text") == []
+
+    def test_a_non_journal_instruction_is_skipped(self, monkeypatch) -> None:
+        """An opcode that is not a journal call, then a real one, keeps only the call."""
+        import types
+
+        fake = types.SimpleNamespace(
+            instructions=[
+                types.SimpleNamespace(name="AddItem", operands=("gold", 1)),  # wrong function
+                types.SimpleNamespace(name="Journal", operands=(123, "nope")),  # bad operand types
+                types.SimpleNamespace(name="Journal", operands=("Q", 5)),  # the real call
+            ]
+        )
+        monkeypatch.setattr(_js, "disassemble", lambda *a, **k: fake)
+        monkeypatch.setattr(_js, "decode_bytecode_field", lambda _b: b"\x00")
+        assert _calls_in_bytecode("Zm9v", "text") == [("Journal", "Q", 5)]
+
+    def test_an_unexpected_disassembler_error_degrades_to_empty(self, monkeypatch) -> None:
+        """A disassembler failure on attacker-shaped bytes is contained, not raised."""
+
+        def boom(*_a, **_k):
+            raise ValueError("bad bytes")
+
+        monkeypatch.setattr(_js, "decode_bytecode_field", lambda _b: b"\x00")
+        monkeypatch.setattr(_js, "disassemble", boom)
+        assert _calls_in_bytecode("Zm9v", "text") == []
+
+
+class TestOwnerRecordFiltering:
+    """The winning-record scans skip the wrong type and the id-less."""
+
+    def test_dialogue_scan_skips_non_info_and_idless_records(self) -> None:
+        """Only DialogueInfo records with an id contribute a call."""
+        sources = {
+            "A.esp": [
+                {"type": "Weapon", "id": "w"},  # wrong type -> skipped
+                {"type": "DialogueInfo", "id": ""},  # no id -> skipped
+                {"type": "DialogueInfo", "id": "i1", "script_text": 'Journal "Q", 5'},
+            ]
+        }
+        calls = calls_from_dialogue(sources, ["A.esp"])
+        assert [c.owner_id for c in calls] == ["i1"]
+
+    def test_script_scan_skips_non_script_and_idless_records(self) -> None:
+        """Only Script records with an id contribute a call."""
+        sources = {
+            "A.esp": [
+                {"type": "Weapon", "id": "w"},  # wrong type -> skipped
+                {"type": "Script", "id": ""},  # no id -> skipped
+                {"type": "Script", "id": "s1", "text": 'Journal "Q", 7'},
+            ]
+        }
+        calls = calls_from_scripts(sources, ["A.esp"])
+        assert [c.owner_id for c in calls] == ["s1"]

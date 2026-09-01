@@ -255,7 +255,9 @@ def build_height_delta(
             grid = decode_vertex_heights(value, offset)
         except LandscapeDecodeError:
             continue
-        if len(grid) != len(winner) or any(len(a) != len(b) for a, b in zip(grid, winner)):
+        if len(grid) != len(winner) or any(  # pragma: no cover - every VHGT decodes to 65x65
+            len(a) != len(b) for a, b in zip(grid, winner)
+        ):
             continue  # different grid size -- not comparable, quietly skipped
         chain.append(name)
         grids[name] = grid

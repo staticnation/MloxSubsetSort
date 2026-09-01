@@ -290,7 +290,7 @@ def vertex_normals_from_heights(rows: list[list[float]]) -> list[list[tuple[int,
             nz = step * step
 
             length = (nx * nx + ny * ny + nz * nz) ** 0.5
-            if length == 0.0:  # Degenerate only if step were zero; guard anyway.
+            if length == 0.0:  # pragma: no cover - degenerate only if step were zero; guard anyway
                 row.append((0, 0, 127))
                 continue
             unit = length / 127.0

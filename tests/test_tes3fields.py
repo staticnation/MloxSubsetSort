@@ -242,3 +242,27 @@ class TestTotality:
 
     def test_every_decodable_field_has_a_description(self) -> None:
         assert {k for k in DECODABLE_FIELDS if describe_field(k)} == set(DECODABLE_FIELDS)
+
+    def test_a_non_numeric_offset_sibling_defaults_the_base_height(self) -> None:
+        """A malformed ``offset`` sibling degrades to a zero base, not a crash."""
+        flat = _b64(bytes(LAND_NUM_VERTS))
+        out = text_for_field(
+            "vertex_heights.data", flat, {"vertex_heights.offset": "not a number"}
+        )
+        assert out is not None
+        assert "VHGT" in out  # rendered normally, base silently taken as 0.0
+        assert "offset=0" in out
+        assert "could not decode" not in out
+
+    def test_an_unexpected_decoder_error_becomes_a_comment(self, monkeypatch) -> None:
+        """A renderer raising something other than a decode error is contained."""
+        from wraithguard import tes3fields
+
+        def explode(_value: object, _record: object) -> str:
+            raise ValueError("something unforeseen")
+
+        monkeypatch.setitem(tes3fields._RENDERERS, "vertex_heights.data", explode)
+        out = text_for_field("vertex_heights.data", "anything")
+        assert out is not None
+        assert out.startswith("; unexpected error")
+        assert "ValueError" in out

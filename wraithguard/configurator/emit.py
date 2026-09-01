@@ -469,8 +469,10 @@ def generate_customizations_toml(
                 # Filtered rather than assumed: emitting toml_value(None) would
                 # write the literal string 'None' into the cfg as a data path,
                 # which fails silently.
+                # is_ours requires a truthy path_val (see its definition above), so a
+                # non-empty run always has at least one value; the empty case is dead.
                 values = [val for _entry, val, _ours in run if val]
-                if values:
+                if values:  # pragma: no branch
                     out.append("[[Customizations.insert]]")
                     if len(values) == 1:
                         # A single path needs no block; `insert` is the plainer

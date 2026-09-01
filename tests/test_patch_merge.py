@@ -159,6 +159,41 @@ class TestReferencesFollowTheirOwnSource:
         ]
         assert base[0] != taken[0]
 
+    def test_one_plugins_mapping_is_built_only_once(self) -> None:
+        """Two reference choices from the same plugin reuse its cached index map."""
+        # Both choices point at Other.esp, so mapping_for('Other.esp') is asked
+        # for twice; the second call must reuse what the first built.
+        out = merged(
+            FieldChoice("references", "Other.esp"), FieldChoice("references", "Other.esp")
+        )
+        assert [r["mast_index"] for r in out["references"]] == [5, 3]
+
+
+class TestARecordWithoutReferences:
+    """A merged record that has no reference list needs no remapping."""
+
+    def test_a_reference_free_record_merges_without_remapping(self) -> None:
+        sources = {
+            "P.esp": [
+                {"type": "Header", "masters": [["Morrowind.esm", 1]]},
+                {"type": "GameSetting", "id": "sMyName", "value": "Base"},
+            ],
+            "Q.esp": [
+                {"type": "Header", "masters": [["Morrowind.esm", 1]]},
+                {"type": "GameSetting", "id": "sMyName", "value": "Other"},
+            ],
+        }
+        out = merge_record(
+            "P.esp",
+            "GameSetting",
+            "sMyName",
+            (FieldChoice("value", "Q.esp"),),
+            sources,
+            ["Morrowind.esm", "P.esp", "Q.esp"],
+        )
+        assert out["value"] == "Other"
+        assert "references" not in out
+
 
 class TestWhatIsRefused:
     """Guessing here writes a record no author produced."""

@@ -58,6 +58,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING, Any, Final
 
+from wraithguard.gui import rtl
 from wraithguard.gui.theme import DARK, apply_titlebar_theme
 from wraithguard.i18n import gettext as _
 from wraithguard.logging_setup import get_logger
@@ -194,6 +195,7 @@ class JournalViewMixin:
         nav.column("#0", width=380, stretch=True)
         nav.heading("index", text=_("Index"))
         nav.column("index", width=70, anchor="e", stretch=False)
+        rtl.apply_rtl_to_treeview(nav)
         nav.tag_configure(FINISHED_TAG, foreground=DARK["accent"])
         nav.tag_configure(CALL_TAG, foreground=DARK["fg_dim"])
         nav_scroll = ttk.Scrollbar(left, orient="vertical", command=nav.yview)

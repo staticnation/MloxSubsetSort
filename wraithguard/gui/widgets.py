@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 from wraithguard.gui import (
     case_insensitive_filetypes,
     register_drop_target,
+    rtl,
     trace_first_fire,
 )
 from wraithguard.gui.theme import DARK
@@ -90,7 +91,7 @@ class Tooltip:
         tk.Label(
             tw,
             text=self.text,
-            justify="left",
+            justify=rtl.text_justify(),
             background=DARK["field_bg"],
             foreground=DARK["fg"],
             relief="solid",

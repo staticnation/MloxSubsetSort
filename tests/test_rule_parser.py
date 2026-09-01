@@ -118,6 +118,37 @@ class TestRulePriority:
         assert priorities[("A.esp", "B.esp")] < priorities[("C.esp", "D.esp")]
 
 
+class TestParserResilience:
+    """The parser must tolerate an empty block and an unreadable file."""
+
+    def test_an_order_block_with_no_names_yields_no_block(self, tmp_path, capsys):
+        """A block whose lines name no plugin contributes nothing, not an empty chain."""
+        path = tmp_path / "rules.txt"
+        path.write_text("[Order]\n[DESC /x/ Foo.esp]\nsome prose with no plugin\n", encoding="utf-8")
+        assert parse_mlox_file(path) == []
+
+    def test_one_unparseable_rule_file_is_skipped_not_fatal(self, tmp_path, monkeypatch, capsys):
+        """A file that raises while parsing is logged and stepped over."""
+        good = tmp_path / "mlox_base.txt"
+        good.write_text("[Order]\nA.esp\nB.esp\n", encoding="utf-8")
+        bad = tmp_path / "mlox_user.txt"
+        bad.write_text("[Order]\nC.esp\n", encoding="utf-8")
+
+        import wraithguard.rules.parser as parser_mod
+
+        real = parser_mod.parse_mlox_file
+
+        def selective(path):
+            if path.name == "mlox_user.txt":
+                raise ValueError("a decode or regex failure deep in parsing")
+            return real(path)
+
+        monkeypatch.setattr(parser_mod, "parse_mlox_file", selective)
+        order, _nearstart, _nearend = parser_mod.load_rule_blocks([good, bad])
+        assert ["A.esp", "B.esp"] in [names for names, _ in order]
+        assert ["C.esp"] not in [names for names, _ in order]
+
+
 class TestPredicateMessageSplitting:
     def test_bracket_continuation_is_not_message_text(self):
         """Regression: an [ALL ...] spanning indented lines was truncated, so

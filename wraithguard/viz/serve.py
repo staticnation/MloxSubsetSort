@@ -38,7 +38,7 @@ from urllib.parse import parse_qs, urlparse
 from wraithguard.logging_setup import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
 LOG = get_logger(__name__)
 
@@ -49,6 +49,11 @@ _HOST = "127.0.0.1"
 #: How long to wait for the server thread to stop before giving up on it.
 _SHUTDOWN_TIMEOUT = 2.0
 
+#: Largest POST body accepted. An edit list is a few kilobytes of JSON; this is
+#: generous for that and small enough that a runaway request cannot exhaust
+#: memory on a loopback server nothing else should be talking to.
+_MAX_POST_BYTES = 8 * 1024 * 1024
+
 
 @dataclass(frozen=True, slots=True)
 class Payload:
@@ -57,10 +62,14 @@ class Payload:
     Attributes:
         body: The bytes to send.
         content_type: The MIME type to send them as.
+        filename: When non-empty, the response is marked as a download with
+            this name (``Content-Disposition: attachment``) -- how the edited
+            mesh a POST handler produces reaches the browser as a saved file.
     """
 
     body: bytes
     content_type: str = "application/octet-stream"
+    filename: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +110,18 @@ class PublishSession:
         """
         return self.server.publish(f"{self.prefix}/{key}", payload)
 
+    def register_post(self, key: str, handler: Callable[[bytes], Payload]) -> str:
+        """Register a POST handler within this session's namespace.
+
+        Args:
+            key: The handler's name within this session.
+            handler: Called with the POST body, returning the response payload.
+
+        Returns:
+            The URL that runs it.
+        """
+        return self.server.register_post(f"{self.prefix}/{key}", handler)
+
 
 class ViewerServer:
     """Serves a small set of in-memory payloads on loopback.
@@ -113,6 +134,7 @@ class ViewerServer:
     def __init__(self) -> None:
         """Create a server. Nothing listens until :meth:`start`."""
         self._payloads: dict[str, Payload] = {}
+        self._post_handlers: dict[str, Callable[[bytes], Payload]] = {}
         self._token = secrets.token_urlsafe(24)
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
@@ -191,6 +213,58 @@ class ViewerServer:
         with self._lock:
             return self._payloads.get(key)
 
+    def register_post(self, key: str, handler: Callable[[bytes], Payload]) -> str:
+        """Register a handler that turns a POST body into a response payload.
+
+        The one way this server accepts input rather than only handing out what
+        it was given: a caller registers a handler under a key, and a POST to
+        that key's URL runs it on the request body. The server stays generic --
+        it neither knows nor imports what a handler does (the mesh editor's
+        handler applies edits and returns an edited file); it only routes bytes
+        in and a :class:`Payload` out, still token-guarded like everything else.
+
+        Args:
+            key: The name to reach the handler at, same namespace as payloads.
+            handler: Called with the POST body, returning the response payload.
+                It may raise to signal a bad request; the server turns that into
+                a 400 without leaking the exception type to the client.
+
+        Returns:
+            An absolute URL including the session token.
+
+        Raises:
+            RuntimeError: If the server is not running.
+        """
+        if self._server is None:
+            raise RuntimeError("the viewer server is not running")
+        with self._lock:
+            self._post_handlers[key] = handler
+        return f"http://{_HOST}:{self.port}/{key}?t={self._token}"
+
+    def apply_post(self, key: str, token: str, body: bytes) -> Payload | None:
+        """Run the POST handler registered at ``key`` on ``body``.
+
+        Args:
+            key: The registered handler name.
+            token: The token from the request.
+            body: The request body to hand the handler.
+
+        Returns:
+            The handler's payload, or ``None`` when the token is wrong or no
+            handler is registered -- indistinguishable, as with :meth:`fetch`.
+
+        Raises:
+            Exception: Whatever the handler raises on a body it rejects; the
+                request handler catches it and answers 400.
+        """
+        if not secrets.compare_digest(token, self._token):
+            return None
+        with self._lock:
+            handler = self._post_handlers.get(key)
+        if handler is None:
+            return None
+        return handler(body)
+
     def start(self) -> None:
         """Begin listening on an ephemeral loopback port.
 
@@ -224,6 +298,7 @@ class ViewerServer:
             thread.join(timeout=_SHUTDOWN_TIMEOUT)
         with self._lock:
             self._payloads.clear()
+            self._post_handlers.clear()
         LOG.info("viewer server stopped")
 
 
@@ -299,6 +374,57 @@ def _make_handler(owner: ViewerServer) -> type[BaseHTTPRequestHandler]:
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(payload.body)
+
+        def do_POST(self) -> None:
+            """Run a registered POST handler, or 404/400."""
+            parsed = urlparse(self.path)
+            key = parsed.path.lstrip("/")
+            token = (parse_qs(parsed.query).get("t") or [""])[0]
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                self.send_error(400)
+                return
+            if length < 0 or length > _MAX_POST_BYTES:
+                self.send_error(413)
+                return
+            body = self.rfile.read(length)
+            try:
+                payload = owner.apply_post(key, token, body)
+            except Exception as exc:  # noqa: BLE001 - rejecting a body is a 400, not a crash
+                LOG.debug("viewer POST handler rejected a body: %s", exc)
+                self._reply_bad_request(str(exc))
+                return
+            if payload is None:
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", payload.content_type)
+            self.send_header("Content-Length", str(len(payload.body)))
+            if payload.filename:
+                self.send_header(
+                    "Content-Disposition", f'attachment; filename="{payload.filename}"'
+                )
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(payload.body)
+
+        def _reply_bad_request(self, message: str) -> None:
+            """Answer 400 with a short plain-text reason the page can show.
+
+            Args:
+                message: The reason, sent as the body so the editor can display
+                    why an edit was refused instead of a bare status code.
+            """
+            body = message.encode("utf-8", errors="replace")
+            self.send_response(400)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(body)
 
         def log_message(self, format: str, *args: object) -> None:  # noqa: A002
             """Send request logs to the application log, not to stderr.

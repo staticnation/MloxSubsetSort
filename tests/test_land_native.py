@@ -31,6 +31,7 @@ from wraithguard.land.native import (
     format_landscape_flags,
     has_landscape,
     landscape_in_sidecar,
+    landscape_records_from_sidecar,
     read_landscape_records,
 )
 from wraithguard.tes3fields.landscape import LAND_SIZE
@@ -333,6 +334,14 @@ class TestTheBytePrescan:
         )
         assert has_landscape(plugin, tmp_path) is False
 
+    def test_an_absent_sidecar_falls_back_to_reading_the_plugin(self, tmp_path: Path) -> None:
+        """With a sidecar dir but no sidecar for this plugin, the bytes decide."""
+        plugin = tmp_path / "d.esm"
+        plugin.write_bytes(_file(land(0, 0)))  # really does have landscape
+        # tmp_path holds no d.keys.json, so the sidecar answer is None and the
+        # reader falls through to scanning the plugin itself.
+        assert has_landscape(plugin, tmp_path) is True
+
 
 class TestForeignFormatsAreRefused:
     """A Morrowind load order can contain an Oblivion or Skyrim plugin.
@@ -390,3 +399,104 @@ class TestForeignFormatsAreRefused:
         path.write_bytes(record(b"TES3", sub(b"HEDR", bytes(300))) + land(1, 2))
         assert [r["grid"] for r in read_landscape_records(path)] == [[1, 2]]
         assert has_landscape(path) is True
+
+
+class TestNativeSubrecordEdges:
+    """Truncation, deletion markers, and read failure in the native reader."""
+
+    def _write(self, tmp_path: Path, *records: bytes) -> Path:
+        path = tmp_path / "plugin.esp"
+        path.write_bytes(_file(*records))
+        return path
+
+    def test_a_subrecord_claiming_too_many_bytes_stops_the_walk(self, tmp_path: Path) -> None:
+        """A subrecord length past the record end truncates the walk, not crashes."""
+        body = sub(b"INTV", struct.pack("<ii", 0, 0)) + b"VHGT" + struct.pack("<I", 9999)
+        path = self._write(tmp_path, record(b"LAND", body))
+        grids = [r["grid"] for r in read_landscape_records(path)]
+        assert grids == [[0, 0]]  # INTV parsed; the impossible VHGT was dropped
+
+    def test_a_deleted_landscape_record_is_flagged(self, tmp_path: Path) -> None:
+        """A ``DELE`` subrecord marks the landscape record deleted.
+
+        DELE is placed before another subrecord so the walk continues past it.
+        """
+        body = (
+            sub(b"INTV", struct.pack("<ii", 0, 0))
+            + sub(b"DELE", bytes(4))
+            + sub(b"DATA", struct.pack("<I", 0))  # a subrecord after DELE
+        )
+        path = self._write(tmp_path, record(b"LAND", body))
+        (rec,) = read_landscape_records(path)
+        assert rec["flags"] == "DELETED"
+
+    def test_a_deleted_texture_record_is_flagged(self, tmp_path: Path) -> None:
+        """A ``DELE`` subrecord marks a LandscapeTexture record deleted."""
+        body = (
+            sub(b"NAME", b"tex\x00")
+            + sub(b"DELE", bytes(4))
+            + sub(b"INTV", struct.pack("<I", 0))  # a subrecord after DELE
+        )
+        path = self._write(tmp_path, record(b"LTEX", body))
+        texture = next(r for r in read_landscape_records(path) if r["type"] == "LandscapeTexture")
+        assert texture["flags"] == "DELETED"
+
+    def test_a_grid_subrecord_is_carried_as_raw_data(self, tmp_path: Path) -> None:
+        """A VTEX/VCLR/etc grid subrecord is passed through as a raw data blob."""
+        body = sub(b"INTV", struct.pack("<ii", 0, 0)) + sub(b"VTEX", b"\x01\x02\x03\x04")
+        path = self._write(tmp_path, record(b"LAND", body))
+        (rec,) = read_landscape_records(path)
+        assert rec["texture_indices"]["data"] == b"\x01\x02\x03\x04"
+
+    def test_an_unknown_landscape_subrecord_is_ignored(self, tmp_path: Path) -> None:
+        """A subrecord tag the reader does not model is skipped, not fatal."""
+        body = (
+            sub(b"INTV", struct.pack("<ii", 0, 0))
+            + sub(b"ZZZZ", b"unmodelled")  # matches no branch -> falls through
+            + sub(b"DATA", struct.pack("<I", 0))
+        )
+        path = self._write(tmp_path, record(b"LAND", body))
+        (rec,) = read_landscape_records(path)
+        assert rec["grid"] == [0, 0]
+
+    def test_an_unknown_texture_subrecord_is_ignored(self, tmp_path: Path) -> None:
+        """An unmodelled subrecord in a LandscapeTexture record is skipped."""
+        body = (
+            sub(b"NAME", b"tex\x00")
+            + sub(b"ZZZZ", b"unmodelled")  # matches no branch -> falls through
+            + sub(b"INTV", struct.pack("<I", 0))
+        )
+        path = self._write(tmp_path, record(b"LTEX", body))
+        assert any(r["type"] == "LandscapeTexture" for r in read_landscape_records(path))
+
+    def test_a_path_that_cannot_be_read_is_a_native_read_error(self, tmp_path: Path) -> None:
+        """Opening a directory as a plugin fails as a NativeReadError, not OSError."""
+        directory = tmp_path / "a-directory.esp"
+        directory.mkdir()
+        with pytest.raises(NativeReadError, match="could not read"):
+            read_landscape_records(directory)
+
+
+class TestSidecarMalformed:
+    """A sidecar whose ``d`` field is not a list is treated as no answer."""
+
+    def _stale_proof(self, plugin: Path, side: Path) -> None:
+        """Make the sidecar at least as new as the plugin so it is trusted."""
+        now = side.stat().st_mtime
+        os.utime(plugin, (now - 10, now - 10))
+
+    def test_landscape_in_sidecar_rejects_a_non_list_body(self, tmp_path: Path) -> None:
+        plugin = tmp_path / "P.esp"
+        plugin.write_bytes(b"x")
+        side = tmp_path / "P.keys.json"
+        side.write_text(json.dumps({"v": KEYS_VERSION, "d": "not a list"}), encoding="utf-8")
+        self._stale_proof(plugin, side)
+        assert landscape_in_sidecar(plugin, tmp_path) is None
+
+    def test_records_from_sidecar_rejects_a_non_list_body(self, tmp_path: Path) -> None:
+        plugin = tmp_path / "P.esp"
+        plugin.write_bytes(b"x")
+        side = tmp_path / "P.land.json"
+        side.write_text(json.dumps({"v": KEYS_VERSION, "d": {"not": "a list"}}), encoding="utf-8")
+        self._stale_proof(plugin, side)
+        assert landscape_records_from_sidecar(plugin, tmp_path) is None

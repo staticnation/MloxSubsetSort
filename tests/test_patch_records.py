@@ -218,6 +218,30 @@ class TestCollecting:
         with pytest.raises(PatchError, match="no records were read"):
             collect([Selection("Gone.esp", "Static", "x")], self._sources(), [])
 
+    def test_two_remapped_records_from_one_plugin_reuse_the_index_map(self) -> None:
+        """The second remappable record from a plugin reuses the cached map.
+
+        The first selection builds the plugin's index map; the second must not
+        rebuild it, so the ``mapping is None`` guard is skipped the second time.
+        """
+        second_cell = {
+            "type": "Cell",
+            "data": {"grid": [8, 22], "flags": ""},
+            "references": [{"mast_index": 1, "refr_index": 5, "id": "another_ref"}],
+        }
+        sources = {"Castle.esp": [*CASTLE, second_cell]}
+        patch = ["Morrowind.esm", "Tribunal.esm", "Bloodmoon.esm", "Castle.esp"]
+        got = collect(
+            [
+                Selection("Castle.esp", "Cell", "(7, 22)"),
+                Selection("Castle.esp", "Cell", "(8, 22)"),
+            ],
+            sources,
+            patch,
+        )
+        assert [r["type"] for r in got] == ["Cell", "Cell"]
+        assert got[1]["references"][0]["mast_index"] == 1  # remapped via the cached map
+
     def test_a_record_that_is_no_longer_there_is_refused(self) -> None:
         """The mod may have been updated between the scan and the patch."""
         with pytest.raises(PatchError, match="has no Static record"):
@@ -355,6 +379,26 @@ class TestCarryingAnEarlierBuildForward:
     def test_an_empty_carry_forward_is_fine(self) -> None:
         """A fresh patch, or one with nothing worth keeping from before."""
         assert carry_forward([], ["Morrowind.esm"]) == []
+
+    def test_two_remappable_records_build_the_old_index_map_only_once(self) -> None:
+        """The second record needing remapping reuses the map the first built."""
+        old = [
+            {"type": "Header", "masters": [["Tribunal.esm", 1]]},
+            {
+                "type": "Cell",
+                "data": {"grid": [1, 1]},
+                "references": [{"mast_index": 1, "refr_index": 2, "id": "from_tribunal"}],
+            },
+            {
+                "type": "Cell",
+                "data": {"grid": [2, 2]},
+                "references": [{"mast_index": 1, "refr_index": 3, "id": "also_from_tribunal"}],
+            },
+        ]
+        got = carry_forward(old, ["Morrowind.esm", "Tribunal.esm"])
+        cells = [r for r in got if r["type"] == "Cell"]
+        assert len(cells) == 2
+        assert all(c["references"][0]["mast_index"] == 2 for c in cells)
 
 
 class TestReplacingAChoice:
@@ -677,3 +721,27 @@ class TestPositionAnchorsAreFound:
         """The building block, kept public because the GUI needs it too."""
         sources = {"One.esp": [self._info("a")], "Two.esp": [self._info("a"), self._info("b")]}
         assert defining_plugins(sources) == {"a": ["One.esp", "Two.esp"], "b": ["Two.esp"]}
+
+
+class TestReferenceListEdges:
+    """Guards in the reference-list remapper and the topic finder."""
+
+    def test_non_dict_and_indexless_references_are_left_alone(self) -> None:
+        """A stray non-dict entry, or a dict with no master index, is passed over."""
+        from wraithguard.patch.records import remap_reference_list
+
+        refs = ["not a dict", {"refr_index": 9}, {"mast_index": 0, "refr_index": 1}]
+        out = remap_reference_list(refs, {0: 4})
+        assert out[0] == "not a dict"  # untouched
+        assert "mast_index" not in out[1]  # no index to remap
+        assert out[2]["mast_index"] == 4  # the real one moved
+
+    def test_a_response_with_no_preceding_topic_owns_nothing(self) -> None:
+        """A DialogueInfo whose key matches nothing present returns no topic."""
+        from wraithguard.patch.records import INFO_TYPE, owning_dialogue
+
+        records = [
+            {"type": "Dialogue", "id": "Greeting"},
+            {"type": INFO_TYPE, "id": "other-response"},
+        ]
+        assert owning_dialogue(records, INFO_TYPE, "missing-key") is None

@@ -383,3 +383,59 @@ class TestPlugin:
         assert document[0]["type"] == "Header"
         assert document[0]["num_objects"] == 1
         assert len(document) == 2
+
+
+class TestEmitEdgeBranches:
+    """Shape guards, empty-layer fills, and the zstd backend fallback."""
+
+    def test_pack_world_map_rejects_a_wrong_shape(self) -> None:
+        """The world map must be exactly 9x9."""
+        from wraithguard.land.emit import pack_world_map
+
+        with pytest.raises(EmitError, match="world map must be"):
+            pack_world_map([[0] * 9 for _ in range(8)])
+
+    def test_pack_vertex_colors_rejects_a_wrong_shape(self) -> None:
+        """Vertex colours must be exactly 65x65."""
+        from wraithguard.land.emit import pack_vertex_colors
+
+        with pytest.raises(EmitError, match="vertex colors must be"):
+            pack_vertex_colors([[(0, 0, 0)] * 65 for _ in range(64)])
+
+    def test_a_textures_only_record_zero_fills_the_other_layers(self) -> None:
+        """With only textures supplied, the height/normal/colour/map fields are blanked."""
+        record, _ = build_landscape_record((0, 0), textures=textures())
+        # Heights, normals, world map and colours are all present but zero-filled.
+        for field in ("vertex_heights", "vertex_normals", "world_map_data", "vertex_colors"):
+            assert field in record
+        assert record["texture_indices"]["data"]
+
+    def test_compress_falls_back_to_the_zstandard_backend(self, monkeypatch) -> None:
+        """When the stdlib zstd is unavailable, the third-party backend is used."""
+        import sys
+
+        from wraithguard.land.emit import _compress
+
+        # Force `from compression import zstd` to raise ImportError so the
+        # function takes its pre-3.14 path.
+        monkeypatch.setitem(sys.modules, "compression", None)
+        out = _compress(b"merged landscape bytes " * 20)
+        assert isinstance(out, bytes)
+        assert out  # a real zstd frame from the zstandard backend
+
+    def test_compress_uses_the_stdlib_backend_when_present(self, monkeypatch) -> None:
+        """On Python 3.14+ the ``compression.zstd`` stdlib module is preferred."""
+        import sys
+        import types
+
+        from wraithguard.land.emit import _compress
+
+        # Emulate the 3.14 standard library so the pre-3.14 fallback is not taken.
+        compression = types.ModuleType("compression")
+        zstd = types.ModuleType("compression.zstd")
+        zstd.compress = lambda raw: b"STDLIB:" + raw  # type: ignore[attr-defined]
+        compression.zstd = zstd  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "compression", compression)
+        monkeypatch.setitem(sys.modules, "compression.zstd", zstd)
+
+        assert _compress(b"payload") == b"STDLIB:payload"

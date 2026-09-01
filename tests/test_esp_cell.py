@@ -224,6 +224,21 @@ class TestReferenceEdges:
         assert ref.persistent is False
         assert Reference().persistent is True  # not temporary -> persistent
 
+    def test_a_reference_ending_the_record_reads_as_empty(self) -> None:
+        """A bare ``FRMR`` at the very end leaves the reference with no subrecords.
+
+        ``Reference.load`` sees the reader already at the end, so its subrecord
+        loop never runs and it returns a defaulted, transform-sanitised record.
+        """
+        body = (
+            _string_sub(b"NAME", "Cell")
+            + _sub(b"DATA", struct.pack("<Iii", int(CellFlags.IS_INTERIOR), 0, 0))
+            + _sub(b"FRMR", struct.pack("<I", _pack(0, 1)))
+        )
+        (cell,) = read_plugin(_record(b"CELL", body))
+        assert len(cell.references) == 1
+        assert cell.references[0].id == ""
+
     def test_unexpected_reference_tag_is_refused(self) -> None:
         from wraithguard.esp import EspError
 

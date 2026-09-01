@@ -137,6 +137,48 @@ def forget_archives() -> None:
     _LOOSE_INDEX.clear()
 
 
+def read_mesh_bytes(folder: Path, path: str) -> bytes:
+    """The raw bytes of one mesh from a data folder, loose or archived.
+
+    The same resolution as :func:`read_mesh` -- loose file, loose-index match,
+    then any ``.bsa`` in the folder -- but returns the bytes rather than a parsed
+    :class:`~wraithguard.nif.reader.NifFile`. An editor needs the bytes: it reads
+    them with ``retain=True``, changes a field, and writes them back, which a
+    parse that keeps counts rather than elements cannot round-trip.
+
+    Args:
+        folder: The data folder providing it.
+        path: The mesh's path within that folder, either separator, any case.
+
+    Returns:
+        The file's bytes.
+
+    Raises:
+        OSError: If neither the folder nor its archives hold it -- the same
+            message :func:`read_mesh` raises, naming both places looked.
+    """
+    loose = folder / path
+    if loose.is_file():
+        return loose.read_bytes()
+    wanted = normalise(path)
+    matched = loose_index(folder).get(wanted)
+    if matched is not None:
+        return matched.read_bytes()
+    for archive in archives_in(folder):
+        try:
+            data = archive.read(wanted)
+        except BsaError as exc:
+            LOG.warning("cannot read %s from %s: %s", path, archive.path.name, exc)
+            continue
+        if data is not None:
+            return data
+    raise OSError(
+        f"{path} is not in {folder} nor in any .bsa there. If the mod was "
+        "installed with only some of its files, or an archive is missing, "
+        "this is where that shows up."
+    )
+
+
 def read_mesh(folder: Path, path: str, *, geometry: bool = True) -> NifFile:
     """Read one mesh from a data folder, loose or archived.
 

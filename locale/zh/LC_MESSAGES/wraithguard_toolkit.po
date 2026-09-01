@@ -1,0 +1,2431 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: wraithguard_toolkit\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh\n"
+"Language-Team: Chinese (Simplified)\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "  Inferred anchor for '%(value)s': %(mode)s '%(anchor)s' (via plugin %(via)s)"
+msgstr "  「%(value)s」的推断锚点: %(mode)s 「%(anchor)s」(经由插件 %(via)s)"
+
+msgid "NOTE: '%(value)s' already present in data= list -- skipping duplicate insert."
+msgstr "注意: 「%(value)s」已存在于 data= 列表中 -- 跳过重复插入。"
+
+msgid "NOTE: '%(value)s' has no after/before anchor -- appending at end of data= list."
+msgstr "注意: 「%(value)s」没有 after/before 锚点 -- 追加到 data= 列表末尾。"
+
+msgid "WARNING: anchor '%(anchor)s' not found among existing data= paths for '%(value)s' -- appending at end instead."
+msgstr "警告: 在「%(value)s」的现有 data= 路径中未找到锚点「%(anchor)s」-- 已改为追加到末尾。"
+
+msgid "WARNING: anchor '%(anchor)s' in the emitted TOML matches %(count)d openmw.cfg lines -- momw-configurator errors on ambiguous matches. Colliding lines: %(lines)s%(more)s"
+msgstr "警告: 生成的 TOML 中的锚点「%(anchor)s」匹配 openmw.cfg 的 %(count)d 行 -- momw-configurator 在匹配不明确时会报错退出。冲突的行: %(lines)s%(more)s"
+
+msgid "WARNING: remove entry '%(entry)s' matches %(count)d openmw.cfg lines -- momw-configurator removes ALL of them, silently. Colliding lines: %(lines)s%(more)s"
+msgstr "警告: 移除条目「%(entry)s」匹配 openmw.cfg 的 %(count)d 行 -- momw-configurator 会静默地「全部」删除它们。冲突的行: %(lines)s%(more)s"
+
+msgid "Scanning for conflicts..."
+msgstr "正在扫描冲突…"
+
+msgid " TES3 RECORD CONFLICTS (read-only)"
+msgstr " TES3 记录冲突 (只读)"
+
+msgid "  Engine: tes3conv (%(path)s) -- field-level diffs available."
+msgstr "  引擎: tes3conv (%(path)s) -- 可进行字段级差异比较。"
+
+msgid "Conflicts: %(count)d record(s), %(involved)d involving your mods. See the Conflicts window."
+msgstr "冲突: 记录 %(count)d 条, 涉及你的模组的 %(involved)d 条。请查看冲突窗口。"
+
+msgid "No data= folders to scan."
+msgstr "无 data= 文件夹可扫描。"
+
+msgid "Scanning data folders for file conflicts..."
+msgstr "正在扫描数据文件夹以查找文件冲突…"
+
+msgid " DATA-PATH RESOURCE (VFS) CONFLICTS"
+msgstr " 数据路径资源 (VFS) 冲突"
+
+msgid "Resource conflicts: %(count)d file(s). See the window."
+msgstr "资源冲突: 文件 %(count)d 个。请查看窗口。"
+
+msgid "%(conflicts)d loose-file conflict(s) across %(dirs)d folder(s), %(files)d file(s) - %(involved)d involve your custom data paths (â). Later folder wins - reorder the data-path panel to change it."
+msgstr "跨 %(dirs)d 个文件夹的散装文件冲突 %(conflicts)d 个, 文件 %(files)d 个 -- %(involved)d 个涉及你的自定义数据路径 (→)。后面的文件夹胜出 -- 重新排列数据路径面板以更改此项。"
+
+msgid "Only my paths"
+msgstr "仅我的路径"
+
+msgid "Search:"
+msgstr "搜索:"
+
+msgid "Filter by file path or winning folder. Enter jumps to the next match (Shift+Enter: previous) and scrolls it into view."
+msgstr "按文件路径或胜出文件夹筛选。Enter 跳到下一个匹配项 (Shift+Enter: 上一个) 并滚动到它。"
+
+msgid "Select a file to see every folder that provides it, in load order.\nSelecting a mesh (.nif) also reads it and describes what each provider contains -- shapes, textures, collision, animation -- and what the winning mesh loses. Rows marked ! in the second column already have a finding."
+msgstr "选择一个文件以按加载顺序查看提供它的每个文件夹。\n选择网格 (.nif) 还会读取它并说明每个提供者包含什么 -- 形状、纹理、碰撞、动画 -- 以及胜出网格丢失了什么。第二列标有 ! 的行已有注释。"
+
+msgid "Save report (CSV)..."
+msgstr "保存报告 (CSV)…"
+
+msgid "View in 3D"
+msgstr "在 3D 中查看"
+
+msgid "Export 3D file..."
+msgstr "导出 3D 文件…"
+
+msgid "Edit mesh..."
+msgstr "编辑网格…"
+
+msgid "Compare Textures"
+msgstr "比较纹理"
+
+msgid "Export comparison..."
+msgstr "导出比较…"
+
+msgid "Close"
+msgstr "关闭"
+
+msgid "Could not read the meshes: %(error)s"
+msgstr "无法读取网格: %(error)s"
+
+msgid "Cannot show this mesh"
+msgstr "无法显示此网格"
+
+msgid "Opened the 3D view for %(path)s"
+msgstr "已为 %(path)s 打开 3D 视图"
+
+msgid "Mesh view"
+msgstr "网格视图"
+
+msgid "No mesh to show"
+msgstr "无网格可显示"
+
+msgid "None of the referenced meshes could be found in the data folders (a missing mod, or the file lives in a .bsa that is not present)."
+msgstr "在数据文件夹中找不到任何引用的网格 (缺失的模组, 或缺失的 .bsa 中的文件)。"
+
+msgid "No image to show"
+msgstr "无图像可显示"
+
+msgid "None of the referenced images could be found in the data folders (a missing mod, or the file lives in a .bsa that is not present)."
+msgstr "在数据文件夹中找不到任何引用的图像 (缺失的模组, 或缺失的 .bsa 中的文件)。"
+
+msgid "Cannot show this image"
+msgstr "无法显示此图像"
+
+msgid "Export the 3D view"
+msgstr "导出 3D 视图"
+
+msgid "Export failed"
+msgstr "导出失败"
+
+msgid "Exported: %(path)s"
+msgstr "已导出: %(path)s"
+
+msgid "Cannot edit this mesh"
+msgstr "无法编辑此网格"
+
+msgid "Its file could not be read."
+msgstr "无法读取其文件。"
+
+msgid "This mesh does not parse completely, so an edit cannot be written back safely."
+msgstr "此网格未完全解析, 因此无法写回编辑。"
+
+msgid "Editing %(path)s"
+msgstr "正在编辑 %(path)s"
+
+msgid "Cannot show this texture"
+msgstr "无法显示此纹理"
+
+msgid "Opened the texture comparison for %(path)s"
+msgstr "已为 %(path)s 打开纹理比较"
+
+msgid "Texture comparison"
+msgstr "纹理比较"
+
+msgid "Export the texture comparison"
+msgstr "导出纹理比较"
+
+msgid "Save resource conflicts"
+msgstr "保存资源冲突"
+
+msgid "Saved: %(path)s"
+msgstr "已保存: %(path)s"
+
+msgid "Save failed"
+msgstr "保存失败"
+
+msgid "%(conflicts)d conflicting record(s) across %(scanned)d plugin(s) - %(involved)d involve your custom mods (â). Winner = last loaded."
+msgstr "跨 %(scanned)d 个插件的冲突记录 %(conflicts)d 条 -- %(involved)d 条涉及你的自定义模组 (→)。胜者 = 最后加载的。"
+
+msgid "Only my mods"
+msgstr "仅我的模组"
+
+msgid "Filter by record type, id, or winning plugin. Enter jumps to the next match (Shift+Enter: previous) and scrolls it into view."
+msgstr "按记录类型、id 或胜出插件筛选。Enter 跳到下一个匹配项 (Shift+Enter: 上一个) 并滚动到它。"
+
+msgid "Include my mods' non-conflicting records"
+msgstr "包含我的模组的无冲突记录"
+
+msgid "Include other mods' non-conflicting records"
+msgstr "包含其他模组的无冲突记录"
+
+msgid "Set tes3conv..."
+msgstr "设置 tes3conv…"
+
+msgid "Field comparison for the selected record - RED = a plugin's edit is discarded Â· AMBER = overridden but nothing lost Â· â = your custom mod Â· last column wins Â· double-click a field for the full value:"
+msgstr "所选记录的字段比较 -- 红色 = 插件的编辑被丢弃 · 琥珀色 = 已覆盖但未丢失任何内容 · → = 你的自定义模组 · 最后一列胜出 · 双击字段查看完整值:"
+
+msgid "Field-by-field diff of the selected record. Red = the plugins disagree; the last one in the load order wins.\n\nDouble-click any row for the full value, one tab per plugin. Fields stored as binary are decoded rather than shown raw, so an edit reads as a change instead of a wall of base64:\n  â¢ bytecode -- disassembled to named script instructions. Spans the disassembler cannot decode are printed as offset/hex/ASCII rather than guessed at, and a 'decoded: N%' header says how much was understood.\n  â¢ variables -- the script's local variable names, in declaration order.\n  â¢ landscape (vertex heights, normals, colors, textures, world map) -- decoded to one terrain row per line, so the diff shows which rows of the cell moved. Heights are reconstructed to absolute world units.\n  â¢ path grid connections -- decoded to a per-point adjacency list (point -> its neighbours), so you can see which nodes were rewired."
+msgstr "所选记录的逐字段差异。红色 = 插件不一致; 加载顺序中的最后一个胜出。\n\n双击行查看完整值, 每个插件一个标签页。以二进制存储的字段会被解码而非原样显示, 以便编辑读作变更而非 base64 之墙:\n  • bytecode -- 被反汇编为命名的脚本指令。反汇编器无法解码的范围会以 offset/hex/ASCII 打印而非猜测, 「decoded: N%」标题指明理解了多少。\n  • variables -- 按声明顺序的脚本局部变量名。\n  • landscape (顶点高度、法线、颜色、纹理、世界地图) -- 解码为每行一条地形行, 以便差异显示单元格的哪些行发生了位移。高度以绝对游戏单位还原。\n  • path grid connections -- 解码为逐点邻接列表 (点 -> 其邻居), 以便查看哪些节点被重新连线。"
+
+msgid "Add record to patch..."
+msgstr "将记录添加到补丁…"
+
+msgid "Choose which plugin's version of the selected record should win, and add it to a patch. Nothing is written yet, and no mod is ever modified: the patch is one new plugin that loads last."
+msgstr "选择所选记录的哪个插件版本应胜出, 并将其添加到补丁。尚未写入任何内容, 且任何模组都永远不会被更改: 补丁是一个最后加载的新插件。"
+
+msgid "Merge field..."
+msgstr "合并字段…"
+
+msgid "Take the selected field from a plugin of your choosing and keep the rest of the record as it is now -- for when one mod fixed one thing and another mod fixed something else in the same record."
+msgstr "从你选择的插件获取所选字段, 并保持记录的其余部分原样 -- 适用于一个模组修复了一处而另一个修复了同一记录中另一处的情况。"
+
+msgid "Define value..."
+msgstr "定义值…"
+
+msgid "Type your own value for the selected field -- a number or string no plugin in the conflict uses (a compromise weight, a corrected health). It is written to the patch exactly as given, in the field's own type; your mods are not modified."
+msgstr "为所选字段输入你自己的值 -- 冲突中任何插件都未使用的数字或字符串 (折中的重量、修正的值)。它会按给定原样以字段的类型写入补丁。你的模组不会被更改。"
+
+msgid "Patch Builder..."
+msgstr "补丁构建器…"
+
+msgid "Review and edit the records queued so far, then write them as one new plugin. Nothing is written until you say so."
+msgstr "检查并编辑迄今为止排入队列的记录, 然后将它们写为一个新插件。在你指示之前不会写入任何内容。"
+
+msgid "Plugin view..."
+msgstr "插件视图…"
+
+msgid "The same scan with the load order's own shape restored: plugin, then kind of record, then record, with the record compared across every plugin that defines it.\n\nA flat list answers 'what conflicts'. This answers 'what does this mod change, and where does it lose', which is the question you are actually asking. The colours fill in on their own once the conflict window's background survey finishes. Read-only."
+msgstr "恢复了加载顺序自身形态的相同扫描: 插件, 然后记录类型, 然后与定义它的每个插件比较的记录。\n\n扁平列表回答「什么冲突」。这回答「此模组更改什么以及在哪里失败」-- 你真正在问的问题。冲突窗口的后台调查完成后, 颜色会自动填充。只读。"
+
+msgid "Journal chains..."
+msgstr "日志链…"
+
+msgid "Every quest's journal stages, sorted by journal index rather than file order, with the winning plugin's text for each stage. Reads the whole load order once when opened. Read-only."
+msgstr "每个任务的日志阶段, 按日志索引而非文件顺序排序, 并附上每个阶段胜出插件的文本。打开时会读取整个加载顺序一次。只读。"
+
+msgid "Plugin summary..."
+msgstr "插件汇总…"
+
+msgid "Judge every conflict in the list and count the result per mod, rather than per record.\n\nA flat list of conflicts cannot answer the question that decides load order: which of my mods is losing work? This compares each record field by field and counts, for every plugin, how many records it edits and does not get its way on.\n\nReads every conflicting record with tes3conv, so it takes a moment on a large load order. Read-only."
+msgstr "评判列表中的每个冲突, 并按模组而非按记录统计结果。\n\n扁平的冲突列表无法回答决定加载顺序的问题: 我的哪个模组丢失了工作? 这会逐字段比较每条记录, 并为每个插件统计它在多少条记录中做出编辑却未能如愿。\n\n它通过 tes3conv 读取每条冲突记录, 因此在大型加载顺序上会耗时。只读。"
+
+msgid "Conflict map (direct)..."
+msgstr "冲突地图 (直接)…"
+
+msgid "Build and open a conflict map directly from the selected conflicts. Shows which mods edit LAND records in each cell, with a breakdown of terrain shape, NPC navigation, and cell record edits."
+msgstr "直接从所选冲突构建并打开冲突地图。显示每个单元格中哪些模组编辑 LAND 记录, 按地形形状、NPC 导航和单元格记录编辑细分。"
+
+msgid "Dump tes3conv JSON..."
+msgstr "转储 tes3conv JSON…"
+
+msgid "Busy reading plugins -- try that again in a moment."
+msgstr "正在读取插件 -- 请稍后重试。"
+
+msgid "Nothing to summarise."
+msgstr "没有可汇总的内容。"
+
+msgid "Judge every conflict?"
+msgstr "评判每个冲突?"
+
+msgid "This reads every plugin that defines any of these %(count)d records -- once each, not once per record -- and will take a few minutes. The checkboxes and filters above narrow the list first if you would rather summarise part of it.\n\nGo ahead?"
+msgstr "这会读取定义这 %(count)d 条记录中任何一条的每个插件 -- 每个读取一次, 而非每条记录一次 -- 因此需要几分钟。如果你只想汇总其中一部分, 上方的复选框和筛选器会先缩小列表。\n\n是否继续?"
+
+msgid "Colouring the load order (%(count)d record(s))..."
+msgstr "正在为加载顺序着色 (记录 %(count)d 条)…"
+
+msgid "Judging %(count)d conflict(s)..."
+msgstr "正在评判 %(count)d 个冲突…"
+
+msgid "Reading plugin %(done)d of %(total)d..."
+msgstr "正在读取插件 %(total)d 个中的第 %(done)d 个…"
+
+msgid "Could not summarise the conflicts."
+msgstr "无法汇总冲突。"
+
+msgid "Summary failed"
+msgstr "汇总失败"
+
+msgid "Unknown error."
+msgstr "未知错误。"
+
+msgid "Coloured %(count)d record(s) across the load order."
+msgstr "已为加载顺序中的 %(count)d 条记录着色。"
+
+msgid "Judged %(count)d record(s); %(losers)d plugin(s) losing work."
+msgstr "已评判记录 %(count)d 条; 丢失工作的插件 %(losers)d 个。"
+
+msgid "Plugin conflict summary"
+msgstr "插件冲突汇总"
+
+msgid "How each mod fares across the conflicts listed. 'Loses' counts records it edits where a later plugin overwrote the change with something different -- work that never reaches the game. 'Same as original' counts records it redefines without changing anything, which is usually removable but not always: an unchanged dialogue response may be there to hold a line's position in its topic."
+msgstr "每个模组在所列冲突中的表现。「丢失」统计它编辑的、后面的插件用别的东西覆盖了更改的记录 -- 永远到不了游戏的工作。「与原始相同」统计它覆盖但未改变任何内容的记录, 通常被删除, 但并非总是: 未更改的对话回复可能存在, 以保持该行在其主题中的位置。"
+
+msgid "Plugin"
+msgstr "插件"
+
+msgid "Records"
+msgstr "记录"
+
+msgid "Loses"
+msgstr "丢失"
+
+msgid "Wins"
+msgstr "胜出"
+
+msgid "Same as original"
+msgstr "与原始相同"
+
+msgid "Defines first"
+msgstr "首先定义"
+
+msgid "%(records)d record(s) judged, %(plugins)d plugin(s) involved%(unreadable)s. The conflict list behind this window is now coloured to match: red where an edit is discarded, amber where a record is overridden but nothing is lost."
+msgstr "已评判记录 %(records)d 条, 涉及插件 %(plugins)d 个%(unreadable)s。此窗口后面的冲突列表现已相应着色: 编辑被丢弃处为红色, 记录被无损覆盖处为琥珀色。"
+
+msgid ", %(n)d could not be read"
+msgstr ", %(n)d 个无法读取"
+
+msgid "Nothing selected"
+msgstr "未选择任何内容"
+
+msgid "Select a record above, then a field in the comparison below."
+msgstr "在上方选择一条记录, 然后在下方比较中选择一个字段。"
+
+msgid "Select a conflicting record first."
+msgstr "请先选择一条冲突记录。"
+
+msgid "Nothing to choose"
+msgstr "没有可选择的内容"
+
+msgid "Only one plugin defines this record, so there is nothing to patch."
+msgstr "只有一个插件定义此记录, 因此没有可打补丁的内容。"
+
+msgid "Which version should win?"
+msgstr "哪个版本应胜出?"
+
+msgid "%(type)s  %(id)s"
+msgstr "%(type)s  %(id)s"
+
+msgid "Take %(field)s from this plugin, keeping the rest of the record as it is now.\nYour mods are not modified."
+msgstr "从此插件获取 %(field)s, 保持记录的其余部分为当前原样。\n你的模组不会被更改。"
+
+msgid "The patch will carry this plugin's whole record and load last.\nYour mods are not modified."
+msgstr "补丁将携带此插件的整条记录并最后加载。\n你的模组不会被更改。"
+
+msgid "currently wins"
+msgstr "当前胜出"
+
+msgid "Use this field"
+msgstr "使用此字段"
+
+msgid "Add to patch"
+msgstr "添加到补丁"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Cannot set this field"
+msgstr "无法设置此字段"
+
+msgid "%(path)s says which record this is -- giving it a typed value would make a different record, not a patched one."
+msgstr "%(path)s 表明这是哪条记录 -- 给它一个类型化的值会使其变成另一条记录, 而非补丁记录。"
+
+msgid "Define a value"
+msgstr "定义值"
+
+msgid "Type a value for %(path)s. It is written to the patch exactly as given, in the field's own type.\nYour mods are not modified."
+msgstr "为 %(path)s 输入一个值。它会按给定原样以字段的类型写入补丁。\n你的模组不会被更改。"
+
+msgid "currently: %(val)s  (%(kind)s)"
+msgstr "当前: %(val)s  (%(kind)s)"
+
+msgid "keeping unnamed bits: %(bits)s"
+msgstr "保留未命名的位: %(bits)s"
+
+msgid "Enabled (true)"
+msgstr "已启用 (true)"
+
+msgid "Set value"
+msgstr "设置值"
+
+msgid "Building the conflict map..."
+msgstr "正在构建冲突地图…"
+
+msgid "The conflict map could not be built."
+msgstr "无法构建冲突地图。"
+
+msgid "Could not build conflict map"
+msgstr "无法构建冲突地图"
+
+msgid "%(error)s"
+msgstr "%(error)s"
+
+msgid "Conflict map ready (%(cells)d cell(s))."
+msgstr "冲突地图已就绪 (单元格 %(cells)d 个)。"
+
+msgid "Conflict Map"
+msgstr "冲突地图"
+
+msgid "Could not write the page"
+msgstr "无法写入页面"
+
+msgid "Writing %(path)s failed: %(error)s"
+msgstr "写入 %(path)s 失败: %(error)s"
+
+msgid "Saved, but could not open a viewer"
+msgstr "已保存，但无法打开查看器"
+
+msgid "The page was written to %(path)s (%(error)s)"
+msgstr "页面已写入 %(path)s (%(error)s)"
+
+msgid "Could not build the view"
+msgstr "无法构建视图"
+
+msgid "Nothing to compare"
+msgstr "没有可比较的内容"
+
+msgid "Only one plugin edits this cell's terrain, so every strategy gives the same result. Strategy choice only matters where two or more plugins change the same ground."
+msgstr "只有一个插件编辑此单元格的地形, 因此每种策略都给出相同结果。策略选择只有在两个或更多插件更改同一地面时才重要。"
+
+msgid "Merged: %(s)s"
+msgstr "已合并: %(s)s"
+
+msgid "Format reference..."
+msgstr "格式参考…"
+
+msgid "Show what this kind of record is supposed to contain: every subrecord, whether the game requires it, how wide it is, and -- where the layout is documented -- the named fields inside it.\n\nA diff tells you what changed; this tells you what it was."
+msgstr "显示这种记录应包含什么: 每个子记录、游戏是否需要它、其宽度, 以及 -- 在结构有文档记录的地方 -- 其中的命名字段。\n\n差异告诉你什么变了; 这告诉你它曾是什么。"
+
+msgid "Read as dialogue..."
+msgstr "作为对话读取…"
+
+msgid "Show this record as the line an NPC says -- to whom, and under what conditions -- instead of raw subrecords. Each plugin's version is rendered in turn, so you can read what a conflict actually changes."
+msgstr "将此记录显示为 NPC 所说的台词 -- 对谁说、在什么条件下 -- 而非原始子记录。每个插件的版本依次渲染, 让你读出冲突实际改变了什么。"
+
+msgid "Dialogue"
+msgstr "对话"
+
+msgid "(no dialogue content)"
+msgstr "(无对话内容)"
+
+msgid "Format reference: %(type)s"
+msgstr "格式参考: %(type)s"
+
+msgid "Show graph..."
+msgstr "显示图…"
+
+msgid "Draw the path grid as a navigation graph, with the edges this plugin added in green and the ones it removed in red.\n\nA mod that only REMOVES edges has probably rebuilt its path grid by accident -- that breaks NPC movement and nothing else reports it."
+msgstr "将路径网格绘制为导航图, 此插件添加的边为绿色, 移除的边为红色。\n\n只「移除」边的模组很可能意外重建了它的路径网格 -- 这会破坏 NPC 移动, 而其他任何东西都不会报告。"
+
+msgid "Show difference..."
+msgstr "显示差异…"
+
+msgid "Decode both versions to absolute heights and subtract them: red where the winner raised the ground, blue where it lowered it.\n\nComparing the raw values above is misleading. Heights are stored as cumulative deltas, so moving ONE vertex changes every byte after it and two nearly-identical cells look completely different."
+msgstr "将两个版本解码为绝对高度并相减: 胜者抬高地面处为红色, 降低处为蓝色。\n\n比较上方的原始值会产生误导。高度以累积增量存储, 因此移动「一个」顶点会改变之后的每个字节, 使两个几乎相同的单元格看起来完全不同。"
+
+msgid "Show in 3D..."
+msgstr "在 3D 中显示…"
+
+msgid "Draw the cell's terrain as a surface you can rotate, with each plugin's version switchable in place. Drag to turn it.\n\nShading follows slope rather than height, which reads as terrain."
+msgstr "将单元格的地形绘制为一个可旋转的表面, 每个插件的版本可就地切换。拖动以旋转。\n\n着色遵循坡度, 更易读作地形。"
+
+msgid "Compare strategies..."
+msgstr "比较策略…"
+
+msgid "Show what each conflict strategy would do to this cell -- the merged terrain under Overwrite, Resolve, Ignore and Curvature, switchable in the same 3D view alongside each plugin's own version.\n\nPreview it here, then set the strategy you want in the plugin's .mergedlands.toml with Merge Settings. Only differs where two or more plugins actually contest a vertex."
+msgstr "显示每种冲突策略对此单元格会做什么 -- Overwrite、Resolve、Ignore 和 Curvature 下的合并地形, 在同一 3D 视图中在每个插件版本旁切换。\n\n在此预览, 然后通过合并设置在插件的 .mergedlands.toml 中设置所需策略。只有在两个或更多插件确实争夺某个顶点处才会有差异。"
+
+msgid "View mesh..."
+msgstr "查看网格…"
+
+msgid "Open the mesh this record points at in the 3D viewer, resolved through your data folders and .bsa archives. One per plugin, so a record whose plugins point at different meshes shows them side by side -- the same viewer the Resource Conflicts window uses."
+msgstr "在 3D 查看器中打开此记录指向的网格, 通过你的数据文件夹和 .bsa 存档解析。每个插件一个, 因此各插件指向不同网格的记录会并排显示它们 -- 与资源冲突窗口相同的查看器。"
+
+msgid "View image..."
+msgstr "查看图像…"
+
+msgid "Open the texture/icon this record points at, resolved through your data folders and .bsa archives, and compared across the plugins that define it -- the same image viewer the Resource Conflicts window uses."
+msgstr "打开此记录指向的纹理/图标, 通过你的数据文件夹和 .bsa 存档解析, 并在定义它的插件之间比较 -- 与资源冲突窗口相同的图像查看器。"
+
+msgid "Queue the whole record from a plugin you pick, then open the patch builder."
+msgstr "从你选择的插件将整条记录加入队列, 然后打开补丁构建器。"
+
+msgid "Take this field..."
+msgstr "获取此字段…"
+
+msgid "Queue just this field from a plugin you pick -- the rest of the record keeps the load-order winner. For when one mod fixed the script and another retextured the mesh."
+msgstr "从你选择的插件仅将此字段加入队列 -- 记录的其余部分保留加载顺序的胜者。适用于一个模组修复了脚本而另一个重新贴图了网格的情况。"
+
+msgid "Dump tes3conv JSON to folder"
+msgstr "将 tes3conv JSON 转储到文件夹"
+
+msgid "Wrote %(count)d JSON file to %(folder)s"
+msgid_plural "Wrote %(count)d JSON files to %(folder)s"
+msgstr[0] "已写入 JSON 文件 %(count)d 个到 %(folder)s"
+
+msgid "JSON dumped"
+msgstr "已转储 JSON"
+
+msgid "Wrote %(count)d tes3conv JSON file to:\n%(folder)s"
+msgid_plural "Wrote %(count)d tes3conv JSON files to:\n%(folder)s"
+msgstr[0] "已写入 tes3conv JSON 文件 %(count)d 个到:\n%(folder)s"
+
+msgid "Nothing written"
+msgstr "未写入任何内容"
+
+msgid "No JSON was written. The tes3conv session may have been cleared - re-run Check Conflicts, then dump again."
+msgstr "未写入任何 JSON。tes3conv 会话可能已被清除 -- 重新运行「检查冲突」, 然后再次导出。"
+
+msgid "Dump failed"
+msgstr "转储失败"
+
+msgid "Word wrap"
+msgstr "自动换行"
+
+msgid "Syntax highlighting: %(theme)s"
+msgstr "语法高亮: %(theme)s"
+
+msgid "your mods'"
+msgstr "你的模组的"
+
+msgid "other mods'"
+msgstr "其他模组的"
+
+msgid "No custom mods"
+msgstr "无自定义模组"
+
+msgid "You have no custom/subset mods configured, so there is nothing to list here."
+msgstr "你未配置任何自定义/子集模组, 因此这里没有可列出的内容。"
+
+msgid "Finding %(label)s non-conflicting records..."
+msgstr "正在查找 %(label)s 的无冲突记录…"
+
+msgid "Could not list records."
+msgstr "无法列出记录。"
+
+msgid "Could not list records"
+msgstr "无法列出记录"
+
+msgid "Found %(count)d non-conflicting record(s) from %(label)s."
+msgstr "从 %(label)s 找到无冲突记录 %(count)d 条。"
+
+msgid "Save conflict report"
+msgstr "保存冲突报告"
+
+msgid "Conflict report saved: %(path)s"
+msgstr "已保存冲突报告: %(path)s"
+
+msgid "tes3conv needed"
+msgstr "需要 tes3conv"
+
+msgid "Reading journal stages needs tes3conv, which does the binary decoding.\n\nUse 'Set tes3conv...' in the Conflicts window to point at it."
+msgstr "读取日志阶段需要 tes3conv, 它执行二进制解码。\n\n请使用冲突窗口中的「设置 tes3conv…」来指定它。"
+
+msgid "Journal chains"
+msgstr "日志链"
+
+msgid "Every quest's journal stages, sorted by journal index rather than file order, with the winning plugin's text, dialogue requirements, full result script, and everything else that script does -- item grants, disposition changes, other scripts starting, whatever a mod actually does at that stage. Read-only: nothing here writes."
+msgstr "每个任务的日志阶段, 按日志索引而非文件顺序排序, 并附上胜出插件的文本、对话条件、完整的结果脚本, 以及该脚本所做的其他一切 -- 给予物品、改变好感度、启动其他脚本, 无论模组在该阶段做什么。只读: 这里不写入任何内容。"
+
+msgid "Quest / stage / call"
+msgstr "任务 / 阶段 / 调用"
+
+msgid "Index"
+msgstr "索引"
+
+msgid "Reading the load order..."
+msgstr "正在读取加载顺序…"
+
+msgid "Could not read the load order -- see the log."
+msgstr "无法读取加载顺序 -- 请查看日志。"
+
+msgid "%(text)s (finished)"
+msgstr "%(text)s (已完成)"
+
+msgid "%(quests)d quest(s), %(stages)d stage(s), %(calls)d call site(s) found."
+msgstr "找到任务 %(quests)d 个, 阶段 %(stages)d 个, 调用点 %(calls)d 个"
+
+msgid " [bytecode]"
+msgstr " [字节码]"
+
+msgid "(no text)"
+msgstr "(无文本)"
+
+msgid "if"
+msgstr "条件"
+
+msgid "Also happens"
+msgstr "也会发生于"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Stage id"
+msgstr "阶段 ID"
+
+msgid "Journal index"
+msgstr "日志索引"
+
+msgid "Quest state"
+msgstr "任务状态"
+
+msgid "(none)"
+msgstr "(无)"
+
+msgid "Defined by"
+msgstr "定义者"
+
+msgid "(unknown)"
+msgstr "(未知)"
+
+msgid "Text"
+msgstr "文本"
+
+msgid "Requirements"
+msgstr "要求"
+
+msgid "Set by"
+msgstr "设置者"
+
+msgid "(no script call found)"
+msgstr "(未找到脚本调用)"
+
+msgid "Also sets"
+msgstr "也设置"
+
+msgid "%(quest)s [%(index)d] -- no matching stage found"
+msgstr "%(quest)s [%(index)d] -- 未找到匹配的阶段"
+
+msgid "Full script"
+msgstr "完整脚本"
+
+msgid "Function"
+msgstr "函数"
+
+msgid "Sets quest"
+msgstr "设置任务"
+
+msgid "Sets index"
+msgstr "设置索引"
+
+msgid "Found in"
+msgstr "发现于"
+
+msgid "Source"
+msgstr "来源"
+
+msgid "compiled bytecode -- no source text was shipped"
+msgstr "已编译字节码 -- 未附带源文本"
+
+msgid "Condition"
+msgstr "条件"
+
+msgid "(unconditional)"
+msgstr "(无条件)"
+
+msgid "Response"
+msgstr "响应"
+
+msgid "Requires"
+msgstr "需要"
+
+msgid "Target stage"
+msgstr "目标阶段"
+
+msgid "(no matching stage found)"
+msgstr "(未找到匹配的阶段)"
+
+msgid "Patch Builder"
+msgstr "补丁构建器"
+
+msgid "Records queued for the patch. Nothing is written until you press Write. Your mods are never modified."
+msgstr "已将记录加入补丁队列。在你按下「写入」之前不会写入任何内容。你的模组永远不会被更改。"
+
+msgid "Record"
+msgstr "记录"
+
+msgid "Field"
+msgstr "字段"
+
+msgid "How"
+msgstr "方式"
+
+msgid "From"
+msgstr "发件"
+
+msgid "Remove"
+msgstr "移除"
+
+msgid "Drop the selected record, or just the selected field. Removing a record's last field drops the record too."
+msgstr "丢弃所选记录, 或仅丢弃所选字段。移除记录的最后一个字段也会丢弃记录本身。"
+
+msgid "Clear all"
+msgstr "全部清除"
+
+msgid "Write patch..."
+msgstr "写入补丁…"
+
+msgid "Patch Builder... (%(count)d)"
+msgstr "补丁构建器… (%(count)d)"
+
+msgid "base: %(base)s"
+msgstr "基础: %(base)s"
+
+msgid "unknown"
+msgstr "未知"
+
+msgid "set to"
+msgstr "设置为"
+
+msgid "from"
+msgstr "发件"
+
+msgid "%(count)d record(s) queued."
+msgstr "已将 %(count)d 条记录加入队列。"
+
+msgid "Nothing queued yet. Add records from the conflict list."
+msgstr "队列中尚无内容。请从冲突列表中添加记录。"
+
+msgid "Clear the patch?"
+msgstr "清除补丁?"
+
+msgid "This drops every queued record. Nothing has been written, so nothing is lost."
+msgstr "这将丢弃队列中的每条记录。尚未写入任何内容, 因此不会丢失任何东西。"
+
+msgid "tes3conv not found"
+msgstr "未找到 tes3conv"
+
+msgid "Cannot measure master sizes without tes3conv. Set its path and try again."
+msgstr "没有 tes3conv 无法测量主文件大小。请设置其路径后重试。"
+
+msgid "Rescan needed"
+msgstr "需要重新扫描"
+
+msgid "%(what)s is no longer in the scan, so there is no way to tell which plugin its unchosen fields should come from. Rescan and queue it again."
+msgstr "%(what)s 已不在扫描中, 因此无法判断其未选中的字段应从哪个插件获取。请重新扫描并再次加入队列。"
+
+msgid "Append or replace?"
+msgstr "追加还是替换?"
+
+msgid "%(name)s already exists. This session has %(count)d record(s) queued.\n\nAppend keeps everything already written and adds these on top -- the way to build one patch across several sessions.\n\nReplace throws away what is already there and writes only this session's records.\n\nYour mods are NOT modified either way, and deleting the patch restores your previous behaviour completely. Load it LAST, and back up your saves."
+msgstr "%(name)s 已存在。本会话有 %(count)d 条记录在队列中。\n\n「追加」保留已写入的所有内容并将这些加在其上 -- 一种在多个会话中构建一个补丁的方法。\n\n「替换」丢弃现有内容并只写入本会话的记录。\n\n无论哪种情况你的模组都「不会」被更改, 删除补丁会完全恢复你之前的行为。请将其加载在「最后」并备份存档。"
+
+msgid "Could not read the existing patch"
+msgstr "无法读取现有补丁"
+
+msgid "%(name)s could not be decoded, so there is nothing to append to. Run Write again and choose Replace, or check the file opens in another tool first."
+msgstr "%(name)s 无法解码, 因此没有可追加的对象。请再次运行「写入」并选择「替换」, 或先检查该文件能否用其他工具打开。"
+
+msgid "Write patch?"
+msgstr "写入补丁?"
+
+msgid "%(count)d record(s) will be written to:\n%(path)s\n\nIt carries whole records chosen by you, and loads last. Your mods are NOT modified, and deleting the patch restores your previous behaviour completely.\n\nLoad it LAST, and back up your saves."
+msgstr "将写入记录 %(count)d 条到:\n%(path)s\n\n它携带你选择的整条记录并最后加载。你的模组「不会」被更改, 删除补丁会完全恢复你之前的行为。\n\n请将其加载在「最后」并备份存档。"
+
+msgid "Patch failed"
+msgstr "补丁失败"
+
+msgid " (%(carried)d carried forward from before)"
+msgstr " (从之前结转 %(carried)d 项)"
+
+msgid "Patch written"
+msgstr "已写入补丁"
+
+msgid "%(records)d record(s) written to:\n%(path)s%(carried)s\n\nDeclares %(masters)d master(s). Add it to your load order LAST."
+msgstr "已写入记录 %(records)d 条到:\n%(path)s%(carried)s\n\n声明主文件: %(masters)d 个。请将其添加到加载顺序的末尾。"
+
+msgid "Write the patch as"
+msgstr "将补丁写为"
+
+msgid "Morrowind plugin"
+msgstr "Morrowind 插件"
+
+msgid "All files"
+msgstr "所有文件"
+
+msgid "Plugin view"
+msgstr "插件视图"
+
+msgid "Your load order as a tree. Open a plugin to see what it changes, and a record to compare it across every plugin that defines it. Records are read and judged as you open them. Read-only: nothing here writes."
+msgstr "以树形式显示你的加载顺序。打开插件以查看它更改了什么, 打开记录以将其与定义它的每个插件比较。记录在打开时被读取和评判。只读: 这里不写入任何内容。"
+
+msgid "Plugin / type / record"
+msgstr "插件 / 类型 / 记录"
+
+msgid "#"
+msgstr "#"
+
+msgid "Double-click a field for its full value across every plugin."
+msgstr "双击字段以查看其在每个插件中的完整值。"
+
+msgid "Colour says what this plugin is doing to the records beneath it:\n  blue = it defines them first\n  green = it changes them and nothing later disagrees\n  amber = it changes them, others disagreed, and it still wins\n  RED = it changes them and something later overrides the change\n  grey = it redefines them without changing anything\n\nRecords are read as you expand them, so colour fills in a moment after a group opens. A plugin takes the worst of whatever has been judged beneath it."
+msgstr "颜色表明此插件对其下方记录所做的事:\n  蓝色 = 首先定义它们\n  绿色 = 更改它们, 而之后没有任何东西反对\n  琥珀色 = 更改它们, 其他反对了, 但它仍胜出\n  红色 = 更改它们, 而之后有东西覆盖了更改\n  灰色 = 覆盖它们但未改变任何内容\n\n记录在展开时被读取, 因此颜色在打开组后稍后填充。插件取其下方评判出的最差者。"
+
+msgid "Select a record in the tree, then choose which plugin's whole version of it should win. Added to a patch that loads last; no mod is ever modified."
+msgstr "在树中选择一条记录, 然后选择哪个插件的整体版本应胜出。它会被添加到最后加载的补丁中; 任何模组都不会被更改。"
+
+msgid "Select a record, then a field in the comparison on the right, and take just that field from a plugin of your choosing -- keeping the rest of the record as it is now."
+msgstr "选择一条记录, 然后在右侧比较中选择一个字段, 并从你选择的插件仅获取该字段 -- 记录的其余部分保持原样。"
+
+msgid "Select a record and a field on the right, then type your own value for it -- a number or string no plugin in the conflict uses. Written verbatim in the field's own type; your mods are not modified."
+msgstr "选择一条记录和右侧的一个字段, 然后输入你自己的值 -- 冲突中任何插件都未使用的数字或字符串。它会以字段的类型按原样写入。你的模组不会被更改。"
+
+msgid "Merge this plugin's fields..."
+msgstr "合并此插件的字段…"
+
+msgid "Select a plugin above, then pick which of its fields should win across every record it defines -- one decision instead of hundreds. Reads the plugin in the background (the window stays responsive), then queues those fields into a patch. Records where this plugin already wins, or where the value already matches, are skipped; your mods are not modified."
+msgstr "在上方选择一个插件, 然后选择在它定义的每条记录中它的哪些字段应胜出 -- 一个决定而非数百个。它会在后台读取插件 (窗口保持响应), 然后将这些字段加入补丁队列。此插件已胜出的记录或值已匹配的记录会被跳过; 你的模组不会被更改。"
+
+msgid "Review and edit everything queued so far, then write it as one new plugin. Nothing is written until you say so."
+msgstr "检查并编辑迄今为止排入队列的所有内容, 然后将其写为一个新插件。在你指示之前不会写入任何内容。"
+
+msgid "Highlight only conflicts that lose work"
+msgstr "仅高亮丢失工作的冲突"
+
+msgid "Click a plugin to highlight the plugins it conflicts with, in purple.\n\nChecked (lost): only records where an edit is actually discarded -- the conflicts worth acting on. Needs a plugin summary, which opening this view starts on its own.\n\nUnchecked (broad): any record two plugins both touch, whether or not anything is lost."
+msgstr "点击插件以紫色高亮它冲突的插件。\n\n勾选 (丢失): 仅编辑确实被丢弃的记录 -- 值得处理的冲突。需要逐插件汇总, 打开此视图会自动运行它。\n\n不勾选 (广泛): 两个插件触及的每条记录。无论是否丢失任何内容。"
+
+msgid "(opening...)"
+msgstr "(正在打开…)"
+
+msgid "Plugin view: %(n)d plugin(s). Open one to see what it changes."
+msgstr "插件视图: 插件 %(n)d 个。打开一个以查看它更改了什么。"
+
+msgid "Nothing to show -- run a conflict scan first."
+msgstr "没有可显示的内容 -- 请先运行冲突扫描。"
+
+msgid "Judging the first %(n)d of %(total)d record(s) in this group."
+msgstr "正在评判此组 %(total)d 条记录中的前 %(n)d 条。"
+
+msgid "%(name)s conflicts with %(n)d plugin(s) (highlighted)."
+msgstr "%(name)s 与 %(n)d 个插件冲突 (已高亮)。"
+
+msgid "Judging the load order -- conflicts that lose work highlight when it finishes."
+msgstr "正在评判加载顺序 -- 丢失工作的冲突将在完成时高亮显示。"
+
+msgid "%(name)s conflicts with nothing here."
+msgstr "%(name)s 在此与任何内容都不冲突。"
+
+msgid "  (wins)"
+msgstr "  (胜出)"
+
+msgid "(set a tes3conv binary to compare fields)"
+msgstr "(设置 tes3conv 二进制文件以比较字段)"
+
+msgid "(busy, or this record could not be read)"
+msgstr "(繁忙, 或无法读取此记录)"
+
+msgid "Select a record in the tree first."
+msgstr "请先在树中选择一条记录。"
+
+msgid "Select a record in the tree, then a field in the comparison on the right."
+msgstr "在树中选择一条记录, 然后在右侧比较中选择一个字段。"
+
+msgid "Select a plugin"
+msgstr "选择插件"
+
+msgid "Select a plugin in the tree first, then try again."
+msgstr "请先在树中选择插件, 然后重试。"
+
+msgid "No field data"
+msgstr "无字段数据"
+
+msgid "Set a tes3conv binary to compare fields."
+msgstr "设置 tes3conv 二进制文件以比较字段。"
+
+msgid "Nothing to merge"
+msgstr "没有可合并的内容"
+
+msgid "%(name)s shares no record with another plugin, so there is nothing to take."
+msgstr "%(name)s 与其他插件不共享任何记录, 因此没有可打补丁的内容。"
+
+msgid "Reading %(name)s (%(n)d record(s))..."
+msgstr "正在读取 %(name)s (记录 %(n)d 条)…"
+
+msgid "Could not read %(name)s: %(err)s"
+msgstr "无法读取 %(name)s: %(err)s"
+
+msgid "%(name)s already wins every field it could change here."
+msgstr "%(name)s 在此处能更改的每个字段上都已胜出。"
+
+msgid "%(name)s either already wins, or matches the winner, for every field -- so there is nothing to take."
+msgstr "%(name)s 在每个字段上要么已胜出, 要么与胜者相同 -- 因此没有可获取的内容。"
+
+msgid "Merge fields from %(name)s"
+msgstr "从 %(name)s 合并字段"
+
+msgid "Pick the fields %(name)s should win, across every record it defines."
+msgstr "在 %(name)s 定义的每条记录中, 选择它应胜出的字段。"
+
+msgid "The number is how many records each field would change.\nYour mods are not modified."
+msgstr "该数字表示每个字段将更改多少条记录。\n你的模组以 → 标记。"
+
+msgid "This plugin's value"
+msgstr "此插件的值"
+
+msgid "%(fields)d field(s) selected, %(n)d record change(s) queued."
+msgstr "已选择字段 %(fields)d 个, 已将记录更改 %(n)d 项加入队列。"
+
+msgid "Queued %(n)d field take(s) from %(name)s."
+msgstr "已将来自 %(name)s 的字段获取 %(n)d 项加入队列。"
+
+msgid "Select all"
+msgstr "全选"
+
+msgid "Merge selected"
+msgstr "合并所选"
+
+msgid "tes3cmd:"
+msgstr "tes3cmd:"
+
+msgid "Path to tes3cmd. Leave empty to auto-detect (PATH, next to this app, next to openmw.cfg). End users normally have the compiled tes3cmd.exe from the MOMW Tools Pack; the pure-perl script works too if perl is installed."
+msgstr "tes3cmd 的路径。留空以自动检测 (PATH、此应用旁边、openmw.cfg 旁边)。最终用户通常拥有 MOMW Tools Pack 中已编译的 tes3cmd.exe; 如果安装了 Perl, 纯 Perl 脚本也可用。"
+
+msgid "Locate tes3cmd"
+msgstr "定位 tes3cmd"
+
+msgid "Browse..."
+msgstr "浏览…"
+
+msgid "Plugins to run on"
+msgstr "要运行的插件"
+
+msgid "My mods (last sort)"
+msgstr "我的模组 (上次排序)"
+
+msgid "Add every custom mod from the last Sort whose file could be located (curated plugins are the list's job, not yours)."
+msgstr "添加上次排序中所有能定位到文件的自定义模组 (精选插件是列表的事情, 而非你的事情)。"
+
+msgid "List mods (last sort)"
+msgstr "列出模组 (上次排序)"
+
+msgid "Add every curated-list plugin from the last Sort whose file could be located -- the complement of 'My mods': everything ACTIVE that is NOT one of your custom additions."
+msgstr "添加上次排序中所有能定位到文件的精选列表插件 -- 「我的模组」的补充: 一切「活动的」且不属于你自己添加的内容。"
+
+msgid "MOMW needs-cleaning"
+msgstr "MOMW 需要清理"
+
+msgid "Add every ACTIVE plugin that plugin-order.yml flags as needs_cleaning (MOMW's own 'clean this one' list), resolved across the data folders. Requires the plugin-order.yml path on the main tab."
+msgstr "添加 plugin-order.yml 标记为 needs_cleaning (MOMW 自己的「清理此项」列表) 的每个「活动」插件, 并通过数据文件夹解析。需要主标签页上的 plugin-order.yml 路径。"
+
+msgid "Add file(s)..."
+msgstr "添加文件…"
+
+msgid "Remove selected"
+msgstr "移除所选"
+
+msgid "Clear"
+msgstr "清除"
+
+msgid "Command"
+msgstr "命令"
+
+msgid "extra arguments:"
+msgstr "额外参数:"
+
+msgid "Optional extra tes3cmd switches, e.g. --instances for clean, --author/--description for header. Passed through verbatim."
+msgstr "可选的额外 tes3cmd 开关, 例如 clean 用的 --instances, 头部用的 --author/--description。按原样传递。"
+
+msgid "Run"
+msgstr "运行"
+
+msgid "Output streams to the main Log. Modifying commands ask for confirmation first; tes3cmd makes its own backups."
+msgstr "输出流入主日志。修改命令会先请求确认; tes3cmd 会创建自己的备份。"
+
+msgid "Run '1. Sort' first so I know which mods are yours."
+msgstr "请先运行「1. 排序」, 以便我知道哪些模组是你的。"
+
+msgid "tes3cmd: added %(count)d of your mods"
+msgstr "tes3cmd: 已添加你的模组 %(count)d 个"
+
+msgid " (%(count)d file not found in the data folders)"
+msgid_plural " (%(count)d files not found in the data folders)"
+msgstr[0] " (%(count)d 个文件在数据文件夹中未找到)"
+
+msgid "Run '1. Sort' first so I know the active load order."
+msgstr "请先运行「1. 排序」, 以便我知道当前的加载顺序。"
+
+msgid "tes3cmd: added %(count)d list mod(s)"
+msgstr "tes3cmd: 已添加列表模组 %(count)d 个"
+
+msgid "Set the plugin-order.yml path on the main tab first."
+msgstr "请先在主标签页上设置 plugin-order.yml 路径。"
+
+msgid "Couldn't read plugin-order.yml: %(error)s"
+msgstr "无法读取 plugin-order.yml: %(error)s"
+
+msgid "tes3cmd: added %(count)d needs-cleaning plugin"
+msgid_plural "tes3cmd: added %(count)d needs-cleaning plugins"
+msgstr[0] "tes3cmd: 已添加需要清理的插件 %(count)d 个"
+
+msgid "Choose plugin file(s)"
+msgstr "选择插件文件"
+
+msgid "Resync master sizes"
+msgstr "重新同步主文件大小"
+
+msgid "Rewrite the recorded master sizes in %(count)d plugin file to match the installed masters?\n\nOnly the 8-byte size fields change; a one-time .masterfix.bak copy of each file is kept."
+msgid_plural "Rewrite the recorded master sizes in %(count)d plugin files to match the installed masters?\n\nOnly the 8-byte size fields change; a one-time .masterfix.bak copy of each file is kept."
+msgstr[0] "重写 %(count)d 个插件文件中记录的主文件大小以匹配已安装的主文件?\n\n只更改 8 字节的大小字段; 会保留每个文件一次性的 .masterfix.bak 副本。"
+
+msgid "Resyncing master sizes..."
+msgstr "正在重新同步主文件大小…"
+
+msgid "'%(path)s' does not exist. Fix the path or clear it to auto-detect."
+msgstr "「%(path)s」不存在。请修正路径或清除它以自动检测。"
+
+msgid "tes3cmd"
+msgstr "tes3cmd"
+
+msgid "tes3cmd not found. Browse to the compiled tes3cmd.exe (MOMW Tools Pack)."
+msgstr "未找到 tes3cmd。请浏览到已编译的 tes3cmd.exe (MOMW Tools Pack)。"
+
+msgid "Add at least one plugin file first."
+msgstr "请先添加至少一个插件文件。"
+
+msgid "tes3cmd clean"
+msgstr "tes3cmd clean"
+
+msgid "Clean %(count)d plugin file?\n\nEach is staged into a private 'Data Files' with its masters so tes3cmd sees the full VFS; plugins whose masters can't be found are skipped. A one-time .preclean.bak copy of each modified file is kept."
+msgid_plural "Clean %(count)d plugin files?\n\nEach is staged into a private 'Data Files' with its masters so tes3cmd sees the full VFS; plugins whose masters can't be found are skipped. A one-time .preclean.bak copy of each modified file is kept."
+msgstr[0] "清理 %(count)d 个插件文件?\n\n每个都会连同其主文件暂存到私有的「Data Files」中, 以便 tes3cmd 看到完整的 VFS; 找不到主文件的插件会被跳过。会保留每个被修改文件一次性的 .preclean.bak 副本。"
+
+msgid "tes3cmd %(command)s running..."
+msgstr "tes3cmd %(command)s 正在运行…"
+
+msgid "  Engine: %(command)s"
+msgstr "  引擎: %(command)s"
+
+msgid "  Staging dir: %(path)s"
+msgstr "  暂存目录: %(path)s"
+
+msgid "  SKIPPED: could not stage '%(name)s'."
+msgstr "  已跳过: 无法暂存「%(name)s」。"
+
+msgid "  SKIPPED: master(s) not found in any data folder: %(names)s -- cleaning without the masters present gives wrong results."
+msgstr "  已跳过: 在任何数据文件夹中都未找到主文件: %(names)s -- 在缺少主文件的情况下清理会产生错误结果。"
+
+msgid "  (exit code %(code)d) -- original NOT touched"
+msgstr "  (退出代码 %(code)d) -- 原始文件未被改动"
+
+msgid "  no changes -- already clean"
+msgstr "  无更改 -- 已是干净的"
+
+msgid "  cleaned: %(before)d -> %(after)d bytes (backup: %(backup)s)"
+msgstr "  已清理: %(before)d -> %(after)d 字节 (备份: %(backup)s)"
+
+msgid "  ERROR: %(error)s"
+msgstr "  错误: %(error)s"
+
+msgid "tes3cmd clean: %(changed)d cleaned, %(clean)d already clean, %(skipped)d skipped (missing masters), %(failed)d failed."
+msgstr "tes3cmd clean: 已清理 %(changed)d 个, 已是干净 %(clean)d 个, 已跳过 %(skipped)d 个 (缺少主文件), 失败 %(failed)d 个。"
+
+msgid "  Re-run '1. Sort' to refresh checks."
+msgstr "  重新运行「1. 排序」以刷新检查。"
+
+msgid "tes3cmd %(command)s: %(ok)d ok, %(failed)d failed. See the log."
+msgstr "tes3cmd %(command)s: 成功 %(ok)d 个, 失败 %(failed)d 个。请查看日志。"
+
+msgid " MASTER-SIZE RESYNC (in-app, VFS-aware)"
+msgstr " 主文件大小重新同步 (应用内, VFS 感知)"
+
+msgid "  %(name)s: ERROR: %(error)s"
+msgstr "  %(name)s: 错误: %(error)s"
+
+msgid "  %(name)s: already in sync"
+msgstr "  %(name)s: 已同步"
+
+msgid "  %(name)s: WARNING: master '%(master)s' not found in any data folder -- its size field left untouched"
+msgstr "  %(name)s: 警告: 在任何数据文件夹中都未找到主文件「%(master)s」-- 其大小字段保持未改动"
+
+msgid "Resync: %(fixed)d plugin(s) updated, %(ok)d already in sync, %(failed)d error(s)."
+msgstr "重新同步: 已更新插件 %(fixed)d 个, 已同步 %(ok)d 个, 失败 %(failed)d 个。"
+
+msgid "  Re-run '1. Sort' to refresh the master check."
+msgstr "  重新运行「1. 排序」以刷新主文件检查。"
+
+msgid "Locate the tes3conv executable"
+msgstr "定位 tes3conv 可执行文件"
+
+msgid "tes3conv set - click 'Check Conflicts' again to re-scan with field diffs."
+msgstr "已设置 tes3conv -- 再次点击「检查冲突」以使用字段差异重新扫描。"
+
+msgid "tes3conv set"
+msgstr "已设置 tes3conv"
+
+msgid "tes3conv location saved.\n\nClick 'Check Conflicts' again to re-scan; the field comparison will then populate when you select a record."
+msgstr "已保存 tes3conv 位置。\n\n再次点击「检查冲突」以重新扫描; 现在可进行字段级差异比较。"
+
+msgid "could not read rule file %(file)s for predicate checks: %(error)s"
+msgstr "无法读取规则文件 %(file)s 以进行谓词检查: %(error)s"
+
+msgid "NOTE: %(name)s: %(count)d conditional/unrecognized line inside ordering rules treated as not-installed and bridged over (mlox does the same)."
+msgid_plural "NOTE: %(name)s: %(count)d conditional/unrecognized lines inside ordering rules treated as not-installed and bridged over (mlox does the same)."
+msgstr[0] "注意: %(name)s: 排序规则内的 %(count)d 条条件性/无法识别的行被视为未安装并跳过 (mlox 也如此)。"
+
+msgid "could not parse rule file %(file)s: %(error)s"
+msgstr "无法解析规则文件 %(file)s: %(error)s"
+
+msgid "Loaded %(count)d plugin refs from %(file)s"
+msgstr "已从 %(file)s 加载插件引用 %(count)d 个"
+
+msgid "%(count)d mlox ordering rule not applied -- your openmw.cfg already orders these the other way, so your (curated) cfg order is kept:"
+msgid_plural "%(count)d mlox ordering rules not applied -- your openmw.cfg already orders these the other way, so your (curated) cfg order is kept:"
+msgstr[0] "%(count)d 条 mlox 排序规则未应用 -- 你的 openmw.cfg 已以另一种方式排序它们, 因此保留你的 (精选) cfg 顺序:"
+
+msgid "    - mlox wanted '%(first)s' before '%(second)s', but your load order already has '%(second)s' before '%(first)s'"
+msgstr "    - mlox 想将「%(first)s」放在「%(second)s」之前, 但在你的加载顺序中「%(second)s」已在「%(first)s」之前"
+
+msgid "WARNING: %(count)d plugin could not be placed due to an unresolved cycle and was appended at the end: %(names)s"
+msgid_plural "WARNING: %(count)d plugins could not be placed due to an unresolved cycle and were appended at the end: %(names)s"
+msgstr[0] "警告: 由于未解决的循环, %(count)d 个插件无法放置, 已追加到末尾: %(names)s"
+
+msgid "No exterior cells have conflicts."
+msgstr "没有外部单元格存在冲突。"
+
+msgid "(%(x)d, %(y)d) â %(count)d conflict, %(n)d plugin(s): %(plugins)s"
+msgid_plural "(%(x)d, %(y)d) â %(count)d conflicts, %(n)d plugin(s): %(plugins)s"
+msgstr[0] "(%(x)d, %(y)d) → 冲突 %(count)d 个, 插件 %(n)d 个: %(plugins)s"
+
+msgid "Cell"
+msgstr "单元格"
+
+msgid "Conflicts"
+msgstr "冲突"
+
+msgid "Yours"
+msgstr "你的"
+
+msgid "Record types"
+msgstr "记录类型"
+
+msgid "Usually wins"
+msgstr "通常胜出"
+
+msgid "terrain shape, textures and vertex colors"
+msgstr "地形形状、纹理和顶点颜色"
+
+msgid "NPC navigation -- broken edges strand NPCs, and nothing else reports it"
+msgstr "NPC 导航 -- 断裂的边会使 NPC 滞留, 而其他任何东西都不会报告这一点"
+
+msgid "the cell's own record: name, water level, region, ambient light"
+msgstr "单元格自身的记录: 名称、水位、地区、环境光"
+
+msgid "Record type"
+msgstr "记录类型"
+
+msgid "Cells"
+msgstr "单元格"
+
+msgid "What it governs"
+msgstr "它所控制的内容"
+
+msgid "Focus on plugin:"
+msgstr "聚焦于插件:"
+
+msgid "- all plugins -"
+msgstr "- 所有插件 -"
+
+msgid "Cells with conflicts"
+msgstr "有冲突的单元格"
+
+msgid "Spatial conflicts"
+msgstr "空间冲突"
+
+msgid "Involving your mods"
+msgstr "涉及你的模组"
+
+msgid "Non-spatial (objects, dialogue, interiors)"
+msgstr "非空间 (物件、对话、室内)"
+
+msgid "Conflict density by cell"
+msgstr "按单元格的冲突密度"
+
+msgid "outlined = involves your mods"
+msgstr "轮廓 = 涉及你的模组"
+
+msgid "Conflicting records per cell. North is up. Hover a cell for its count and which plugins are conflicting there. Each of the first few counts has its own color and larger counts are grouped, because one, two and three conflicts are different situations while thirty and thirty-five are not. Focusing a plugin recolors its cells by its own count there on this same scale, and mutes the rest."
+msgstr "按单元格的冲突记录。北方朝上。将鼠标悬停在单元格上以查看其计数以及哪些插件在此冲突。前几个计数各有自己的颜色, 较大的会被分组, 因为一个、两个和三个冲突是不同的情况, 而三十和三十五则不是。聚焦某个插件会以相同比例按该插件自身的计数为其单元格重新着色, 并使其余部分变暗。"
+
+msgid "What is being edited"
+msgstr "正在编辑的内容"
+
+msgid "All cells (worst first)"
+msgstr "所有单元格 (最差优先)"
+
+msgid "Touches %(cells)s cell(s), %(total)s conflict(s) here. %(breakdown)s"
+msgstr "影响单元格 %(cells)s 个, 此处冲突 %(total)s 个。%(breakdown)s"
+
+msgid "(no type breakdown available)"
+msgstr "(无类型细分)"
+
+msgid "Conflict map"
+msgstr "冲突地图"
+
+msgid "Cells where the same record is defined by more than one plugin. Coverage (which mods touch which cells) is a different question -- see the cell map."
+msgstr "同一记录被多个插件定义的单元格。覆盖范围 (哪些模组触及哪些单元格) 是另一个问题 -- 请查看单元格地图。"
+
+msgid "On this page"
+msgstr "本页内容"
+
+msgid "Rendered from %(name)s"
+msgstr "从 %(name)s 渲染"
+
+msgid "Program documentation"
+msgstr "程序文档"
+
+msgid "Generated %(when)s"
+msgstr "生成于 %(when)s"
+
+msgid "Base: %(plugin)s"
+msgstr "基础: %(plugin)s"
+
+msgid "Winner: %(plugin)s"
+msgstr "胜者: %(plugin)s"
+
+msgid "Winner"
+msgstr "胜者"
+
+msgid "Step"
+msgstr "步骤"
+
+msgid "Height difference"
+msgstr "高度差"
+
+msgid "higher than the previous step"
+msgstr "高于上一步"
+
+msgid "lower than the previous step"
+msgstr "低于上一步"
+
+msgid "North is up. Unchanged vertices are left blank on a diff step, and color saturates at that step's largest movement, so shades are comparable within a page but not between pages. The Base step has nothing before it to diff against, so it shows that plugin's own absolute elevation on a separate low-to-high scale instead."
+msgstr "北方朝上。在差异步骤中, 未更改的顶点保持空白, 颜色在该步骤的最大位移处饱和。因此色调在页面内可比较, 但页面之间不可。基础步骤之前没有可供比较的内容, 因此它以从低到高的独立比例显示该插件自身的绝对高度。"
+
+msgid "Base version"
+msgstr "基础版本"
+
+msgid "vertex (%(col)s, %(row)s): %(delta)s units"
+msgstr "顶点 (%(col)s, %(row)s): %(delta)s 单位"
+
+msgid "vertex (%(col)s, %(row)s): %(height)s units"
+msgstr "顶点 (%(col)s, %(row)s): %(height)s 单位"
+
+msgid "Absolute elevation, %(lo)s to %(hi)s units. Nothing loaded before it to compare against."
+msgstr "绝对海拔, %(lo)s 至 %(hi)s 单位。之前未加载任何可供比较的内容。"
+
+msgid "%(changed)s of %(total)s vertices differ from the previous step. Largest movement %(peak)s units (%(up)s raised, %(down)s lowered)."
+msgstr "与上一步相比, %(total)s 个顶点中有 %(changed)s 个不同。最大位移为 %(peak)s 单位 (上升 %(up)s, 下降 %(down)s)。"
+
+msgid "The terrain is identical at this step. It differs from the previous step in some other field -- textures, colors or the world map -- not in height."
+msgstr "此步骤的地形完全相同。它与上一步在另一个字段上不同 -- 纹理、颜色或世界地图 -- 而非高度。"
+
+msgid "Terrain difference"
+msgstr "地形差异"
+
+msgid "Absolute heights, decoded and subtracted. Comparing the raw fields is misleading: heights are stored as cumulative deltas, so moving one vertex changes every byte after it."
+msgstr "绝对高度, 已解码并相减。比较原始字段会产生误导: 高度以累积增量存储, 因此移动一个顶点会改变之后的每个字节。"
+
+msgid "Nothing to show."
+msgstr "没有可显示的内容。"
+
+msgid "point %(index)d at (%(x)d, %(y)d, %(z)d)"
+msgstr "点 %(index)d 位于 (%(x)d, %(y)d, %(z)d)"
+
+msgid "Points"
+msgstr "点"
+
+msgid "Connections"
+msgstr "连接"
+
+msgid "Extent"
+msgstr "范围"
+
+msgid "%(units)d world units"
+msgstr "%(units)d 世界单位"
+
+msgid "path point"
+msgstr "路径点"
+
+msgid "edge added at this step"
+msgstr "此步骤添加的边"
+
+msgid "edge removed at this step"
+msgstr "此步骤移除的边"
+
+msgid "unchanged"
+msgstr "未更改"
+
+msgid "connection"
+msgstr "连接"
+
+msgid "Edges added"
+msgstr "添加的边"
+
+msgid "Edges removed"
+msgstr "移除的边"
+
+msgid "Top-down view, north up. Hover a point for its coordinates."
+msgstr "俯视图, 北方朝上。将鼠标悬停在点上以查看其坐标。"
+
+msgid "Base version â nothing loaded before it to compare against."
+msgstr "基础版本 -- 之前未加载任何可供比较的内容。"
+
+msgid "The navigation graph is unchanged at this step. These records differ in point positions or flags, not in connectivity."
+msgstr "此步骤的导航图未更改。这些记录在点位置或标志上不同, 而非连接性。"
+
+msgid "This step only removes connections. That is the shape of an accidentally rebuilt path grid, and it is worth checking in game."
+msgstr "此步骤只移除连接。那是意外重建的路径网格的形态, 值得在游戏中检查。"
+
+msgid "Navigation graph"
+msgstr "导航图"
+
+msgid "Path grid"
+msgstr "路径网格"
+
+msgid "The navigation mesh NPCs follow, and what this plugin changed about it."
+msgstr "NPC 遵循的导航网格, 以及此插件对其所做的更改"
+
+msgid "Height range: %(lo)s to %(hi)s units"
+msgstr "高度范围: %(lo)s 至 %(hi)s 单位"
+
+msgid "(vertical exaggerated %(times)sx)"
+msgstr "(垂直方向夸大 %(times)s倍)"
+
+msgid "contours every %(step)s units"
+msgstr "每 %(step)s 单位一条等高线"
+
+msgid "Reset"
+msgstr "重置"
+
+msgid "Isometric"
+msgstr "等距"
+
+msgid "Top down"
+msgstr "俯视"
+
+msgid "Shading:"
+msgstr "着色:"
+
+msgid "Relief"
+msgstr "地势"
+
+msgid "Flat facets"
+msgstr "平面刻面"
+
+msgid "Hillshade"
+msgstr "山体阴影"
+
+msgid "Lights:"
+msgstr "灯光:"
+
+msgid "Single"
+msgstr "单个"
+
+msgid "3-way"
+msgstr "三向"
+
+msgid "6-way"
+msgstr "六向"
+
+msgid "Scales:"
+msgstr "比例:"
+
+msgid "Multiscale"
+msgstr "多尺度"
+
+msgid "Sun azimuth:"
+msgstr "太阳方位角:"
+
+msgid "Sun altitude:"
+msgstr "太阳高度角:"
+
+msgid "Tint:"
+msgstr "着色:"
+
+msgid "Hypsometric"
+msgstr "高程分色"
+
+msgid "Rainbow"
+msgstr "彩虹"
+
+msgid "Greyscale"
+msgstr "灰度"
+
+msgid "Tint %:"
+msgstr "着色 %:"
+
+msgid "Contours"
+msgstr "等高线"
+
+msgid "Vertical:"
+msgstr "垂直:"
+
+msgid "%(times)sx"
+msgstr "%(times)s倍"
+
+msgid "Drag to rotate, shift/right-drag to pan, scroll to zoom. Shading follows slope, which reads as terrain better than height does. Heights are drawn to the same scale as the ground, so a slope here is the slope in game."
+msgstr "拖动以旋转, Shift/右键拖动以平移, 滚动以缩放。着色遵循坡度, 比高度更易读作地形。高度以与地面相同的比例绘制, 因此这里的坡度就是游戏中的坡度。"
+
+msgid "Drag to rotate, shift/right-drag to pan, scroll to zoom; switch plugins to see the same cell as each one leaves it. Shading follows slope. Heights are drawn to the same scale as the ground, so a slope here is the slope in game."
+msgstr "拖动以旋转, Shift/右键拖动以平移, 滚动以缩放; 切换插件以查看每个插件如何留下同一单元格。着色遵循坡度。高度以与地面相同的比例绘制, 因此这里的坡度就是游戏中的坡度。"
+
+msgid "Some records could not be decoded: %(detail)s"
+msgstr "部分记录无法解码: %(detail)s"
+
+msgid "Surfaces"
+msgstr "表面"
+
+msgid "Terrain surface"
+msgstr "地形表面"
+
+msgid "The same 65x65 height grid the text view lists, as a shape you can turn."
+msgstr "与文本视图列出的相同的 65x65 高度网格, 作为一个你可以旋转的形状。"
+
+msgid "couldn't stage '%(name)s': %(error)s"
+msgstr "无法暂存「%(name)s」: %(error)s"
+
+msgid "could not read the mesh: %(reason)s"
+msgstr "无法读取网格: %(reason)s"
+
+msgid "loses collision"
+msgstr "丢失碰撞"
+
+msgid "loses animation"
+msgstr "丢失动画"
+
+msgid "needs %(count)d texture the other does not ship"
+msgid_plural "needs %(count)d textures the other does not ship"
+msgstr[0] "需要另一方未附带的纹理 %(count)d 个"
+
+msgid "%(percent)d%% of the triangles"
+msgstr "%(percent)d%% 的三角形"
+
+msgid "Mesh contents (read just now):"
+msgstr "网格内容 (刚刚读取):"
+
+msgid "  %(n)d. %(dir)s - could not read: %(why)s"
+msgstr "  %(n)d. %(dir)s - 无法读取: %(why)s"
+
+msgid "%(count)d shape"
+msgid_plural "%(count)d shapes"
+msgstr[0] "形状 %(count)d 个"
+
+msgid "%(count)d triangle"
+msgid_plural "%(count)d triangles"
+msgstr[0] "三角形 %(count)d 个"
+
+msgid "%(count)d texture"
+msgid_plural "%(count)d textures"
+msgstr[0] "纹理 %(count)d 个"
+
+msgid "collision"
+msgstr "碰撞"
+
+msgid "no collision"
+msgstr "无碰撞"
+
+msgid "animated"
+msgstr "动画"
+
+msgid "PARTIAL: %(read)d of %(declared)d blocks"
+msgstr "部分: %(declared)d 个块中的 %(read)d 个"
+
+msgid "  Against provider %(n)d, the winner %(note)s."
+msgstr "  对于提供者 %(n)d, 胜者 %(note)s。"
+
+msgid "  Textures referenced: %(list)s"
+msgstr "  引用的纹理: %(list)s"
+
+msgid "  %(count)d mesh conflict changes what the asset does; those lines are marked below."
+msgid_plural "  %(count)d mesh conflicts change what the asset does; those lines are marked below."
+msgstr[0] "  %(count)d 个网格冲突改变了资源的行为; 那些行在下方已标记。"
+
+msgid "Backup written: %(path)s"
+msgstr "已写入备份: %(path)s"
+
+msgid "\n--- DRY RUN: no files written ---"
+msgstr "\n--- 试运行: 未写入文件 ---"
+
+msgid "Wrote updated: %(path)s"
+msgstr "已写入更新版: %(path)s"
+
+msgid "Scanned '%(path)s': %(folders)d mod folder(s), %(plugins)d plugin(s)."
+msgstr "已扫描「%(path)s」: 模组文件夹 %(folders)d 个, 插件 %(plugins)d 个。"
+
+msgid "Wrote subset file: %(path)s"
+msgstr "已写入子集文件: %(path)s"
+
+msgid "'%(entry)s' from %(source)s is declared as groundcover but is not a plugin filename -- skipping."
+msgstr "来自 %(source)s 的「%(entry)s」被声明为 groundcover, 但不是插件文件名 -- 已跳过。"
+
+msgid "'%(entry)s' from %(source)s doesn't look like a plugin filename or a data folder path (no recognized extension, no slash) -- skipping."
+msgstr "来自 %(source)s 的「%(entry)s」看起来既不像插件文件名也不像数据文件夹路径 (无可识别的扩展名, 无斜杠) -- 已跳过。"
+
+msgid "  %(file)s: %(plugins)d plugin(s), %(paths)d data path(s)"
+msgstr "  %(file)s: 插件 %(plugins)d 个, 数据路径 %(paths)d 个"
+
+msgid "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(paths)s"
+msgstr "  注意: 找到数据路径插入但未排序 (传入 --sort-data-paths 以包含它们): %(paths)s"
+
+msgid "  in-memory scan: %(plugins)d plugin(s), %(paths)d data path(s)"
+msgstr "  内存扫描: 插件 %(plugins)d 个, 数据路径 %(paths)d 个"
+
+msgid "  NOTE: data path insertion found but not sorted (pass --sort-data-paths to include it): %(count)d path"
+msgid_plural "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(count)d paths"
+msgstr[0] "  注意: 找到数据路径插入但未排序 (传入 --sort-data-paths 以包含它): 路径 %(count)d 个"
+
+msgid "  %(file)s: %(plugins)d content plugin(s), %(paths)d data path(s)"
+msgstr "  %(file)s: 内容插件 %(plugins)d 个, 数据路径 %(paths)d 个"
+
+msgid "  Loaded %(count)d plugin entry from %(file)s"
+msgid_plural "  Loaded %(count)d plugin entries from %(file)s"
+msgstr[0] "  已从 %(file)s 加载插件条目 %(count)d 个"
+
+msgid "  WARNING: could not read plugin-order.yml (%(error)s) -- skipping yml checks."
+msgstr "  警告: 无法读取 plugin-order.yml (%(error)s) -- 跳过 yml 检查。"
+
+msgid "  '%(list)s': %(count)d curated plugin on this list"
+msgid_plural "  '%(list)s': %(count)d curated plugins on this list"
+msgstr[0] "  「%(list)s」: 此列表上的精选插件 %(count)d 个"
+
+msgid "  WARNING: no plugins found for list '%(list)s' in the yml -- check the list name spelling. Curated-set checks skipped."
+msgstr "  警告: 在 yml 中未找到列表「%(list)s」的插件 -- 请检查列表名称的拼写。已跳过精选集检查。"
+
+msgid "  Excluded %(count)d curated plugin from the sort: %(names)s"
+msgid_plural "  Excluded %(count)d curated plugins from the sort: %(names)s"
+msgstr[0] "  已从排序中排除精选插件 %(count)d 个: %(names)s"
+
+msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
+msgstr "\n  已在 cfg 中, 将在其中重新定位: %(names)s"
+
+msgid "  Not in cfg yet, will be inserted: %(names)s"
+msgstr "  尚未在 cfg 中，将被插入: %(names)s"
+
+msgid "  Read header masters for %(have)d of %(total)d custom plugin(s)."
+msgstr "  已读取 %(total)d 个自定义插件中 %(have)d 个的头部主文件。"
+
+msgid "\n  No [Conflict]/[Requires]/[Note] warnings triggered."
+msgstr "\n  未触发 [Conflict]/[Requires]/[Note] 警告。"
+
+msgid "\n  No plugin-order.yml warnings."
+msgstr "\n  无 plugin-order.yml 警告。"
+
+msgid "  (plugin files not reachable from the data folders; can't read headers)"
+msgstr "  (插件文件无法从数据文件夹访问; 无法读取头部)"
+
+msgid "  All masters present and correctly ordered."
+msgstr "  所有主文件均存在且顺序正确。"
+
+msgid "master check failed: %(error)s"
+msgstr "主文件检查失败: %(error)s"
+
+msgid "\n[STALE] '%(artifact)s' is older than %(count)d active plugin (e.g. %(examples)s%(more)s) -- re-run momw-configurator so it gets rebuilt against the current load order."
+msgid_plural "\n[STALE] '%(artifact)s' is older than %(count)d active plugins (e.g. %(examples)s%(more)s) -- re-run momw-configurator so it gets rebuilt against the current load order."
+msgstr[0] "\n[已过时] 「%(artifact)s」比 %(count)d 个活动插件更旧 (例如 %(examples)s%(more)s) -- 重新运行 momw-configurator 以便针对当前加载顺序重新构建。"
+
+msgid "  (excluded %(count)d plugin by --exclude)"
+msgid_plural "  (excluded %(count)d plugins by --exclude)"
+msgstr[0] "  (通过 --exclude 排除插件 %(count)d 个)"
+
+msgid "  Keeping tes3conv JSON dump in: %(path)s"
+msgstr "  保留 tes3conv JSON 转储于: %(path)s"
+
+msgid "  Engine: %(engine)s"
+msgstr "  引擎: %(engine)s"
+
+msgid "native esp reader (field-level)"
+msgstr "原生 esp 读取器 (字段级)"
+
+msgid "\n  Wrote conflict report: %(path)s"
+msgstr "\n  已写入冲突报告: %(path)s"
+
+msgid "could not write conflict CSV: %(error)s"
+msgstr "无法写入冲突 CSV: %(error)s"
+
+msgid "  Scanned %(scanned)d plugin(s): %(exterior)d exterior + %(interior)d interior cell(s) touched."
+msgstr "  已扫描插件 %(scanned)d 个: 影响外部单元格 %(exterior)d 个 + 室内单元格 %(interior)d 个。"
+
+msgid "  Wrote cell map: %(path)s  (open it in a browser)"
+msgstr "  已写入单元格地图: %(path)s  (在浏览器中打开)"
+
+msgid "could not write cell map: %(error)s"
+msgstr "无法写入单元格地图: %(error)s"
+
+msgid "  Scanned %(scanned)d plugin(s); %(cells)d interior cell(s), %(grids)d interior pathgrid(s)."
+msgstr "  已扫描插件 %(scanned)d 个; 室内单元格 %(cells)d 个, 室内路径网格 %(grids)d 个。"
+
+msgid "\n  No lint findings."
+msgstr "\n  无 lint 发现。"
+
+msgid "\n  Wrote resource report: %(path)s"
+msgstr "\n  已写入资源报告: %(path)s"
+
+msgid "could not write resource CSV: %(error)s"
+msgstr "无法写入资源 CSV: %(error)s"
+
+msgid "  Pass --sort-data-paths to enable:"
+msgstr "  传入 --sort-data-paths 以启用:"
+
+msgid "  <-- inserted"
+msgstr "  <-- 已插入"
+
+msgid "UNMANAGED (ORPHAN) ENTRIES FROM openmw.cfg"
+msgstr "来自 openmw.cfg 的未管理 (孤立) 条目"
+
+msgid "  %(count)d orphan plugin pulled from openmw.cfg"
+msgid_plural "  %(count)d orphan plugins pulled from openmw.cfg"
+msgstr[0] "  已从 openmw.cfg 拉取孤立插件 %(count)d 个"
+
+msgid "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations."
+msgstr "  未找到未管理的插件 -- cfg 中的每个 content= 插件都在列表或你的设置中。"
+
+msgid "groundcover declared by this run"
+msgstr "本次运行声明的 groundcover"
+
+msgid "  These are written as groundcover= rather than content=. Their data= folders are inserted normally -- OpenMW has to find the file."
+msgstr "  这些被写为 groundcover= 而非 content=。它们的 data= 文件夹照常插入 -- OpenMW 应能找到文件。"
+
+msgid "groundcover plugins held back"
+msgstr "被保留的 groundcover 插件"
+
+msgid "%(count)d plugin in your subset is already declared as groundcover in openmw.cfg, so it was NOT added to content=:"
+msgid_plural "%(count)d plugins in your subset are already declared as groundcover in openmw.cfg, so they were NOT added to content=:"
+msgstr[0] "你的子集中的 %(count)d 个插件已在 openmw.cfg 中声明为 groundcover, 因此「未」将其添加到 content=:"
+
+msgid "  Their groundcover= lines are untouched and their data= paths are still written, so the grass stays enabled -- as grass. Loading one as content= too would spawn every blade as a real object."
+msgstr "  它们的 groundcover= 行未被改动, data= 路径仍会被写入, 因此草仍保持启用 -- 作为草。将其中一个也作为 content= 加载会将每一片草叶生成为真实物件。"
+
+msgid "  openmw.cfg left untouched (pass --write-cfg to patch it directly)"
+msgstr "  openmw.cfg 未被改动 (传入 --write-cfg 以直接为其打补丁)"
+
+msgid "  WARNING: configurator preview failed: %(error)s"
+msgstr "  警告: 配置器预览失败: %(error)s"
+
+msgid "\n  DRY RUN: would write %(path)s\n%(toml)s"
+msgstr "\n  试运行: 将写入 %(path)s\n%(toml)s"
+
+msgid "  Wrote corrected customizations: %(path)s"
+msgstr "  已写入更正后的 customizations: %(path)s"
+
+msgid "  Plugins sorted:        %(count)d"
+msgstr "  已排序插件:        %(count)d"
+
+msgid "  Data paths inserted:   %(count)d"
+msgstr "  已插入数据路径:   %(count)d"
+
+msgid "  Rule warnings raised:  %(count)d"
+msgstr "  引发的规则警告:  %(count)d"
+
+msgid "  plugin-order.yml warnings: %(count)d"
+msgstr "  plugin-order.yml 警告: %(count)d"
+
+msgid "  openmw.cfg written:    %(answer)s"
+msgstr "  已写入 openmw.cfg:    %(answer)s"
+
+msgid "yes"
+msgstr "是"
+
+msgid "no"
+msgstr "否"
+
+msgid "  customizations.toml written: %(answer)s"
+msgstr "  已写入 customizations.toml: %(answer)s"
+
+msgid "Rule files (priority = order below, last = highest -- drag rows to reorder)"
+msgstr "规则文件 (优先级 = 下方顺序, 最后 = 最高 -- 拖动行以重新排序)"
+
+msgid "mlox rule files (mlox_base.txt, mlox_user.txt, ...), applied in this order.\nLater files can override/extend earlier ones -- put mlox_base.txt first and your own mlox_user.txt last. Drag rows to reorder, or use the buttons."
+msgstr "mlox 规则文件 (mlox_base.txt、mlox_user.txt、…), 按此顺序应用。\n后面的文件可以覆盖/扩展前面的 -- 请将 mlox_base.txt 放在最前, 你自己的 mlox_user.txt 放在最后。拖动行以重新排序或使用按钮。"
+
+msgid "Add File(s)..."
+msgstr "添加文件…"
+
+msgid "Browse for one or more mlox rule .txt files to add to the list."
+msgstr "浏览一个或多个 mlox 规则 .txt 文件以添加到列表。"
+
+msgid "Remove Selected"
+msgstr "移除所选"
+
+msgid "Remove the selected rule file from the list (doesn't delete anything on disk)."
+msgstr "从列表中移除所选规则文件 (不删除磁盘上的任何内容)。"
+
+msgid "Move Up"
+msgstr "上移"
+
+msgid "Move the selected rule file earlier (lower priority)."
+msgstr "将所选规则文件前移 (降低优先级)。"
+
+msgid "Move Down"
+msgstr "下移"
+
+msgid "Move the selected rule file later (higher priority)."
+msgstr "将所选规则文件后移 (提高优先级)。"
+
+msgid "New Rule..."
+msgstr "新建规则…"
+
+msgid "Write your own mlox [Order]/[NearStart]/[NearEnd] rule without knowing the syntax: pick plugins (or grab the selected rows from the plugin panel), preview the rule, and append it to a personal rules file that loads LAST so it wins conflicts. This is how rules for modern mods get made -- consider contributing good ones upstream."
+msgstr "无需了解语法即可编写你自己的 mlox [Order]/[NearStart]/[NearEnd] 规则: 选择插件 (或从插件面板获取选中行), 预览规则, 并将其添加到「最后」加载以在冲突中胜出的个人规则文件。现代模组的规则就是这样制作的 -- 请考虑将好的规则向上游提交。"
+
+msgid "Update Rules..."
+msgstr "更新规则…"
+
+msgid "Download the CURRENT mlox_base.txt / mlox_user.txt from the actively maintained rules repo (github.com/%(repo)s -- the same source plox uses, and mlox 1.1+ auto-updates from) over the matching files in this list. The old files are kept as timestamped .bak copies. Files with other names (your personal rules) are never touched. Source URL configurable via Sources..."
+msgstr "从积极维护的规则库 (github.com/%(repo)s -- 与 plox 相同的源, 也是 mlox 1.1+ 更新的来源) 下载「当前」的 mlox_base.txt / mlox_user.txt 并覆盖此列表中的对应文件。旧文件会保留为带时间戳的 .bak 副本。其他名称的文件 (你的个人规则) 永远不会被触及。源 URL 可通过源…配置。"
+
+msgid "Sources..."
+msgstr "来源…"
+
+msgid "Configure WHERE 'Update Rules...' and the plugin-order.yml 'Update...' button download from -- point them at a fork or mirror if upstream moves. Blank fields use the built-in defaults."
+msgstr "配置「更新规则…」和 plugin-order.yml 的「更新…」按钮从「何处」下载 -- 如果源已迁移, 请指向分支或镜像。空白字段使用内置默认值。"
+
+msgid "(install tkinterdnd2 to drag files in from your file manager)"
+msgstr "(安装 tkinterdnd2 以从文件管理器拖入文件)"
+
+msgid "Choose a folder for the mlox rule files"
+msgstr "为 mlox 规则文件选择文件夹"
+
+msgid "Update rules"
+msgstr "更新规则"
+
+msgid "Download the current mlox rules from github.com/%(repo)s?\n\n%(files)s\n\nThey don't exist yet -- they'll be created here."
+msgstr "从 github.com/%(repo)s 下载当前的 mlox 规则?\n\n%(files)s\n\n它们尚不存在 -- 将在此创建。"
+
+msgid "Download the current rules from github.com/%(repo)s over these files?\n\n%(age)s\n\nTimestamped .bak copies of the old files are kept."
+msgstr "从 github.com/%(repo)s 下载当前规则并覆盖这些文件?\n\n%(age)s\n\n会保留旧文件的带时间戳 .bak 副本。"
+
+msgid "Move the selected row(s) one position earlier. Works with a multi-selection; you can also drag a contiguous block up with the mouse."
+msgstr "将所选行前移一个位置。支持多选; 也可以用鼠标将连续块向上拖动。"
+
+msgid "Move the selected row(s) one position later. Works with a multi-selection; you can also drag a contiguous block down with the mouse."
+msgstr "将所选行后移一个位置。支持多选; 也可以用鼠标将连续块向下拖动。"
+
+msgid "Disable / Enable"
+msgstr "禁用 / 启用"
+
+msgid "Opt the selected row in or out of the load order. Disabled rows are dimmed and marked, and are left out of Export: a custom item is simply not inserted, and an item already in your openmw.cfg gets a removeContent/removeData entry in the emitted TOML so it's durably removed. Double-click a row to toggle it too."
+msgstr "将所选行纳入或移出加载顺序。已禁用的行会变暗并加标记, 并从导出中排除: 自定义项只是不被插入, 而已在你的 openmw.cfg 中的项会在生成的 TOML 中获得 removeContent/removeData 条目, 以便被可靠地移除。双击行也会切换它。"
+
+msgid "Discard any manual dragging and restore the order from the last Sort (your disable/enable choices are kept)."
+msgstr "放弃任何手动拖动, 并从上次排序恢复顺序 (你的启用/禁用选择会保留)。"
+
+msgid "Plugin load order -- drag to override mlox (red = touched by this sort, purple = master problem)"
+msgstr "插件加载顺序 -- 拖动以覆盖 mlox (红色 = 被本次排序改动, 紫色 = 主文件问题)"
+
+msgid "Data path order -- drag to adjust (highlighted = your custom paths)"
+msgstr "数据路径顺序 -- 拖动以调整 (高亮 = 你的自定义路径)"
+
+msgid "Drag & drop is unavailable (tkinterdnd2 or its tkdnd library is missing) -- use the Browse buttons below."
+msgstr "拖放不可用 (缺少 tkinterdnd2 或其 tkdnd 库) -- 请使用下方的浏览按钮。"
+
+msgid "Required. The openmw.cfg to read the current content= and data= order from, and (if 'Write openmw.cfg directly' is checked) to patch."
+msgstr "必需。用于读取当前 content= 和 data= 顺序的 openmw.cfg (如果勾选了「直接写入 openmw.cfg」, 则也用于打补丁)。"
+
+msgid "A momw-configurator/umo customizations TOML to pull the plugin/data-path subset from automatically. Optional if you provide a subset file instead -- provide both and they're combined."
+msgstr "用于自动拉取插件/数据路径子集的 momw-configurator/umo customizations TOML。如果你改为提供子集文件, 则此项可选 -- 两者都提供时会合并。"
+
+msgid "A plain text file (one plugin filename or data folder path per line, '#' comments allowed) or a minimal TOML with subset=[...]/data=[...]. Combined with --emit-toml, this alone is enough to generate a brand new customizations.toml with no existing one required."
+msgstr "一个纯文本文件 (每行一个插件文件名或数据文件夹路径, 允许「#」注释) 或包含 subset=[...]/data=[...] 的最小 TOML。与 --emit-toml 结合时, 仅凭这一个就能创建新的 customizations.toml 而无需现有的。"
+
+msgid "Where to write a corrected customizations.toml (sorted insert blocks, re-anchored). Disabled when 'write directly back' below is checked."
+msgstr "写入更正后的 customizations.toml 的位置 (已排序的插入块, 已重新锚定)。勾选下方「直接覆盖」时禁用。"
+
+msgid "list name (optional):"
+msgstr "列表名称 (可选):"
+
+msgid "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser."
+msgstr "MOMW 的 plugin-order.yml (关于哪些插件属于哪个精选列表的可信来源)。在上方指定列表名称后, 该列表的精选插件会被排除在排序之外 (永不重排), 以便只影响你自己的添加, 并发出只读警告: 冗余、孤立、needs-cleaning 以及基础顺序拒绝检查。若安装了 PyYAML 则使用它, 否则使用内置解析器。"
+
+msgid "Write directly back to customizations.toml (overwrite in place; a .bak-<timestamp> copy is made first unless backups are disabled below)"
+msgstr "直接写回 customizations.toml (就地覆盖; 除非下方备份被禁用, 否则会先创建 .bak-<时间戳> 副本)"
+
+msgid "Instead of writing to a separate file above, overwrite the customizations.toml given above in place. A timestamped backup is made first (unless disabled), and you'll get a confirmation prompt before it actually happens."
+msgstr "不写入上方的单独文件, 而是就地覆盖上方指定的 customizations.toml。会先创建带时间戳的备份 (除非被禁用), 并在实际执行前请求你确认。"
+
+msgid "Options"
+msgstr "选项"
+
+msgid "Dry run (preview only, don't write files)"
+msgstr "试运行 (仅预览, 不写入文件)"
+
+msgid "When checked, Export shows exactly what it would write without touching any files. Uncheck when you're ready to actually save."
+msgstr "勾选后, 导出会准确显示它将写入的内容而不改动文件。准备好真正保存时取消勾选。"
+
+msgid "Write openmw.cfg directly"
+msgstr "直接写入 openmw.cfg"
+
+msgid "Patch the content=/data= lines in openmw.cfg in place on Export. A .bak-<timestamp> copy is made first unless backups are disabled."
+msgstr "导出时就地修补 openmw.cfg 中的 content=/data= 行。除非备份被禁用, 否则会先创建 .bak-<时间戳> 副本。"
+
+msgid "Sort data= paths too"
+msgstr "也排序 data= 路径"
+
+msgid "mlox has no concept of data= folder order -- this positions new data= paths using an explicit after/before anchor if you wrote one, or by scanning the folder for plugins and anchoring next to their neighbor in the sorted content= order. Off by default so a plugin-only run can't surprise-reorder data= too. Also required for the data path order panel to populate."
+msgstr "mlox 没有 data= 文件夹顺序的概念 -- 这会使用你编写的显式 after/before 锚点来放置新的 data= 路径, 或通过扫描文件夹查找插件和锚点, 将它们锚定在已排序 content= 顺序中其邻居旁边。默认禁用, 以免仅运行插件时意外重排 data=。还要求数据路径顺序面板已填充。"
+
+msgid "Skip .bak backup of openmw.cfg"
+msgstr "跳过 openmw.cfg 的 .bak 备份"
+
+msgid "Skip making a timestamped backup before overwriting openmw.cfg and/or an in-place customizations.toml. Not recommended."
+msgstr "在就地覆盖 openmw.cfg 和/或 customizations.toml 之前跳过创建带时间戳的备份。不推荐。"
+
+msgid "Skip mlox Conflict/Requires/Note warnings"
+msgstr "跳过 mlox 的 Conflict/Requires/Note 警告"
+
+msgid "Skip evaluating [Conflict]/[Requires]/[Note] rules against the sorted plugin list. This is purely informational and read-only either way -- it never changes the computed order or what gets written, only whether warnings get printed."
+msgstr "跳过针对已排序插件列表评估 [Conflict]/[Requires]/[Note] 规则。无论如何这纯粹是信息性的且只读 -- 它从不改变计算出的顺序或写入的内容, 只改变是否打印警告。"
+
+msgid "Create subset text document (on Scan)"
+msgstr "创建子集文本文档 (扫描时)"
+
+msgid "Controls what 'Scan...' does with its result. Checked: write the scanned list to a .txt subset file you choose, and load it (the file stays on disk for reuse). Unchecked: keep the scanned list in memory just for this session and feed it straight to the sort -- nothing is written to disk."
+msgstr "控制「扫描…」如何处理其结果。勾选: 将扫描出的列表写入你选择的子集 .txt 文件并加载它 (文件保留在磁盘上以便重用)。不勾选: 仅在本会话将扫描出的列表保留在内存中并直接传给排序 -- 不向磁盘写入任何内容。"
+
+msgid "Pull unmanaged (orphan) plugins from openmw.cfg"
+msgstr "从 openmw.cfg 拉取未管理 (孤立) 插件"
+
+msgid "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml. Their current cfg order is kept as the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are left exactly as openmw.cfg has them: they are already in the cfg's own data= order, and there is no reliable way to tell a path the list manages from one you added, so pulling them would reorder the whole VFS."
+msgstr "还排序 openmw.cfg 中「已」存在且无任何东西管理的 content= 插件 -- 既不属于精选列表 (plugin-order.yml) 也不属于你的 customizations.toml。它们当前的 cfg 顺序被保留为起点, 直到排序将其移动。基础主文件 (Morrowind/Tribunal/Bloodmoon) 永远不会被触及。可单独 (无需子集文件) 或与之一起工作。\n\ndata= 路径保持它们在 openmw.cfg 中的原样: 它们已在 cfg 自己的 data= 顺序中, 且没有可靠方法区分列表管理的路径和你添加的路径, 因此拉取它们会重排整个 VFS。"
+
+msgid "Exclude from conflict / cell scans:"
+msgstr "从冲突 / 单元格扫描中排除:"
+
+msgid "Declare as groundcover:"
+msgstr "声明为 groundcover:"
+
+msgid "Keep tes3conv JSON dump"
+msgstr "保留 tes3conv JSON 转储"
+
+msgid "Tidy old HTML views"
+msgstr "整理旧的 HTML 视图"
+
+msgid "Every conflict map, terrain view and path grid is written to its own timestamped file so you can compare two of them side by side -- which means they pile up, and one map can be several megabytes.\n\nChecked: on exit, the newest 3 of each kind are kept and older ones removed (with their data folders). Only files this tool generated are ever touched -- never anything you saved yourself with a name of your own choosing.\n\nUnchecked: nothing is ever deleted."
+msgstr "每个冲突地图、地形视图和路径网格都被写入各自的带时间戳文件, 以便你并排比较两个 -- 也就是说它们会累积, 一个地图可能有数兆字节。\n\n勾选: 退出时保留每种类型最新的 3 个, 较旧的 (连同其数据文件夹) 被删除。只触及此工具生成的文件 -- 绝不触及你以自己名称保存的内容。\n\n不勾选: 永不删除任何内容。"
+
+msgid "tes3conv conversions are written to disk (not held in RAM) and read per-plugin, so big load orders don't blow up memory. They always go to a 'tes3conv_json' folder next to the app and are reused within a run -- so Check Conflicts then Cell Map won't re-run tes3conv (a plugin is only re-converted if it changed). This box just decides what happens on exit: checked = keep that folder (reused next launch too); unchecked = delete it when you close the app."
+msgstr "tes3conv 转换被写入磁盘 (不保留在 RAM 中) 并逐插件读取, 以免大型加载顺序使内存膨胀。它们总是放入应用旁边的「tes3conv_json」文件夹并在运行内重用 -- 因此「检查冲突」之后再「单元格地图」不会重新运行 tes3conv (插件仅在更改时才重新转换)。此复选框只决定退出时会发生什么: 勾选 = 保留此文件夹 (下次运行也重用); 不勾选 = 关闭应用时删除。"
+
+msgid "Verbose Merged Lands log"
+msgstr "详细的 Merged Lands 日志"
+
+msgid "Checked: a Merge Lands run also names every plugin that carries a .mergedlands.toml and exactly what it sets (per layer: on/off and the conflict strategy), and lists every plugin it could not read -- rather than the headline counts. For working out why a merge did what it did.\n\nUnchecked: the normal summary log."
+msgstr "勾选: 合并地形运行还会列出携带 .mergedlands.toml 的每个插件及其确切设置 (逐层: 开/关和冲突策略), 并列出每个无法读取的插件 -- 而非基本计数。用于理解合并为何如此。\n\n不勾选: 普通汇总日志。"
+
+msgid "Log"
+msgstr "日志"
+
+msgid "Full output from the last Sort and/or Export. Color key: green = a plugin/path this sort inserted or moved, orange = a heads-up (mlox warning, or a rule your curated cfg order overrode), blue = a section header, bright red = an error worth checking. Plain text = frozen base rows left untouched. Colors follow the syntax highlighting theme picked below."
+msgstr "上次排序和/或导出的完整输出。颜色说明: 绿色 = 本次排序插入或移动的插件/路径, 橙色 = 通知 (mlox 警告, 或你的精选 cfg 顺序覆盖的规则), 蓝色 = 章节标题, 亮红色 = 值得检查的错误。普通文本 = 保持未改动的冻结基础行。颜色遵循下方选择的语法高亮主题。"
+
+msgid "Clear Log"
+msgstr "清除日志"
+
+msgid "Clear the log panel. Doesn't affect the order panels or any files."
+msgstr "清除日志面板。不影响顺序面板或任何文件。"
+
+msgid "Save Log As..."
+msgstr "将日志另存为…"
+
+msgid "Save the current log contents to a text file."
+msgstr "将当前日志内容保存到文本文件。"
+
+msgid "Theme:"
+msgstr "主题:"
+
+msgid "Color theme for the whole GUI: window/button colors, syntax highlighting here in the Log panel, and the field-diff JSON viewer (Check Conflicts -> double-click a field). Switching re-themes everything immediately, including any windows already open. Built-in: Dracula, Monokai, Atom One Dark, Gruvbox Dark, plus anything you've imported."
+msgstr "整个 GUI 的配色主题: 窗口/按钮颜色、此处日志面板中的语法高亮, 以及 JSON 字段差异查看器 (检查冲突 -> 双击字段)。切换会一次性重新着色所有内容, 包括已打开的窗口。内置: Dracula、Monokai、Atom One Dark、Gruvbox Dark, 以及你导入的任何主题。"
+
+msgid "Import Theme..."
+msgstr "导入主题…"
+
+msgid "Import a custom theme from a JSON file (background/foreground/select/section/warn/error/ok/inserted/dim as hex colors, plus an optional \"chrome\" object for explicit window/button colors) or a base16 scheme file (.yaml/.yml/.json with base00..base0F -- e.g. from the atelierbram/syntax-highlighting or chriskempson/base16 scheme repos). Window colors not given explicitly are derived from the background. Imported themes are saved and appear in the dropdown from then on."
+msgstr "从 JSON 文件 (background/foreground/select/section/warn/error/ok/inserted/dim 作为十六进制颜色, 外加用于窗口/按钮显式颜色的可选「chrome」对象) 或 base16 方案文件 (包含 base00..base0F 的 .yaml/.yml/.json -- 例如来自 atelierbram/syntax-highlighting 或 chriskempson/base16 库) 导入自定义主题。未显式设置的窗口颜色由背景推导。导入的主题会被保存, 此后出现在下拉菜单中。"
+
+msgid "Clear Memory"
+msgstr "清除内存"
+
+msgid "Forget every plugin/folder added by hand (drag-drop or the Add buttons) and any scan result held only in memory (not saved to a .txt) -- none of that is shown anywhere on screen, and it otherwise keeps accumulating for the rest of the session. Does not touch any files."
+msgstr "忘记每个手动添加的插件/文件夹 (拖放或添加按钮) 以及仅保留在内存中的任何扫描结果 (未保存到 .txt) -- 这些不会显示在屏幕上, 否则会累积到会话结束。不触及任何文件。"
+
+msgid "Help"
+msgstr "帮助"
+
+msgid "Open the program's own documentation -- the Quick start (what to click, in order) or the Read me (every option, in detail) -- rendered as a readable page with a contents sidebar. Works offline; nothing is downloaded."
+msgstr "打开程序自己的文档 -- 快速入门 (按顺序点击什么) 或「请阅读」(每个选项的详情) -- 作为带目录侧栏的易读页面。离线工作; 不下载任何内容。"
+
+msgid "Log syntax highlighting: %(name)s"
+msgstr "日志语法高亮: %(name)s"
+
+msgid "Import syntax highlighting theme"
+msgstr "导入语法高亮主题"
+
+msgid "Import failed"
+msgstr "导入失败"
+
+msgid "Couldn't import that theme:\n\n%(error)s"
+msgstr "无法导入该主题:\n\n%(error)s"
+
+msgid "Imported and applied theme: %(name)s"
+msgstr "已导入并应用主题: %(name)s"
+
+msgid "Theme imported"
+msgstr "已导入主题"
+
+msgid "Imported \"%(name)s\" and set it as the active log theme."
+msgstr "已导入「%(name)s」并将其设为活动日志主题。"
+
+msgid "Missing input"
+msgstr "缺少输入"
+
+msgid "Select the mods folder to scan"
+msgstr "选择要扫描的模组文件夹"
+
+msgid "Save generated subset file as"
+msgstr "将生成的子集文件另存为"
+
+msgid "Scanning mods folder..."
+msgstr "正在扫描模组文件夹…"
+
+msgid "Scan complete -- %(folders)d folder(s), %(plugins)d plugin(s). Subset file loaded."
+msgstr "扫描完成 -- 文件夹 %(folders)d 个, 插件 %(plugins)d 个。已加载子集文件。"
+
+msgid "Scan complete -- %(folders)d folder(s), %(plugins)d plugin(s). Held in memory (no file written)."
+msgstr "扫描完成 -- 文件夹 %(folders)d 个, 插件 %(plugins)d 个。保留在内存中 (未写入文件)。"
+
+msgid "Add plugin..."
+msgstr "添加插件…"
+
+msgid "Include a plugin the Scan missed -- e.g. one sitting outside a recognised mod folder. It joins your custom subset on the next Sort. You can also drag a plugin file onto the list above from your file manager."
+msgstr "包含扫描遗漏的插件 -- 例如位于可识别模组文件夹之外的插件。它将在下次排序时加入你的自定义子集。也可以从文件管理器将插件文件拖入上方列表。"
+
+msgid "(install tkinterdnd2 to drag a plugin in)"
+msgstr "(安装 tkinterdnd2 以拖入插件)"
+
+msgid "Add data folder..."
+msgstr "添加数据文件夹…"
+
+msgid "Include a folder the Scan missed -- e.g. an OpenMW Lua mod with a non-standard layout (no meshes/textures/... folder and no plugin). It joins your data paths on the next Sort; tick 'Sort data= paths too' to place it in the load order. You can also drag a folder onto the list above from your file manager."
+msgstr "包含扫描遗漏的文件夹 -- 例如布局非标准 (无 meshes/textures/… 文件夹且无插件) 的 OpenMW Lua 模组。它将在下次排序时加入你的数据路径; 勾选「也排序 data= 路径」可将其放入加载顺序。也可以从文件管理器将文件夹拖入上方列表。"
+
+msgid "(install tkinterdnd2 to drag a folder in)"
+msgstr "(安装 tkinterdnd2 以拖入文件夹)"
+
+msgid "Select a data folder to add"
+msgstr "选择要添加的数据文件夹"
+
+msgid "Select plugin(s) to add"
+msgstr "选择要添加的插件"
+
+msgid "Plugins"
+msgstr "插件"
+
+msgid "Added plugin"
+msgstr "已添加插件"
+
+msgid "Already added"
+msgstr "已添加"
+
+msgid "Added data folder"
+msgstr "已添加数据文件夹"
+
+msgid "  Tick 'Sort data= paths too' to place it."
+msgstr "  勾选「也排序 data= 路径」以放置它。"
+
+msgid "Not a plugin or folder: %(path)s"
+msgstr "既非插件也非文件夹: %(path)s"
+
+msgid "Nothing to clear."
+msgstr "没有可清除的内容。"
+
+msgid "%(n)d manual plugin(s)"
+msgstr "手动插件 %(n)d 个"
+
+msgid "%(n)d manual data folder(s)"
+msgstr "手动数据文件夹 %(n)d 个"
+
+msgid "the in-memory scan result"
+msgstr "内存中的扫描结果"
+
+msgid "Clear memory?"
+msgstr "清除内存?"
+
+msgid "This forgets everything added by hand this session and any scan result held in memory (not written to a subset file):\n\n%(summary)s\n\nThey will no longer be included on the next Sort. This does not touch the subset file field, remembered paths, or any file on disk. Continue?"
+msgstr "这会忘记本会话中手动添加的所有内容以及保留在内存中的任何扫描结果 (未保存到子集文件的):\n\n%(summary)s\n\n它们在下次排序时将不再被包含。这不触及子集文件字段、记住的路径或磁盘上的任何文件。是否继续?"
+
+msgid "Cleared: %(summary)s"
+msgstr "已清除: %(summary)s"
+
+msgid "%(what)s (%(n)d added, applied on Sort): %(value)s"
+msgstr "%(what)s (已添加 %(n)d 项, 排序时应用): %(value)s"
+
+msgid "Sorting..."
+msgstr "正在排序…"
+
+msgid ", %(count)d yml warning(s)"
+msgstr ", yml 警告 %(count)d 个"
+
+msgid "Sorted %(plugins)d plugin(s), %(warnings)d rule warning(s)%(yml)s. Drag to adjust, then Export."
+msgstr "已排序插件 %(plugins)d 个, 规则警告 %(warnings)d 个%(yml)s。拖动以调整, 然后导出。"
+
+msgid "openmw.cfg changed"
+msgstr "openmw.cfg 已更改"
+
+msgid "openmw.cfg has changed on disk since you ran '1. Sort' (did momw-configurator re-run?).\n\nThe order on screen was computed against the OLD contents. It's safer to re-Sort first.\n\nExport anyway?"
+msgstr "自你运行「1. 排序」以来, openmw.cfg 在磁盘上已更改 (是否重新运行了 momw-configurator?)。\n\n屏幕上的顺序是针对「旧」内容计算的。先重新排序更安全。\n\n仍要导出吗?"
+
+msgid "Overwrite customizations.toml?"
+msgstr "覆盖 customizations.toml?"
+
+msgid "This will overwrite:\n%(path)s\n\nin place%(note)s. Continue?"
+msgstr "这将就地覆盖:\n%(path)s\n\n%(note)s。是否继续?"
+
+msgid "Exporting..."
+msgstr "正在导出…"
+
+msgid "Export done -- cfg written: %(cfg)s, toml written: %(toml)s."
+msgstr "导出完成 -- 已写入 cfg: %(cfg)s, 已写入 toml: %(toml)s。"
+
+msgid "Building cell map..."
+msgstr "正在构建单元格地图…"
+
+msgid "\n\nThis REPLACES the existing %(name)s."
+msgstr "\n\n这将替换现有的 %(name)s。"
+
+msgid "Build Merged Lands.esp?"
+msgstr "构建 Merged Lands.esp?"
+
+msgid "A new plugin will be written to:\n%(path)s\n\nIt carries terrain only -- no references, objects or scripts -- so everything placed in those cells stays where it is. Your mods are NOT modified, and deleting the merged plugin restores your previous behaviour completely.\n\nLoad it LAST, and back up your saves before playing with it the first time.%(existing)s\n\nYes: write it here.   No: choose a different folder."
+msgstr "将写入一个新插件到:\n%(path)s\n\n它只携带地形 -- 无引用、物件或脚本 -- 因此放置在这些单元格中的一切都保持原位。你的模组「不会」被更改, 删除合并后的插件会完全恢复你之前的行为。\n\n请将其加载在「最后」, 并在首次使用它游玩前备份存档。%(existing)s\n\n是: 写入此处。   否: 选择其他文件夹。"
+
+msgid "Merging land..."
+msgstr "正在合并地形…"
+
+msgid "Folder not found"
+msgstr "未找到文件夹"
+
+msgid "%(path)s no longer exists. Please choose where to write."
+msgstr "%(path)s 不再存在。请选择写入位置。"
+
+msgid "Data Files not found"
+msgstr "未找到 Data Files"
+
+msgid "Could not work out which folder holds your plugins, so there is no sensible place to put the merged plugin. Use 'Merged Lands folder...' to choose one."
+msgstr "无法确定哪个文件夹存放你的插件, 因此没有合理的位置放置合并后的插件。请使用「Merged Lands 文件夹…」来选择它。"
+
+msgid "Where should Merged Lands.esp be written?"
+msgstr "Merged Lands.esp 应写入何处?"
+
+msgid "Not a data folder"
+msgstr "不是数据文件夹"
+
+msgid "%(path)s is not one of the folders OpenMW reads, so it will not find the merged plugin there.\n\nAdd this line to openmw.cfg:\n\ndata=\"%(path)s\"\n\nand put 'content=%(name)s' last."
+msgstr "%(path)s 不是 OpenMW 读取的文件夹之一, 因此它不会在那里找到合并后的插件。\n\n请将此行添加到 openmw.cfg:\n\ndata=\"%(path)s\"\n\n并将「content=%(name)s」放在最后。"
+
+msgid " MERGE LANDS"
+msgstr " 合并地形"
+
+msgid "Merge produced nothing to write."
+msgstr "合并未产生可写入的内容。"
+
+msgid "Merged Lands written: %(cells)d cell(s)."
+msgstr "已写入 Merged Lands: 单元格 %(cells)d 个。"
+
+msgid "Merge failed -- see log."
+msgstr "合并失败 -- 请查看日志。"
+
+msgid "%(contested)d vertex/vertices were edited by more than one mod; the later one in your load order won each."
+msgstr "%(contested)d 个顶点被多个模组编辑; 在你的加载顺序中后面的那个各自胜出。"
+
+msgid "%(major)d were blended far from a mod's intent where a .mergedlands.toml asked to Resolve."
+msgstr "%(major)d 处在 .mergedlands.toml 要求 Resolve 的位置被混合得远离了模组的意图。"
+
+msgid "Merged Lands built"
+msgstr "已构建 Merged Lands"
+
+msgid "Written to:\n%(path)s\n\nEnable it and place it LAST in your load order.\n\n%(cells)d land record(s), %(textures)d land texture(s).\n%(detail)s"
+msgstr "已写入:\n%(path)s\n\n请启用它并将其放在加载顺序的末尾。\n\n地形记录: %(cells)d 条, 地面纹理: %(textures)d 个。\n%(detail)s"
+
+msgid "Pick a plugin to write a .mergedlands.toml for"
+msgstr "选择要为其写入 .mergedlands.toml 的插件"
+
+msgid "Morrowind plugins"
+msgstr "Morrowind 插件"
+
+msgid "Existing .mergedlands.toml could not be read"
+msgstr "无法读取现有的 .mergedlands.toml"
+
+msgid "%(name)s will be replaced from defaults:\n\n%(err)s"
+msgstr "%(name)s 将从默认值替换:\n\n%(err)s"
+
+msgid "Merge settings: %(name)s"
+msgstr "合并设置: %(name)s"
+
+msgid "Choose how %(name)s's landscape edits merge. Uncheck a layer to keep this plugin from touching it; set a strategy for how its edits resolve where they collide with another mod. The defaults behave as if there were no file."
+msgstr "选择 %(name)s 的地形编辑如何合并。取消勾选某一层可阻止此插件触及它; 设置策略以确定其编辑在与另一模组冲突处如何解决。默认值表现得如同该文件不存在。"
+
+msgid "meta_type:"
+msgstr "meta_type:"
+
+msgid "Patch = a hand-written settings file (the usual choice). Auto = default behaviour. MergedLands marks a plugin the tool generated so a re-run ignores it -- do not set that on an ordinary mod."
+msgstr "Patch = 手写的设置文件 (通常的选择)。Auto = 默认行为。MergedLands 会标记工具生成的插件, 以便重新运行时忽略它 -- 请勿在普通模组上设置此项。"
+
+msgid "Layers"
+msgstr "图层"
+
+msgid "include"
+msgstr "包含"
+
+msgid "layer"
+msgstr "图层"
+
+msgid "conflict strategy"
+msgstr "冲突策略"
+
+msgid "Vertex heights -- and the normals stored with them."
+msgstr "顶点高度 -- 以及与之一起存储的法线。"
+
+msgid "Baked vertex colours (terrain lighting)."
+msgstr "烘焙的顶点颜色 (地形光照)。"
+
+msgid "Which land texture paints each square."
+msgstr "哪种地形纹理绘制每个方格。"
+
+msgid "The low-resolution world-map heightmap."
+msgstr "低分辨率的世界地图高度图。"
+
+msgid "Auto = later plugin wins for entries it changed Â· Overwrite = this plugin wins collisions Â· Ignore = keep the earlier edit Â· Resolve = blend conflicting numbers Â· Curvature = structure-weighted blend (ours)."
+msgstr "Auto = 对于它更改的条目, 后面的插件胜出 · Overwrite = 冲突中此插件胜出 · Ignore = 保留较早的编辑 · Resolve = 混合冲突的数值 · Curvature = 按结构加权的混合 (本工具方式)。"
+
+msgid "Preview:"
+msgstr "预览:"
+
+msgid "Write .mergedlands.toml"
+msgstr "写入 .mergedlands.toml"
+
+msgid "Could not write .mergedlands.toml"
+msgstr "无法写入 .mergedlands.toml"
+
+msgid "Wrote %(name)s."
+msgstr "已写入 %(name)s。"
+
+msgid "Merge settings written"
+msgstr "已写入合并设置"
+
+msgid "Wrote:\n%(path)s\n\nRun Merge Lands to apply it."
+msgstr "已写入:\n%(path)s\n\n运行合并地形以应用它。"
+
+msgid " CELL MAP"
+msgstr " 单元格地图"
+
+msgid "native esp reader"
+msgstr "原生 esp 读取器"
+
+msgid "  %(exterior)d exterior + %(interior)d interior cell(s) touched across %(scanned)d plugin(s)."
+msgstr "  跨 %(scanned)d 个插件, 影响外部单元格 %(exterior)d 个 + 室内单元格 %(interior)d 个。"
+
+msgid "  Map written to: %(path)s"
+msgstr "  地图已写入: %(path)s"
+
+msgid "Cell map ready (%(exterior)d exterior, %(interior)d interior)."
+msgstr "单元格地图已就绪 (外部 %(exterior)d 个, 室内 %(interior)d 个)。"
+
+msgid "Open in browser"
+msgstr "在浏览器中打开"
+
+msgid "(inline render failed -- use 'Open in browser'. The 3D and nav views need a real browser engine.)"
+msgstr "(内联渲染失败 -- 请使用「在浏览器中打开」。3D 和导航视图需要真正的浏览器引擎。)"
+
+msgid "Save HTML..."
+msgstr "保存 HTML…"
+
+msgid "(inline render failed - use 'Open in browser' for the full map)"
+msgstr "(内联渲染失败 -- 请使用「在浏览器中打开」查看完整地图)"
+
+msgid "Save cell map"
+msgstr "保存单元格地图"
+
+msgid "Cell map saved: %(path)s"
+msgstr "已保存单元格地图: %(path)s"
+
+msgid "If upstream moves or a new fork takes over, point the updaters at the new location here. Blank = built-in defaults. Downloads are always validated before anything is overwritten."
+msgstr "如果上游迁移或新的分支接管, 请在此为更新器指定新位置。留空 = 内置默认值。下载在覆盖任何内容之前始终会被验证。"
+
+msgid "mlox rules URL template:"
+msgstr "mlox 规则 URL 模板:"
+
+msgid "Where 'Update Rules...' downloads from. Must contain {name}, which is replaced with mlox_base.txt / mlox_user.txt per file.\nDefault: %(url)s"
+msgstr "「更新规则…」从何处下载。必须包含 {name}, 它会为每个文件替换为 mlox_base.txt / mlox_user.txt。\n默认: %(url)s"
+
+msgid "default: %(url)s"
+msgstr "默认: %(url)s"
+
+msgid "plugin-order.yml URL:"
+msgstr "plugin-order.yml URL:"
+
+msgid "Where the plugin-order.yml 'Update...' button downloads from. Blank tries the built-in candidates in order.\nDefault: %(url)s"
+msgstr "plugin-order.yml 的「更新…」按钮从何处下载。留空则按顺序尝试内置选项。\n默认: %(url)s"
+
+msgid "default: %(url)s..."
+msgstr "默认: %(url)s…"
+
+msgid "Download sources"
+msgstr "下载源"
+
+msgid "The rules URL template must contain {name} (it's replaced with the rule filename)."
+msgstr "规则 URL 模板必须包含 {name} (它会被替换为规则文件名)。"
+
+msgid "Reset to defaults"
+msgstr "重置为默认值"
+
+msgid "Save & Close"
+msgstr "保存并关闭"
+
+msgid "New mlox rule"
+msgstr "新建 mlox 规则"
+
+msgid "rules file:"
+msgstr "规则文件:"
+
+msgid "Personal rules file the rule is appended to (created with a header if new). Use your OWN file, not mlox_base/mlox_user -- those get overwritten by 'Update Rules...'. It's auto-added to the rule-files list LAST, so your rules win conflicts."
+msgstr "规则被追加到的个人规则文件 (若为新文件则带标题创建)。请使用「你自己的」文件, 而非 mlox_base/mlox_user -- 后者会被「更新规则…」覆盖。它会自动添加到规则文件列表的「最后」, 以便你的规则在冲突中胜出。"
+
+msgid "Rule type"
+msgstr "规则类型"
+
+msgid "Plugins (order matters for [Order])"
+msgstr "插件 (对 [Order] 而言顺序很重要)"
+
+msgid "From plugin panel"
+msgstr "从插件面板"
+
+msgid "Add the rows currently SELECTED in the main plugin-order panel, in their displayed order (Ctrl/Shift-click there to multi-select first)."
+msgstr "将主插件顺序面板中当前「选中」的行按其显示顺序添加 (Ctrl/Shift 单击以先选择多个)。"
+
+msgid "Group as ANY"
+msgstr "分组为 ANY"
+
+msgid "Wrap the SELECTED plugins in an [ANY ...] group, for a rule that is satisfied by whichever of several versions someone has installed -- the shape the guidelines use for mods with an XB edition, a Tribunal edition and so on.\n\nSelect the grouped entry and press again to ungroup."
+msgstr "将「选中」的插件包裹在 [ANY …] 组中, 用于由多个已安装版本中任意一个满足的规则 -- 指南用于 XB 版、Tribunal 版等模组的形式。\n\n选择已分组的条目并再次按下可取消分组。"
+
+msgid "Type a plugin filename and press Enter. mlox wildcards are allowed: ? for one character, * for any run, <VER> for a version number -- though the guidelines ask for these to be used sparingly, since expanding them is slow."
+msgstr "输入插件文件名并按 Enter。允许使用 mlox 通配符: ? 表示单个字符, * 表示任意序列, <VER> 表示版本号 -- 不过由于展开较慢, 指南建议节制使用。"
+
+msgid "Add"
+msgstr "添加"
+
+msgid "Message and source"
+msgstr "消息与来源"
+
+msgid "message:"
+msgstr "消息:"
+
+msgid "What to tell the person, and what to do about it. Ordering rules carry no message; the warning rules are much less useful without one.\n\nA message containing ']' is written in the block form automatically, because a ']' would otherwise close the rule label early."
+msgstr "告诉对方什么, 以及对此该做什么。排序规则不携带消息; 没有它的警告规则用处小得多。\n\n包含「]」的消息会自动以块形式写入, 因为「]」否则会过早关闭规则标签。"
+
+msgid "(Ref:) source:"
+msgstr "(引用:) 来源:"
+
+msgid "Where this rule's claim comes from: a readme filename, a forum post, a URL. The guidelines ask for one on every rule so that someone else can check it, or correct it.\n\nA URL gets whitespace before the closing parenthesis automatically -- pages that auto-link URLs otherwise swallow the ')' into the link."
+msgstr "此规则的主张来自何处: readme 文件名、论坛帖子、URL。指南要求每条规则都有此项, 以便他人可以核实或修正它。\n\nURL 会在右括号前自动加一个空格 -- 从 URL 自动生成链接的页面否则会把「)」吞进链接。"
+
+msgid "@section:"
+msgstr "@章节:"
+
+msgid "Optional heading written above the rule. The rule-base groups rules into sections, roughly one per mod, to keep the file navigable."
+msgstr "写在规则上方的可选标题。规则库将规则大致按每个模组一个章节分组, 以保持文件易于浏览。"
+
+msgid "highlight:"
+msgstr "高亮:"
+
+msgid "none"
+msgstr "无"
+
+msgid "%(mark)s = %(meaning)s"
+msgstr "%(mark)s = %(meaning)s"
+
+msgid "; comment:"
+msgstr "; 注释:"
+
+msgid "A ';' comment written above the rule. mlox strips these before reading."
+msgstr "写在规则上方的「;」注释。mlox 在读取前会剥离它们"
+
+msgid "Preview"
+msgstr "预览"
+
+msgid "Append rule"
+msgstr "追加规则"
+
+msgid "Write the rule to the file above. Refused while there is an error: mlox silently discards a rule it cannot use, so this is the only place you would find out.\n\nWarnings do not block -- they are the guidelines' advice, not the parser's requirements."
+msgstr "将规则写入上方文件。存在错误时会被拒绝: mlox 会静默丢弃它无法使用的规则, 因此这是你能得知此事的唯一地方。\n\n警告不会阻止 -- 那是指南的建议, 而非解析器的要求。"
+
+msgid "Rule guide"
+msgstr "规则指南"
+
+msgid "Open the rule reference: what each rule kind says, how expressions nest, and the conventions the rule-base follows.\n\nIt opens in your browser, so it can sit beside this window while you work."
+msgstr "打开规则参考: 每种规则类型的含义、表达式如何嵌套, 以及规则库遵循哪些约定。\n\n它在你的浏览器中打开, 因此可在你工作时并排放在此窗口旁。"
+
+msgid "No problems. This rule follows the guidelines.\n"
+msgstr "无问题。此规则符合指南。\n"
+
+msgid "Select row(s) in the plugin-order panel first."
+msgstr "请先在插件顺序面板中选择行。"
+
+msgid "Personal rules file"
+msgstr "个人规则文件"
+
+msgid "New rule"
+msgstr "新建规则"
+
+msgid "Set a rules file first."
+msgstr "请先设置规则文件。"
+
+msgid "Don't append personal rules to mlox_base.txt / mlox_user.txt -- 'Update Rules...' overwrites those. Pick your own file (e.g. mlox_my_rules.txt)."
+msgstr "请勿将个人规则追加到 mlox_base.txt / mlox_user.txt -- 「更新规则…」会覆盖它们。请选择你自己的文件 (例如 mlox_my_rules.txt)。"
+
+msgid "Rule conflicts with the curated order"
+msgstr "规则与精选顺序冲突"
+
+msgid "This [Order] rule contradicts the frozen curated (MOMW) order for:\n\n%(pairs)s\n\nmlox will DISCARD those orderings (it never reorders the curated list), so the rule won't take effect for them. Write it anyway?"
+msgstr "此 [Order] 规则与以下项的冻结精选 (MOMW) 顺序相矛盾:\n\n%(pairs)s\n\nmlox 会「丢弃」这些排序 (它从不重新排列精选列表), 因此规则对它们不起作用。仍要写入吗?"
+
+msgid "Rule appended to %(file)s. Re-run '1. Sort' to apply it."
+msgstr "规则已追加到 %(file)s。重新运行「1. 排序」以应用它。"
+
+msgid "Update %(name)s"
+msgstr "更新 %(name)s"
+
+msgid "Save %(name)s as"
+msgstr "将 %(name)s 另存为"
+
+msgid "the file doesn't exist yet -- it will be created"
+msgstr "文件尚不存在 -- 将被创建"
+
+msgid "your copy is ~%(days)d day(s) old"
+msgstr "你的副本约为 %(days)d 天前"
+
+msgid "Download the current %(name)s from MOMW?\n\n%(age)s.\n\nThe download is validated before anything is written; a timestamped .bak of the old file is kept."
+msgstr "从 MOMW 下载当前的 %(name)s?\n\n%(age)s。\n\n下载会在写入任何内容之前进行验证; 会保留旧文件的带时间戳 .bak 副本。"
+
+msgid "Downloading %(name)s..."
+msgstr "正在下载 %(name)s…"
+
+msgid "Run '1. Sort' first so there's a load order to check against."
+msgstr "请先运行「1. 排序」, 以便有可对照检查的加载顺序。"
+
+msgid "Choose an OpenMW save"
+msgstr "选择 OpenMW 存档"
+
+msgid "Save check failed: %(error)s"
+msgstr "保存检查失败: %(error)s"
+
+msgid "Save check: %(count)d missing dependency! See the log."
+msgid_plural "Save check: %(count)d missing dependencies! See the log."
+msgstr[0] "保存检查: 缺少依赖项 %(count)d 个! 请查看日志。"
+
+msgid "Save Check"
+msgstr "保存检查"
+
+msgid "Save check: all %(count)d dependencies present."
+msgstr "保存检查: 所有依赖项均存在 (%(count)d 个)。"
+
+msgid "%(file)s: all %(count)d content files it needs are in the current load order. Safe to export."
+msgstr "%(file)s: 它所需的全部内容文件 (%(count)d 个) 都在当前加载顺序中。可以安全导出。"
+
+msgid "Quick start"
+msgstr "快速入门"
+
+msgid "Read me"
+msgstr "请阅读"
+
+msgid "Writing mlox rules"
+msgstr "正在写入 mlox 规则"
+
+msgid "Documentation not found"
+msgstr "未找到文档"
+
+msgid "%(name)s was not found next to the program.\n\nIt ships alongside the app; if this is a build made without it, the same document is in the project folder."
+msgstr "在程序旁边未找到 %(name)s。\n\n它随应用一起分发; 如果这是不含它的构建, 相同的文档在项目文件夹中。"
+
+msgid "Could not open documentation"
+msgstr "无法打开文档"
+
+msgid "%(name)s could not be rendered:\n%(error)s"
+msgstr "无法渲染 %(name)s:\n%(error)s"
+
+msgid "Set openmw.cfg (or run a Sort) so I know where to look."
+msgstr "请设置 openmw.cfg (或运行排序), 以便我知道去哪里查找。"
+
+msgid "Scanning for backups..."
+msgstr "正在扫描备份…"
+
+msgid "Found %(count)d backup file."
+msgid_plural "Found %(count)d backup files."
+msgstr[0] "找到备份文件 %(count)d 个。"
+
+msgid "Backup scan failed: %(error)s"
+msgstr "备份扫描失败: %(error)s"
+
+msgid "%(count)d backup file. Restore copies the backup over its original; Delete removes the backup file itself."
+msgid_plural "%(count)d backup files. Restore copies the backup over its original; Delete removes the backup file itself."
+msgstr[0] "备份文件 %(count)d 个。还原会将备份覆盖到其原始文件上; 删除会移除备份文件本身。"
+
+msgid "Restore"
+msgstr "还原"
+
+msgid "Copy %(count)d backup over its original (overwriting it)?"
+msgid_plural "Copy %(count)d backups over their originals (overwriting them)?"
+msgstr[0] "将 %(count)d 个备份覆盖到其原始文件上 (覆盖它)?"
+
+msgid "Restored %(count)d backup%(failed)s. Re-run '1. Sort' to refresh checks."
+msgid_plural "Restored %(count)d backups%(failed)s. Re-run '1. Sort' to refresh checks."
+msgstr[0] "已还原备份 %(count)d 个%(failed)s。重新运行「1. 排序」以刷新检查。"
+
+msgid ", %(fail)d failed"
+msgstr ", 失败 %(fail)d 个"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Permanently delete %(count)d backup file?"
+msgid_plural "Permanently delete %(count)d backup files?"
+msgstr[0] "永久删除备份文件 %(count)d 个?"
+
+msgid "Deleted %(count)d backup file."
+msgid_plural "Deleted %(count)d backup files."
+msgstr[0] "已删除备份文件 %(count)d 个。"
+
+msgid "Restore Selected"
+msgstr "还原所选"
+
+msgid "Delete Selected"
+msgstr "删除所选"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Linting plugins..."
+msgstr "正在对插件进行 lint…"
+
+msgid " LINT (tes3lint-style checks, native)"
+msgstr " LINT (tes3lint 风格检查, 原生)"
+
+msgid "\n  No lint findings. Clean bill of health."
+msgstr "\n  无 lint 发现。一切正常。"
+
+msgid "Lint: %(count)d finding. See the log."
+msgid_plural "Lint: %(count)d findings. See the log."
+msgstr[0] "Lint: 发现 %(count)d 个。请查看日志。"
+
+msgid "Lint: no findings."
+msgstr "Lint: 无发现。"

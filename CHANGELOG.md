@@ -1,6 +1,74 @@
 # Changelog
 
 
+## 3.1.8
+
+Editing meshes, not just reading them. The NIF writer added in 3.1.7 had no
+caller outside its own tests; this release puts it to work behind an editing
+layer that changes one value inside a block and writes the file back, with every
+other block and all the framing preserved byte-for-byte.
+
+### Added
+
+- **A NIF editing layer, `wraithguard.nif.edit`.** Built on a new
+  `field_spans()` that reports where each field sits inside a block, so an edit
+  is a splice into the block's retained bytes rather than a full re-encode -- an
+  untouched field is copied through verbatim, so only the bytes asked for can
+  change, and a field that grows or shrinks (a longer texture path) is fine
+  because NIF blocks carry no internal length. `set_field` writes any scalar or
+  string field, refusing -- via a re-parse check -- one that decides the size of
+  a later field (a count, an array's `has_*` flag), which cannot be changed on
+  its own without desynchronising the block. `field_views` describes a block's
+  fields for an editor: name, kind, value, and whether each is editable. Around
+  these sit the specific edits -- `set_string_field`, texture-path helpers,
+  `translate_vertices` / `translate_all_vertices` (moving the bounding-sphere
+  centre with the vertices) -- and `apply_edits`, which runs a list of edits
+  against a mesh's bytes and writes it back. Everything returns new frozen
+  objects; unedited, a read/write round trip stays byte-exact.
+
+- **Translations, and a translation pipeline.** `tools/build_locale.py`
+  builds a language's gettext catalogue from the template and a
+  `locale/translations/<lang>.json` (English source to translation), standard
+  library only so it works where GNU `msgfmt` is not installed. It refuses to
+  build a translation that drops a `%(placeholder)s` or gives a plural the wrong
+  number of forms -- a wrong translation can crash in one language only, so it is
+  caught at build time, not run time. All eleven languages -- German, French,
+  Spanish, Italian, Portuguese, Russian, Polish, Japanese, Korean, Chinese and
+  Arabic -- ship complete (all 797 strings, plurals and all). The app discovers
+  any compiled catalogue, and an untranslated string falls back to English.
+  Plural rules for de/fr/es/it/pt/ru/pl, Arabic's six forms, and the no-plural
+  ja/ko/zh are in place. Machine-drafted, for native review.
+
+- **Right-to-left layout for Arabic.** A new `wraithguard/gui/rtl.py` turns the
+  interface around when the active language reads right-to-left. The theme setup
+  flips the Tk option database and ttk styles so every label, entry and button
+  right-aligns without touching its construction site; the conflict, plugin,
+  patch and journal tables mirror their column and heading anchors (a numeric
+  column stays end-aligned by moving left); and tooltips justify to the reading
+  edge. The split is deliberate: the direction *logic* -- `active_is_rtl` and the
+  `flip_anchor` / `flip_side` / `flip_sticky` / `start_anchor` helpers -- lives
+  in `wraithguard/rtl.py` with no Tk dependency, so it is unit-tested and
+  100%-covered by the hermetic suite; only the three Tk appliers sit in
+  `wraithguard/gui/rtl.py`, covered by the xvfb smoke run like the rest of the
+  GUI. Every helper is a no-op in a left-to-right language, so the wiring costs
+  the other ten nothing. Tk does not reorder bidirectional glyph runs, so this
+  fixes alignment and widget geometry, not glyph-level BiDi.
+
+- **An editable mesh view.** The 3D mesh viewer's block tree is now selectable:
+  click a block and an inspector on the right shows its fields, grouped into
+  editable properties and read-only structure, each with the right control -- a
+  number box, a text box, a toggle. Edits are collected and saved with one
+  button, which downloads the rewritten `.nif`. The editing runs over the same
+  loopback server the viewer already uses: the page POSTs the edit list to a new
+  handler that applies it with the layer above and returns the file, so nothing
+  is written until the user saves, and the source (which may sit inside a `.bsa`)
+  is never touched. Reached by "Edit mesh..." on a selected mesh conflict, and
+  from the record-conflict side too: a record's "View mesh..." opens editable
+  when it resolves to a single mesh (a side-by-side comparison of two stays
+  read-only, since the inspector's block indices belong to one tree). The
+  read-only viewer and the standalone exported page are unchanged.
+
+
 ## 3.1.7
 
 The theme of this release is **self-sufficiency**: the toolkit no longer needs

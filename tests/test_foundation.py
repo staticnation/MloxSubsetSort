@@ -90,6 +90,46 @@ class TestConsoleOutput:
 
         assert stream.getvalue().count("once") == 1
 
+    def test_setup_without_force_keeps_existing_handlers(self):
+        """``force=False`` adds configuration without tearing down what is there."""
+        stream = io.StringIO()
+        setup_logging(verbosity=1, stream=stream, force=True)
+        before = len(logging.getLogger("wraithguard").handlers)
+        setup_logging(verbosity=1, stream=io.StringIO(), force=False)
+        after = len(logging.getLogger("wraithguard").handlers)
+        assert after >= before  # nothing was removed
+
+
+class TestAddLogHandler:
+    """Attaching an extra handler, e.g. a GUI log pane."""
+
+    def test_a_handler_without_a_level_is_added_as_is(self):
+        """With no level given and a NOTSET handler, the root level is untouched."""
+        from wraithguard.logging_setup import add_log_handler
+
+        setup_logging(verbosity=0, stream=io.StringIO())
+        root = logging.getLogger("wraithguard")
+        handler = logging.NullHandler()  # level 0 (NOTSET)
+        try:
+            add_log_handler(handler)  # level=None -> no setLevel, no root lowering
+            assert handler in root.handlers
+        finally:
+            root.removeHandler(handler)
+
+    def test_a_lower_handler_level_lowers_the_root(self):
+        """A handler wanting more detail than the root pulls the root down to it."""
+        from wraithguard.logging_setup import add_log_handler
+
+        setup_logging(verbosity=0, stream=io.StringIO())  # root at WARNING
+        root = logging.getLogger("wraithguard")
+        handler = logging.NullHandler()
+        try:
+            add_log_handler(handler, level=LogLevel.DEBUG)
+            assert handler.level == LogLevel.DEBUG
+            assert root.level <= LogLevel.DEBUG
+        finally:
+            root.removeHandler(handler)
+
 
 class TestFileOutput:
     def test_file_captures_debug_even_when_console_is_quiet(self, tmp_path: Path):

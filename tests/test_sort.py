@@ -202,3 +202,90 @@ class TestCaseInsensitivity:
         """OpenMW's VFS is case-insensitive, so 'a.esp' and 'A.esp' are one file."""
         result = build_and_sort(BASE, ["a.esp"], [], {"a.esp": VANILLA})
         assert sorted(result) == sorted(BASE)
+
+    def test_two_differently_cased_duplicates_collapse_to_one(self, capsys):
+        """Two subset spellings of one cfg plugin canonicalise and de-duplicate."""
+        result = build_and_sort(["Morrowind.esm"], ["morrowind.esm", "MORROWIND.ESM"], [], {})
+        assert result == ["Morrowind.esm"]
+
+
+class TestRuleEdgeCorners:
+    """Degenerate rule shapes the engine must tolerate without misbehaving."""
+
+    def test_a_rule_naming_one_plugin_twice_adds_no_self_edge(self, capsys):
+        """A rule with the same plugin on both sides is a no-op, not a self-loop."""
+        result = build_and_sort(BASE, [], [(["A.esp", "A.esp"], 0)], {})
+        assert result == BASE
+
+    def test_a_repeated_conflicting_rule_is_reported_once(self, capsys):
+        """Two identical rules that would each close the same cycle dedupe to one."""
+        subset = ["S.esp"]
+        masters = {"s.esp": VANILLA}
+        rules = [
+            (["S.esp", "A.esp"], 2),  # S before A -- added
+            (["A.esp", "S.esp"], 1),  # A before S -- rejected, would cycle
+            (["A.esp", "S.esp"], 0),  # the same rejected edge again
+        ]
+        build_and_sort(BASE, subset, rules, masters)
+        out = capsys.readouterr().out
+        # The single deduped "not applied" report, not one per repeated rule.
+        assert out.count("not applied") == 1
+
+    def test_the_after_anchor_keeps_the_furthest_predecessor(self, capsys):
+        """With two predecessors, the later-but-nearer one is not a better anchor.
+
+        Predecessors are visited alphabetically; here that order runs opposite to
+        base position, so the second candidate is rejected as no improvement.
+        """
+        base = ["Morrowind.esm", "Zebra.esp", "Apple.esp"]
+        masters = {"p.esp": ["Morrowind.esm", "Zebra.esp", "Apple.esp"]}
+        result = build_and_sort(base, ["P.esp"], [], masters)
+        assert result.index("P.esp") > result.index("Apple.esp")
+
+    def test_the_before_anchor_keeps_the_earliest_successor(self, capsys):
+        """Symmetric: a later successor that sits further along is no improvement."""
+        base = ["Morrowind.esm", "Apple.esp", "Zebra.esp"]
+        rules = [(["P.esp", "Apple.esp"], 0), (["P.esp", "Zebra.esp"], 0)]
+        result = build_and_sort(base, ["P.esp"], rules, {"p.esp": VANILLA})
+        assert result.index("P.esp") < result.index("Apple.esp")
+
+    def test_a_custom_derived_from_another_custom_settles(self, capsys):
+        """A custom mastering another custom resolves through the position fixpoint."""
+        subset = ["P.esp", "Q.esp"]
+        # C.esp precedes A.esp among P's masters so the *later* master gives a
+        # lower position -- exercising the "not a better anchor" tie-break.
+        masters = {
+            "p.esp": ["Morrowind.esm", "C.esp", "A.esp"],
+            "q.esp": ["Morrowind.esm", "P.esp"],
+        }
+        result = build_and_sort(BASE, subset, [], masters)
+        assert result.index("P.esp") < result.index("Q.esp")
+        assert sorted(result) == sorted(BASE + subset)
+
+
+class TestNearAnchorsAreRecorded:
+    def test_a_near_start_hint_is_written_to_anchor_out(self, capsys):
+        """A custom plugin hinted near-start is recorded as such for the report."""
+        anchors: dict = {}
+        build_and_sort(
+            BASE,
+            ["Custom.esp"],
+            [],
+            {"custom.esp": VANILLA},
+            nearstart=["Custom.esp"],
+            anchor_out=anchors,
+        )
+        assert anchors["custom.esp"] == ("nearstart", None)
+
+    def test_a_near_end_hint_is_written_to_anchor_out(self, capsys):
+        """The symmetric near-end case is recorded too."""
+        anchors: dict = {}
+        build_and_sort(
+            BASE,
+            ["Custom.esp"],
+            [],
+            {"custom.esp": VANILLA},
+            nearend=["Custom.esp"],
+            anchor_out=anchors,
+        )
+        assert anchors["custom.esp"] == ("nearend", None)

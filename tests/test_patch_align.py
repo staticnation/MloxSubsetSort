@@ -71,6 +71,16 @@ class TestWhatIdentifiesAnEntry:
         entry = {"mast_index": 1, "refr_index": 7294, "id": "apelles matius"}
         assert label_for("references", entry) == "apelles matius"
 
+    def test_a_bare_string_entry_is_its_own_identity(self) -> None:
+        """A plain string list entry is already the key."""
+        assert identity("scripts", "my_script") == "my_script"
+
+    def test_an_unserialisable_entry_falls_back_to_repr(self) -> None:
+        """A value JSON cannot encode still yields a stable key via repr."""
+        key = identity("odd", frozenset({1, 2}))
+        assert key == identity("odd", frozenset({1, 2}))
+        assert "frozenset" in key
+
 
 class TestTheInsertionThatBreaksOrdinalDiffs:
     """The case the module exists for."""

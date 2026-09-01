@@ -248,6 +248,42 @@ class TestBc4AndBc5:
         assert (red, green, blue) == (200, 200, 200)
         assert alpha == 255
 
+    def test_bc4_truncated_before_a_block_is_refused(self) -> None:
+        """A BC4 surface too short for its first block fails as a finding."""
+        with pytest.raises(DdsError, match="BC4 data ends early"):
+            read_dds(dds(b"ATI1", 4, 4, b"\x00\x00\x00\x00"))  # needs 8 bytes, has 4
+
+    def test_bc5_truncated_before_a_block_is_refused(self) -> None:
+        """A BC5 surface too short for its first 16-byte block fails as a finding."""
+        with pytest.raises(DdsError, match="BC5 data ends early"):
+            read_dds(dds(b"ATI2", 4, 4, b"\x00" * 8))  # needs 16 bytes, has 8
+
+    def test_a_dx10_format_with_no_fourcc_mapping_is_refused(self) -> None:
+        """A DXGI number that is neither refused nor mapped cannot be decoded."""
+        with pytest.raises(DdsError, match="unsupported DXGI format 200"):
+            read_dds(dx10_dds(200, 4, 4, bytes(16)))
+
+    def test_a_dx10_header_that_is_truncated_is_a_finding_not_a_struct_error(self) -> None:
+        """A DX10 tag with no extension header degrades to a DdsError."""
+        with pytest.raises(DdsError):
+            read_dds(dds(b"DX10", 4, 4, b""))  # no DX10 extension bytes follow
+
+    def test_a_luminance_surface_without_a_mask_decodes_to_grey(self) -> None:
+        """A luminance format with no explicit mask is treated as full-depth grey."""
+        image = read_dds(
+            dds(
+                b"\x00\x00\x00\x00",
+                2,
+                2,
+                bytes([128, 128, 128, 128]),
+                pf_flags=0x20000,  # _DDPF_LUMINANCE
+                bit_count=8,
+                masks=(0, 0, 0, 0),
+            )
+        )
+        red, green, blue, _alpha = image.pixel(0, 0)
+        assert red == green == blue
+
     def test_bc5_reconstructs_blue_from_the_two_stored_channels(self) -> None:
         """A flat normal must come back pointing straight out of the surface.
 
@@ -759,3 +795,93 @@ class TestRemainingRefusals:
         """A surface that is neither compressed, RGB, nor luminance."""
         with pytest.raises(DdsError, match="pixel format"):
             read_dds(dds(b"\x00\x00\x00\x00", 2, 2, b"\x00" * 16, pf_flags=0x200))
+
+
+class TestReaderFormatDispatch:
+    """The format enum's capability flags, and read_image's dispatch/refusals."""
+
+    def test_decodable_flags_the_formats_we_turn_into_pixels(self) -> None:
+        """DDS/BMP/TGA decode here; PNG/TIFF/unknown do not."""
+        assert ImageFormat.DDS.decodable
+        assert not ImageFormat.PNG.decodable
+
+    def test_browser_native_flags_what_a_browser_shows_untouched(self) -> None:
+        """PNG and BMP are handed over as-is; DDS is not."""
+        assert ImageFormat.PNG.browser_native
+        assert not ImageFormat.DDS.browser_native
+
+    def test_looks_like_tga_rejects_too_short_data(self) -> None:
+        """A buffer too short to hold a TGA header is not a TGA."""
+        from wraithguard.images.reader import _looks_like_tga
+
+        assert _looks_like_tga(b"short") is False
+
+    def test_read_image_refuses_png(self) -> None:
+        """PNG decoding is intentionally not implemented."""
+        with pytest.raises(ImageError, match="PNG"):
+            read_image(b"\x89PNG\r\n\x1a\n" + b"\x00" * 20)
+
+    def test_read_image_refuses_tiff(self) -> None:
+        """TIFF is not a format the viewer decodes."""
+        with pytest.raises(ImageError, match="TIFF"):
+            read_image(b"II*\x00" + b"\x00" * 20)
+
+    def test_read_image_refuses_an_unrecognised_format(self) -> None:
+        """Bytes matching no known signature are refused, not guessed at."""
+        with pytest.raises(ImageError, match="unrecognised"):
+            read_image(b"not any known image header at all")
+
+    def test_read_image_decodes_a_targa(self) -> None:
+        """A real TGA is dispatched to the Targa decoder and returns pixels."""
+        image = read_image(tga(1, 1, bytes((10, 20, 30, 40))))
+        assert image.width == 1
+        assert image.height == 1
+
+    def test_looks_like_tga_accepts_a_real_header(self) -> None:
+        """A well-formed TGA header passes the field checks, not just the footer."""
+        from wraithguard.images.reader import _looks_like_tga
+
+        assert _looks_like_tga(tga(1, 1, bytes((10, 20, 30, 40)))) is True
+
+    def test_looks_like_tga_accepts_the_v2_footer(self) -> None:
+        """A TGA 2.0 footer signature is recognised even without a valid header."""
+        from wraithguard.images.reader import _TGA_FOOTER, _looks_like_tga
+
+        assert _looks_like_tga(b"\x00" * 10 + _TGA_FOOTER + b"\x00") is True
+
+    def test_browser_image_reraises_for_an_undisplayable_format(self) -> None:
+        """An unrecognised, non-browser-native blob cannot be shown, so it raises."""
+        from wraithguard.images import browser_image
+
+        with pytest.raises(ImageError):
+            browser_image(b"not any known image header at all")
+
+
+class TestTextureRoleClassification:
+    """The role properties and the ``classify`` precedence rules."""
+
+    def test_is_color_excludes_normal_maps_and_masks(self) -> None:
+        """A side-by-side colour view means something only for colour textures."""
+        assert TextureRole.DIFFUSE.is_color
+        assert not TextureRole.NORMAL.is_color
+
+    def test_carries_height_is_the_normal_family_only(self) -> None:
+        """Alpha holds parallax height only in the normal-map roles."""
+        assert TextureRole.NORMAL.carries_height
+        assert not TextureRole.DIFFUSE.carries_height
+
+    def test_role_from_name_without_an_extension_is_unknown(self) -> None:
+        """A bare stem with no recognised suffix carries no opinion."""
+        assert role_from_name("tx_rock") is TextureRole.UNKNOWN
+
+    def test_classify_falls_through_an_unrecognised_osg_unit(self) -> None:
+        """An OSG unit name that states no role does not veto the name evidence."""
+        assert classify("tx_n.dds", osg_name="mysteryunit") is TextureRole.NORMAL
+
+    def test_classify_prefers_a_normal_suffix_over_a_base_slot(self) -> None:
+        """A normal-map name in a diffuse slot is a normal map, not a photograph."""
+        assert classify("tx_n.dds", slot="base") is TextureRole.NORMAL
+
+    def test_classify_honours_a_non_diffuse_slot_over_a_bare_name(self) -> None:
+        """A slot the engine reads wins over a name that carries no opinion."""
+        assert classify("tx.dds", slot="glow") is TextureRole.GLOW

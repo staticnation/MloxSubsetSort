@@ -22,8 +22,8 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from wraithguard.nif.bsa import BsaArchive
-from wraithguard.nif.vfs import archives_in, forget_archives, read_mesh
+from wraithguard.nif.bsa import BsaArchive, BsaError
+from wraithguard.nif.vfs import archives_in, forget_archives, read_mesh, read_mesh_bytes
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -87,6 +87,41 @@ def _clean_archive_cache() -> None:
     forget_archives()
 
 
+class TestReadMeshBytes:
+    """``read_mesh_bytes`` resolves the same way as ``read_mesh``, returning bytes.
+
+    The editor needs the raw bytes, not a parsed file: it reads them with
+    ``retain=True``, changes a field and writes them back. It must therefore find
+    a mesh in the same three places -- loose, loose by normalised name, or in a
+    ``.bsa`` -- and raise the same "looked in both" error when it is nowhere.
+    """
+
+    def test_reads_a_loose_file_directly(self, tmp_path: Path) -> None:
+        """A file that exists at the exact path is returned verbatim."""
+        loose = tmp_path / "meshes" / "x.nif"
+        loose.parent.mkdir(parents=True)
+        loose.write_bytes(MINIMAL_NIF)
+        assert read_mesh_bytes(tmp_path, "meshes/x.nif") == MINIMAL_NIF
+
+    def test_matches_a_loose_file_by_case_and_separator(self, tmp_path: Path) -> None:
+        """A differing case/separator resolves through the loose index."""
+        loose = tmp_path / "meshes" / "B" / "Head.NIF"
+        loose.parent.mkdir(parents=True)
+        loose.write_bytes(MINIMAL_NIF)
+        assert read_mesh_bytes(tmp_path, "meshes\\b\\head.nif") == MINIMAL_NIF
+
+    def test_reads_bytes_from_an_archive(self, tmp_path: Path) -> None:
+        """A mesh that is only inside a ``.bsa`` is read from it."""
+        build_bsa(tmp_path / "Morrowind.bsa", {"meshes\\arch.nif": MINIMAL_NIF})
+        assert read_mesh_bytes(tmp_path, "meshes/arch.nif") == MINIMAL_NIF
+
+    def test_missing_everywhere_raises_with_both_places_named(self, tmp_path: Path) -> None:
+        """A mesh in neither the folder nor its archives is an ``OSError``."""
+        build_bsa(tmp_path / "Morrowind.bsa", {"meshes\\other.nif": MINIMAL_NIF})
+        with pytest.raises(OSError, match="not in"):
+            read_mesh_bytes(tmp_path, "meshes/missing.nif")
+
+
 class TestTheArchiveIsTried:
     """A mesh inside a ``.bsa`` must open exactly like a loose one."""
 
@@ -97,6 +132,7 @@ class TestTheArchiveIsTried:
         opened = BsaArchive(archive)
         assert len(opened) == 1
         assert opened.read("meshes/b/b_n_argonian_m_head_02.nif") == MINIMAL_NIF
+        assert opened.names == ["meshes/b/b_n_argonian_m_head_02.nif"]
 
     def test_an_archived_mesh_is_found(self, tmp_path: Path) -> None:
         """The exact case from the report: vanilla mesh, no loose file."""
@@ -144,3 +180,31 @@ class TestTheArchiveIsTried:
         first = archives_in(tmp_path)
         second = archives_in(tmp_path)
         assert first is second
+
+
+class TestBsaIndexingEdges:
+    """Corners of the low-level archive reader."""
+
+    def test_an_entry_with_an_empty_name_is_skipped(self, tmp_path: Path) -> None:
+        """A blank name is not a real file and is left out of the index."""
+        path = tmp_path / "blank.bsa"
+        build_bsa(path, {"": b"junk", "meshes\\real.nif": MINIMAL_NIF})
+        archive = BsaArchive(path)
+        assert archive.read("meshes/real.nif") == MINIMAL_NIF
+        assert archive.read("") is None  # the blank entry never entered the index
+
+    def test_indexing_a_path_that_cannot_be_opened_is_reported(self, tmp_path: Path) -> None:
+        """An unreadable archive path surfaces as a BsaError, not an OSError."""
+        directory = tmp_path / "not-a-file.bsa"
+        directory.mkdir()  # opening a directory as a file raises OSError
+        with pytest.raises(BsaError, match="cannot read"):
+            BsaArchive(directory)
+
+    def test_reading_after_the_archive_disappears_is_reported(self, tmp_path: Path) -> None:
+        """A file removed between indexing and reading is a BsaError."""
+        path = tmp_path / "vanishing.bsa"
+        build_bsa(path, {"meshes\\x.nif": MINIMAL_NIF})
+        archive = BsaArchive(path)
+        path.unlink()
+        with pytest.raises(BsaError, match="cannot read"):
+            archive.read("meshes/x.nif")

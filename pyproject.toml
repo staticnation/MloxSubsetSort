@@ -57,7 +57,7 @@ wraithguard = ["py.typed"]
 # below and wraithguard.__version__ never drift apart.
 [project]
 name = "wraithguard-toolkit"
-version = "3.1.7"
+version = "3.1.8"
 description = "Sort your own Morrowind mods into a frozen MOMW load order."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -284,6 +284,7 @@ ignore = [
 # constructed; no shell, no user string interpolation.
 "wraithguard/gui/theme.py" = ["PERF203"]
 "wraithguard/gui/widgets.py" = ["PERF203"]
+"wraithguard/gui/rtl.py" = ["PERF203"]
 "wraithguard/gui/t3.py" = ["PERF203", "S603"]
 "wraithguard/gui/conflicts.py" = ["PERF203", "S603"]
 

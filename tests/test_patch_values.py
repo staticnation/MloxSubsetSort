@@ -98,6 +98,22 @@ class TestTypedByKind:
     def test_a_flags_kind_is_a_verbatim_string(self) -> None:
         assert parse_typed_value("SILVER | 0x8", "flags:WeaponFlags") == "SILVER | 0x8"
 
+    def test_a_non_number_for_a_float_kind_is_refused(self) -> None:
+        with pytest.raises(PatchError, match="not a number"):
+            parse_typed_value("abc", "float")
+
+    def test_an_unrecognised_bool_word_is_refused(self) -> None:
+        with pytest.raises(PatchError, match="true/false"):
+            parse_typed_value("maybe", "bool")
+
+    def test_a_list_kind_rejects_invalid_json(self) -> None:
+        with pytest.raises(PatchError, match="not valid JSON"):
+            parse_typed_value("{not json", "list")
+
+    def test_a_list_kind_rejects_a_non_array(self) -> None:
+        with pytest.raises(PatchError, match="JSON array"):
+            parse_typed_value("42", "list")
+
     def test_a_str_kind_keeps_spaces(self) -> None:
         assert parse_typed_value("  keep  ", "str") == "  keep  "
 

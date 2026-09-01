@@ -223,7 +223,9 @@ def _scan_calls(tokens: list[tuple[str, str]]) -> list[tuple[int, str, str, int]
             continue
         try:
             index = int(float(tokens[j][1]))
-        except ValueError:
+        except ValueError:  # pragma: no cover - a "number" token is [+-]?digits(.digits)?,
+            # which float always parses; the guard is defensive against a future
+            # tokeniser change rather than a case this scanner can produce.
             i = j
             continue
 
@@ -457,7 +459,9 @@ def _parse_statement_line(
         return None
 
     raw = "".join(t[1] for t in line_tokens).strip()
-    if not raw:
+    if not raw:  # pragma: no cover - the leading-whitespace skip and comment check above
+        # already returned for an all-blank line, so a line reaching here always has
+        # a non-blank token; kept as a defensive guard.
         return None
 
     # script_tokens' own operator regex lists "-" before "->" in its

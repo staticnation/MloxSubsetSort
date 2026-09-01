@@ -110,7 +110,7 @@ def _compress(raw: bytes) -> bytes:
 
     try:
         import zstandard
-    except ImportError as exc:
+    except ImportError as exc:  # pragma: no cover - both zstd backends absent; one is always present in CI
         raise EmitError(
             "writing a merged plugin needs zstd, which is not available. "
             "tes3conv's reader decompresses every landscape field without "

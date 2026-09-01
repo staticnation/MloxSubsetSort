@@ -418,6 +418,48 @@ class TestDryRunVsRealWrite:
                 tmp_path / "out.esp",
             )
 
+    def test_a_successful_write_is_reported_with_the_output_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A returncode-0 run that leaves a file behind reports the written path.
+
+        The converter is faked so the success path is exercised without a real
+        tes3conv on PATH.
+        """
+        import subprocess
+        import types
+        from pathlib import Path as _Path
+
+        def fake_run(argv, *_args: object, **_kwargs: object) -> types.SimpleNamespace:
+            _Path(argv[2]).write_text("pretend binary plugin", encoding="utf-8")
+            return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        out = tmp_path / "out.esp"
+        selections = [Selection("Castle.esp", "GameSetting", "sCastleName")]
+
+        result = build_record_patch(selections, SOURCES, PATCH, SIZES, "tes3conv", out)
+
+        assert result.output == out
+        assert out.is_file()
+        assert any("wrote" in line for line in result.lines)
+
+    def test_a_nonzero_return_code_is_reported_as_a_rejection(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A converter that exits non-zero surfaces its stderr as a rejection."""
+        import subprocess
+        import types
+
+        def fake_run(*_args: object, **_kwargs: object) -> types.SimpleNamespace:
+            return types.SimpleNamespace(returncode=1, stdout="", stderr="bad record at 3")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        selections = [Selection("Castle.esp", "GameSetting", "sCastleName")]
+
+        with pytest.raises(PatchServiceError, match="refused the patch: bad record at 3"):
+            build_record_patch(selections, SOURCES, PATCH, SIZES, "tes3conv", tmp_path / "out.esp")
+
     def test_tes3conv_reporting_success_with_no_file_written_is_caught(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

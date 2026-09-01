@@ -1,0 +1,61 @@
+- for_mod: "Morrowind"
+  file_name: "Morrowind.bsa"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "morrowind-pbr"
+    - "expanded-vanilla"
+    - "i-heart-vanilla"
+    - "i-heart-vanilla-directors-cut"
+    - "morrowind-starter-pack"
+    - "starwind-modded"
+    - "just-good-morrowind"
+    - "just-beautiful-morrowind"
+    - "arktwend-enhanced-wip"
+    - "of-ash-and-blight-wip"
+
+- for_mod: "Morrowind"
+  file_name: "Tribunal.bsa"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "morrowind-pbr"
+    - "expanded-vanilla"
+    - "i-heart-vanilla"
+    - "i-heart-vanilla-directors-cut"
+    - "morrowind-starter-pack"
+    - "starwind-modded"
+    - "just-good-morrowind"
+    - "just-beautiful-morrowind"
+    - "arktwend-enhanced-wip"
+    - "of-ash-and-blight-wip"
+
+- for_mod: "Morrowind"
+  file_name: "Bloodmoon.bsa"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "morrowind-pbr"
+    - "expanded-vanilla"
+    - "i-heart-vanilla"
+    - "i-heart-vanilla-directors-cut"
+    - "morrowind-starter-pack"
+    - "starwind-modded"
+    - "just-good-morrowind"
+    - "just-beautiful-morrowind"
+    - "arktwend-enhanced-wip"
+    - "of-ash-and-blight-wip"
+
+- for_mod: RR Mod Series - Melchiors Mudcrab Merchant
+  file_name: "RR_Melchior's_Mudcrab_Merchant.bsa"
+  on_lists:
+    - "of-ash-and-blight-wip"
+
+- for_mod: Windows Glow - Tribunal
+  file_name: Windows Glow TR.bsa
+
+- for_mod: Windows Glow - Bloodmoon (now with Raven Rock)
+  file_name: Windows Glow BM.bsa

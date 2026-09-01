@@ -40,23 +40,37 @@ Two checkers keep this state from regressing, both in CI and `pytest`:
 
 ## Adding a language
 
+Translations live in `locale/translations/<lang>.json` -- a flat map of the
+English source string to its translation (a list of forms for a counted
+`ngettext` string). `tools/build_locale.py` turns that plus the template into
+the `.po` a translator can edit and the `.mo` the app loads. It is standard
+library only, so it works on Windows where GNU `msginit`/`msgfmt` are not
+installed, and it **refuses to build** a translation that drops a placeholder or
+gives a plural the wrong number of forms -- a wrong translation is worse than a
+missing one, which just falls back to English.
+
 ```bash
 # 1. Make sure the template is current
 python tools/make_pot.py
 
-# 2. Start a language (once per language)
-msginit -i locale/wraithguard_toolkit.pot -o locale/de/LC_MESSAGES/wraithguard_toolkit.po -l de
+# 2. Write locale/translations/de.json  (English source -> translation)
+#    Untranslated strings can be left out; they fall back to English.
 
-# 3. Translate the .po (Poedit, Weblate, or any text editor)
-
-# 4. Compile it
-msgfmt locale/de/LC_MESSAGES/wraithguard_toolkit.po \
-    -o locale/de/LC_MESSAGES/wraithguard_toolkit.mo
+# 3. Build the .po and .mo, with the safety checks
+python tools/build_locale.py de           # one language
+python tools/build_locale.py --all        # every translations/<lang>.json
 ```
 
-The app picks the language up automatically on next launch. Force one with
-`MLOX_LANG=de`, and check what is installed with
+The app picks the language up automatically on next launch (it scans for any
+`<lang>/LC_MESSAGES/wraithguard_toolkit.mo`), and reports coverage as it builds
+so the untranslated gap is visible. Force a language with `MLOX_LANG=de`, and
+check what is installed with
 `python -c "from wraithguard import available_languages; print(available_languages())"`.
+
+Supported plural rules live in `PLURAL_FORMS` in `tools/build_locale.py`
+(currently de, fr, es, it, ru, pl); add a language's rule there before building
+it. The generated `.po` is a convenience for editing in Poedit/Weblate -- the
+`.json` is the source of truth this repo builds from.
 
 ## Notes for translators
 

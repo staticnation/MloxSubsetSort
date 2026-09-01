@@ -46,8 +46,13 @@ log_themes.json
 *~[0-9].esp
 *~[0-9].esm
 
-# --- Compiled translation catalogues (built from .po) ---
+# --- Compiled translation catalogues ---
+# Built by tools/build_locale.py from locale/translations/<lang>.json. The
+# shipped catalogues are committed so the app loads them from a plain source
+# checkout (there is no compile step at install time); stray/dev .mo elsewhere
+# stay ignored.
 locale/**/*.mo
+!locale/*/LC_MESSAGES/wraithguard_toolkit.mo
 
 # Sampled game assets, copied in by tools/check_nif_layouts.py --collect.
 # Real Morrowind meshes: useful locally, not ours to redistribute.

@@ -283,3 +283,141 @@ class TestOpenMwAuxiliaryMaps:
         """Untextured shapes carry an empty string, and must not be searched."""
         make_texture(tmp_path / "Mod", "tx_rock.dds")
         assert TextureResolver([tmp_path / "Mod"]).siblings("") == {}
+
+
+class TestReadAndSiblings:
+    """Reading a resolved texture, and finding the OpenMW auxiliary maps."""
+
+    def test_read_returns_the_bytes_of_a_resolved_file(self, tmp_path: Path) -> None:
+        """A resolved loose texture reads back its own bytes."""
+        make_texture(tmp_path / "Mod", "tx.dds", b"pixels")
+        resolver = TextureResolver([tmp_path / "Mod"])
+        resolved = resolver.resolve("tx.dds")
+        assert resolver.read(resolved) == b"pixels"
+
+    def test_read_of_a_vanished_file_is_none(self, tmp_path: Path) -> None:
+        """A file resolved and then deleted reads as nothing, not a crash."""
+        path = make_texture(tmp_path / "Mod", "tx.dds", b"pixels")
+        resolver = TextureResolver([tmp_path / "Mod"])
+        resolved = resolver.resolve("tx.dds")
+        path.unlink()  # gone between resolve and read
+        assert resolver.read(resolved) is None
+
+    def test_read_of_an_unresolved_reference_is_none(self, tmp_path: Path) -> None:
+        """Nothing resolved means nothing to read."""
+        resolver = TextureResolver([tmp_path / "Mod"])
+        assert resolver.read(resolver.resolve("missing.dds")) is None
+
+    def test_siblings_finds_a_normal_map_beside_the_diffuse(self, tmp_path: Path) -> None:
+        """OpenMW's ``_n`` normal map is discovered by name next to the diffuse."""
+        make_texture(tmp_path / "Mod", "tx.dds")
+        make_texture(tmp_path / "Mod", "tx_n.dds")
+        siblings = TextureResolver([tmp_path / "Mod"]).siblings("tx.dds")
+        assert "_n" in siblings
+        assert siblings["_n"].found
+
+    def test_siblings_of_an_empty_reference_is_empty(self, tmp_path: Path) -> None:
+        """A blank reference has no siblings to look for."""
+        assert TextureResolver([tmp_path / "Mod"]).siblings("   ") == {}
+
+    def test_siblings_of_an_extensionless_reference_assumes_dds(self, tmp_path: Path) -> None:
+        """A reference with no extension is treated as a ``.dds`` stem."""
+        make_texture(tmp_path / "Mod", "tx_n.dds")
+        siblings = TextureResolver([tmp_path / "Mod"]).siblings("tx")
+        assert "_n" in siblings
+
+
+class TestTextureResolverResilience:
+    """The resolver degrades over unreadable folders/archives rather than crashing."""
+
+    def test_resolve_of_an_empty_reference_is_unfound(self, tmp_path: Path) -> None:
+        """A blank reference resolves to nothing, without touching the index."""
+        from wraithguard.nif.textures import TextureResolver
+
+        assert not TextureResolver([tmp_path / "Mod"]).resolve("").found
+
+    def test_indexing_stops_at_the_cap(self, tmp_path: Path, monkeypatch) -> None:
+        """Past the file cap the resolver logs and stops rather than running away."""
+        import wraithguard.nif.textures as tx
+
+        make_texture(tmp_path / "Mod", "a.dds")
+        monkeypatch.setattr(tx, "_MAX_INDEXED", 0)
+        # Building with the cap at zero exercises the stop-and-warn path.
+        tx.TextureResolver([tmp_path / "Mod"])
+
+    def test_an_unreadable_texture_folder_is_skipped(self, tmp_path: Path, monkeypatch) -> None:
+        """An OSError while walking a data folder is logged, not fatal."""
+        from pathlib import Path
+
+        from wraithguard.nif.textures import TextureResolver
+
+        make_texture(tmp_path / "Mod", "a.dds")
+
+        def _boom(self, *a, **k):
+            raise OSError("simulated unreadable mount")
+
+        monkeypatch.setattr(Path, "rglob", _boom)
+        # Construction must still succeed with an empty index.
+        resolver = TextureResolver([tmp_path / "Mod"])
+        assert not resolver.resolve("a.dds").found
+
+    def test_texture_root_survives_an_unreadable_folder(self, tmp_path: Path, monkeypatch) -> None:
+        """``_texture_root`` returns None on an OSError rather than raising."""
+        from pathlib import Path
+
+        from wraithguard.nif.textures import _texture_root
+
+        folder = tmp_path / "Mod"
+        folder.mkdir()
+
+        def _boom(self):
+            raise OSError("simulated")
+
+        monkeypatch.setattr(Path, "iterdir", _boom)
+        assert _texture_root(folder) is None
+
+    def test_resolve_collapses_doubled_separators(self, tmp_path: Path) -> None:
+        """A reference with ``//`` resolves to the same file as one without."""
+        from wraithguard.nif.textures import TextureResolver
+
+        make_texture(tmp_path / "Mod", "bm/tx.dds")
+        assert TextureResolver([tmp_path / "Mod"]).resolve("bm//tx.dds").found
+
+    def test_read_skips_an_archive_that_errors_or_misses(self, tmp_path: Path) -> None:
+        """A BsaError is skipped, a miss (None) moves on, and all-fail yields None."""
+        from wraithguard.nif.bsa import BsaError
+        from wraithguard.nif.textures import Resolved, TextureResolver
+
+        resolver = TextureResolver([tmp_path / "Mod"])
+
+        class _BrokenArchive:
+            path = tmp_path / "broken.bsa"
+
+            def read(self, _name):
+                raise BsaError("corrupt")
+
+        class _MissingArchive:
+            path = tmp_path / "other.bsa"
+
+            def read(self, _name):
+                return None  # does not hold it -> move to the next archive
+
+        # reversed() means the missing one is tried first, then the broken one.
+        resolver._archives = [_BrokenArchive(), _MissingArchive()]
+        assert resolver.read(Resolved(reference="x", archived_name="textures/x.dds")) is None
+
+    def test_construction_survives_unreadable_folders(self, tmp_path: Path, monkeypatch) -> None:
+        """OSError while listing a folder (for the texture root or its .bsa files) is not fatal."""
+        from pathlib import Path as _Path
+
+        from wraithguard.nif.textures import TextureResolver
+
+        folder = tmp_path / "Mod"
+        folder.mkdir()
+
+        def _boom(self):
+            raise OSError("simulated unreadable mount")
+
+        monkeypatch.setattr(_Path, "iterdir", _boom)
+        # Both the texture-root probe and the .bsa scan hit iterdir; neither may raise.
+        assert not TextureResolver([folder]).resolve("x.dds").found

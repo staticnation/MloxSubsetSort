@@ -197,7 +197,7 @@ def load_rule_blocks(
                     blocks_out.append((names, priority))
                 elif keyword == "nearstart":
                     nearstart.extend(names)
-                elif keyword == "nearend":
+                elif keyword == "nearend":  # pragma: no branch - exhaustive: only ordering keywords
                     nearend.extend(names)
             total = sum(len(names) for _keyword, names in blocks)
             # A milestone about the run, not part of the report the user asked

@@ -531,8 +531,11 @@ def _texture_slot(block: Block, by_index: dict[int, Block], slot: str) -> str:
         if prop is None or prop.type_name != "NiTexturingProperty":
             continue
         slots = prop.fields.get("textures")
-        if not isinstance(slots, dict):
-            continue
+        # A parsed NiTexturingProperty always carries its texture_slots as a dict;
+        # this guards a property whose field never parsed (a truncated block), which
+        # the geometry path never reaches, so the guarded skip is dead.
+        if not isinstance(slots, dict):  # pragma: no cover
+            continue  # pragma: no cover
         source = by_index.get(int(slots.get(slot, -1)))
         if source is None:
             continue

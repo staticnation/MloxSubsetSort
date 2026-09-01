@@ -80,6 +80,33 @@ class TestParsing:
         monkeypatch.setitem(sys.modules, "yaml", None)
         self._check(parse_plugin_order_yml(_write(tmp_path)))
 
+    def test_the_fallback_ignores_indented_lines_before_any_entry(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A stray indented line with no open entry is skipped, yielding nothing.
+
+        With no top-level ``- `` item ever seen, the parser holds no entry to
+        fold the line into and finishes with an empty result.
+        """
+        monkeypatch.setitem(sys.modules, "yaml", None)
+        path = tmp_path / "plugin-order.yml"
+        path.write_text("  file_name: orphan.esp\n  for_mod: nothing\n", encoding="utf-8")
+        assert parse_plugin_order_yml(path) == []
+
+    def test_the_fallback_ignores_unknown_keys_and_blank_list_items(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An unrecognised key and an empty ``on_lists`` item are both skipped."""
+        monkeypatch.setitem(sys.modules, "yaml", None)
+        path = tmp_path / "plugin-order.yml"
+        path.write_text(
+            '- file_name: a.esp\n  unknown_key: ignored\n  on_lists:\n    - ""\n    - real-list\n',
+            encoding="utf-8",
+        )
+        (entry,) = parse_plugin_order_yml(path)
+        assert entry["file_name"] == "a.esp"
+        assert entry["on_lists"] == ["real-list"]  # the blank item was dropped
+
 
 class TestCuratedForList:
     """Selecting one curated list's plugins, in order, case-insensitively."""

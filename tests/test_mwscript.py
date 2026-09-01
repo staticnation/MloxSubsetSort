@@ -287,6 +287,23 @@ class TestScriptRecordReader:
     def test_missing_file_yields_no_scripts(self, tmp_path):
         assert read_script_records(tmp_path / "absent.esp") == []
 
+    def test_a_script_with_no_name_or_bytecode_is_dropped(self, tmp_path):
+        """An SCPT carrying only an unknown subrecord names nothing and is skipped.
+
+        The unrecognised tag falls through every branch, and with neither a name
+        nor bytecode the record is not emitted.
+        """
+
+        def sub(tag: bytes, payload: bytes) -> bytes:
+            return tag + struct.pack("<I", len(payload)) + payload
+
+        body = sub(b"ABCD", b"unrecognised subrecord payload")
+        record = b"SCPT" + struct.pack("<III", len(body), 0, 0) + body
+        header = b"TES3" + struct.pack("<III", 0, 0, 0)
+        path = tmp_path / "nameless.esp"
+        path.write_bytes(header + record)
+        assert read_script_records(path) == []
+
 
 class TestTes3convBytecodeField:
     """Decoding the ``bytecode`` field as tes3conv writes it into JSON."""

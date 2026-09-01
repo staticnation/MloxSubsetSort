@@ -221,7 +221,9 @@ def _shift(
     report.cells_touched.add(coords)
     for twin, tx, ty in _twins(coords, x, y):
         grid = cells.get(twin)
-        if grid is not None:
+        # A vertex only reaches here once _is_movable confirmed every one of its
+        # twins is present, so this get never misses; the guard stays defensive.
+        if grid is not None:  # pragma: no branch
             grid[ty * LAND_SIZE + tx] += delta
             report.cells_touched.add(twin)
     return True
@@ -262,7 +264,9 @@ def _split(structure_a: float, structure_b: float, excess: int) -> tuple[int, in
     weight_a = 1.0 / (1.0 + structure_a * _STRUCTURE_WEIGHT)
     weight_b = 1.0 / (1.0 + structure_b * _STRUCTURE_WEIGHT)
     total = weight_a + weight_b
-    if total <= 0.0:
+    if total <= 0.0:  # pragma: no cover - curvature is a non-negative angle, so each
+        # weight is 1/(1+non-negative) and strictly positive; their sum can never be
+        # <= 0. Kept as a divide-by-zero guard against a future signed structure metric.
         share = excess // 2
         return share, excess - share
     share_a = round(excess * weight_a / total)

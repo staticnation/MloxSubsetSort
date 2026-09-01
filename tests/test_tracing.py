@@ -108,3 +108,53 @@ class TestSortTrace:
         sort_trace_begin()
         assert sort_trace_path() is None
         trace_sort("ignored")  # must not raise
+
+
+class TestTraceIoFailuresAreSwallowed:
+    """A failing disk must lose trace lines, never break the run it traces."""
+
+    def test_closing_a_broken_handle_is_ignored(self) -> None:
+        """``_close`` swallows an OSError from a handle that will not close."""
+        from wraithguard.tracing import _close
+
+        class _Stubborn:
+            def close(self) -> None:
+                raise OSError("disk went away")
+
+        _close(_Stubborn())  # must not raise
+
+    def test_a_sort_trace_that_cannot_open_leaves_no_handle(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """If the sort trace cannot be opened, tracing carries on without it."""
+        set_trace_file(tmp_path / "trace.log")
+
+        real_open = Path.open
+
+        def refuse(self: Path, *args: object, **kwargs: object):
+            if self.name == SORT_TRACE_NAME:
+                raise OSError("read-only filesystem")
+            return real_open(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", refuse)
+        sort_trace_begin()  # must not raise
+        trace_sort("ignored")  # no handle -> silent no-op
+
+    def test_a_write_failure_on_the_sort_trace_is_swallowed(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A write that raises mid-sort loses the line, not the sort."""
+        import wraithguard.tracing as tracing_mod
+
+        set_trace_file(tmp_path / "trace.log")
+        sort_trace_begin()
+
+        class _BrokenWriter:
+            def write(self, _text: str) -> int:
+                raise OSError("disk full")
+
+            def flush(self) -> None:  # pragma: no cover - never reached after write raises
+                pass
+
+        monkeypatch.setattr(tracing_mod, "_sort_trace_handle", _BrokenWriter())
+        trace_sort("engine: step")  # must not raise

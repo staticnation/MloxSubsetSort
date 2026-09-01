@@ -231,6 +231,7 @@ from wraithguard.gui import (  # noqa: E402
     dnd_ready,
     doc_path,
     register_drop_target,
+    rtl,
     trace_first_fire,
 )
 from wraithguard.gui.conflicts import ConflictWindowsMixin  # noqa: E402
@@ -5385,6 +5386,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             suffix = "  (wins)" if i == len(plugins) - 1 else ""
             ftree.heading(f"p{i}", text=f"{star}{p}{suffix}")
             ftree.column(f"p{i}", width=210, anchor="w", stretch=True)
+        rtl.apply_rtl_to_treeview(ftree)
         ftree.delete(*ftree.get_children())
         if self._conf_session is None:
             ftree.insert(

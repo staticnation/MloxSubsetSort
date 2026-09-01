@@ -21,7 +21,7 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal
 
 import wraithguard_toolkit as core
-from wraithguard.gui import app_base_dir, case_insensitive_filetypes
+from wraithguard.gui import app_base_dir, case_insensitive_filetypes, rtl
 from wraithguard.gui.conflict_colors import (
     ALL_TEXT_MINE,
     all_bg_by_tag,
@@ -51,10 +51,15 @@ from wraithguard.images.viewer import Maps, build_compare_page
 from wraithguard.logging_setup import get_logger
 from wraithguard.nif import MeshAnalyser
 from wraithguard.nif.bsa import BsaError, normalise
+from wraithguard.nif.edit import (
+    NifEditError,
+    apply_edits,
+    field_views,
+)
 from wraithguard.nif.geometry import block_tree, world_meshes
-from wraithguard.nif.reader import NifParseError
+from wraithguard.nif.reader import NifParseError, read_nif_bytes
 from wraithguard.nif.textures import TextureResolver
-from wraithguard.nif.vfs import archives_in, loose_index, read_mesh
+from wraithguard.nif.vfs import archives_in, loose_index, read_mesh, read_mesh_bytes
 from wraithguard.nif.viewer import build_viewer_page
 from wraithguard.patch import (
     FieldChoice,
@@ -90,7 +95,7 @@ from wraithguard.tes3fields.dialogue import (
     script_tokens,
 )
 from wraithguard.viz.library import ViewerError, three_source
-from wraithguard.viz.serve import Payload, ViewerServer
+from wraithguard.viz.serve import Payload, PublishSession, ViewerServer
 
 LOG_GUI = get_logger(__name__)
 
@@ -214,6 +219,27 @@ def _as_float(value: object) -> float:
         return float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return 0.0
+
+
+def _json_field_value(value: object) -> object:
+    """A field value reduced to something the editor page can show and edit.
+
+    Scalars and strings pass through (the inspector edits them); a float is
+    rounded so the box does not fill with binary noise; the packed bytes the
+    reader keeps for a compound (a matrix, an embedded run) become a short
+    ``"<N bytes>"`` note, since those are read-only in the panel anyway.
+
+    Args:
+        value: The raw field value from :class:`~wraithguard.nif.edit.FieldView`.
+
+    Returns:
+        A JSON-friendly stand-in.
+    """
+    if isinstance(value, bytes):
+        return f"<{len(value)} bytes>"
+    if isinstance(value, float):
+        return round(value, 6)
+    return value
 
 
 class ConflictWindowsMixin:
@@ -573,6 +599,7 @@ class ConflictWindowsMixin:
         ):
             tree.heading(c, text=txt)
             tree.column(c, width=w, anchor="w", stretch=(c in ("path", "winner")))
+        rtl.apply_rtl_to_treeview(tree)
         vsb = ttk.Scrollbar(mid, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=vsb.set)
         tree.grid(row=0, column=0, sticky="nsew")
@@ -630,7 +657,7 @@ class ConflictWindowsMixin:
             # clicked, it knows exactly.
             lines.extend(self._mesh_detail(c))
             is_mesh = str(c.get("path", "")).lower().endswith(".nif")
-            for name in ("_res_view3d", "_res_export3d"):
+            for name in ("_res_view3d", "_res_export3d", "_res_edit_mesh"):
                 button = getattr(self, name, None)
                 if button is not None:
                     button.configure(state="normal" if is_mesh else "disabled")
@@ -659,6 +686,10 @@ class ConflictWindowsMixin:
             btns, text=_("Export 3D file..."), command=self._export_mesh_viewer, state="disabled"
         )
         self._res_export3d.pack(side="left", padx=(4, 0))
+        self._res_edit_mesh = ttk.Button(
+            btns, text=_("Edit mesh..."), command=self._edit_mesh_viewer, state="disabled"
+        )
+        self._res_edit_mesh.pack(side="left", padx=(8, 0))
         self._res_view_texture = ttk.Button(
             btns,
             text=_("Compare Textures"),
@@ -874,6 +905,8 @@ class ConflictWindowsMixin:
         title: str,
         resolver: TextureResolver | None,
         status_note: str = "",
+        *,
+        edit_source: bytes | None = None,
     ) -> None:
         """Serve a 3D mesh view over loopback, standalone-file as fallback.
 
@@ -889,6 +922,9 @@ class ConflictWindowsMixin:
             title: The page title -- a VFS path or a field name.
             resolver: Texture resolver for the meshes, or ``None``.
             status_note: A status-bar line to set on success, if any.
+            edit_source: The mesh's original bytes to make the view editable,
+                or ``None`` for a read-only view. Only honoured on the loopback
+                path -- a standalone page has no server to save through.
         """
         try:
             server = self._viewer_server()
@@ -919,6 +955,11 @@ class ConflictWindowsMixin:
                 key = f"g{next(counter)}.{suffix}"
                 return {"url": session.publish(key, Payload(blob, kind))}
 
+            edit_config = (
+                self._register_mesh_editor(session, edit_source, title)
+                if edit_source is not None
+                else None
+            )
             page = build_viewer_page(
                 sides,
                 title=title,
@@ -926,6 +967,7 @@ class ConflictWindowsMixin:
                 library_url=self._three_js_url(server),
                 trees=trees,
                 resolver=resolver,
+                edit=edit_config,
             )
             url = session.publish("index.html", Payload(page.encode("utf-8"), "text/html"))
         except (ViewerError, NifParseError, OSError) as exc:
@@ -982,6 +1024,7 @@ class ConflictWindowsMixin:
         dirs = [Path(str(d)) for d in (self._plan_scan_dirs() or [])]
         sides: list[tuple[str, list]] = []
         trees: list[list] = []
+        values: list[str] = []
         for plugin in plugins:
             value = (per.get(plugin) or {}).get(field)
             if not isinstance(value, str) or not value:
@@ -991,6 +1034,7 @@ class ConflictWindowsMixin:
                 continue
             sides.append((f"{plugin} / {value}", world_meshes(parsed)))
             trees.append(block_tree(parsed))
+            values.append(value)
         if not sides:
             messagebox.showinfo(
                 _("No mesh to show"),
@@ -1001,7 +1045,12 @@ class ConflictWindowsMixin:
             )
             return
         resolver = TextureResolver(dirs) if dirs else None
-        self._serve_mesh_view(sides, trees, field, resolver)
+        # A single mesh can be edited; a side-by-side comparison of two different
+        # meshes cannot -- the inspector's block indices belong to one tree, so
+        # editing stays off when there is more than one side, exactly as the
+        # resource window keeps its "View in 3D" comparison read-only.
+        edit_source = self._read_vfs_bytes(dirs, f"meshes/{values[0]}") if len(sides) == 1 else None
+        self._serve_mesh_view(sides, trees, field, resolver, edit_source=edit_source)
 
     def _read_vfs_bytes(self, dirs: Sequence[Path], vfs_path: str) -> bytes | None:
         """Read a file from whichever data folder holds it, later folders first.
@@ -1126,6 +1175,102 @@ class ConflictWindowsMixin:
             messagebox.showerror(_("Export failed"), str(exc))
             return
         self.status_var.set(_("Exported: %(path)s") % {"path": target})
+
+    def _edit_mesh_viewer(self) -> None:
+        """Open the selected mesh in the 3D view with the field editor enabled.
+
+        Serves the winning mesh -- the file the game would load -- as an
+        editable view: its block tree becomes selectable, each block's fields
+        show in an inspector, and a Save downloads the edited ``.nif``. The edit
+        needs the loopback server (a standalone page has no way to save); when a
+        port cannot be bound the same view opens read-only, without the editor.
+        """
+        conflict = self._selected_mesh_conflict()
+        if conflict is None:
+            return
+        path = str(conflict.get("path", ""))
+        data: bytes | None = None
+        winner: Path | None = None
+        for folder in reversed([Path(str(provider)) for provider in conflict.get("providers", [])]):
+            try:
+                data = read_mesh_bytes(folder, path)
+                winner = folder
+                break
+            except OSError:
+                continue
+        if data is None or winner is None:
+            messagebox.showerror(_("Cannot edit this mesh"), _("Its file could not be read."))
+            return
+        try:
+            parsed = read_nif_bytes(data, retain=True, geometry=True)
+        except NifParseError as exc:
+            messagebox.showerror(_("Cannot edit this mesh"), str(exc))
+            return
+        if not parsed.complete:
+            messagebox.showerror(
+                _("Cannot edit this mesh"),
+                _("This mesh does not parse completely, so an edit cannot be written back safely."),
+            )
+            return
+        sides = [(f"{winner.name} / {path}", world_meshes(parsed))]
+        trees = [block_tree(parsed)]
+        self._serve_mesh_view(
+            sides,
+            trees,
+            path,
+            self._texture_resolver(conflict),
+            _("Editing %(path)s") % {"path": path},
+            edit_source=data,
+        )
+
+    def _register_mesh_editor(
+        self, session: PublishSession, data: bytes, title: str
+    ) -> dict[str, object] | None:
+        """Describe a mesh's blocks for the inspector and register its save handler.
+
+        Builds the ``edit`` payload :func:`build_viewer_page` turns into an
+        editor -- every block's fields, each marked editable or not -- and
+        registers the POST handler the Save button reaches: it applies the
+        posted edits to the original bytes and hands the result back as a
+        download. Returns ``None`` (no editor) when the mesh does not parse
+        whole, matching the guard the caller already made.
+
+        Args:
+            session: The publish session this view owns.
+            data: The original mesh bytes, edits are applied against these.
+            title: The mesh's path, used for the download's default name.
+
+        Returns:
+            The ``edit`` mapping for :func:`build_viewer_page`, or ``None``.
+        """
+        nif = read_nif_bytes(data, retain=True)
+        if not nif.complete:
+            return None
+        blocks: dict[int, dict[str, object]] = {}
+        for index, block in enumerate(nif.blocks):
+            try:
+                fields: list[dict[str, object]] = [
+                    {
+                        "name": view.name,
+                        "kind": view.kind,
+                        "value": _json_field_value(view.value),
+                        "editable": view.editable,
+                    }
+                    for view in field_views(block)
+                ]
+            except NifEditError:
+                fields = []
+            blocks[index] = {"type": block.type_name, "fields": fields}
+        filename = Path(title).name or "edited.nif"
+
+        def apply_handler(body: bytes) -> Payload:
+            """Apply the posted edits to the source mesh, returning it to download."""
+            request = json.loads(body)
+            edited = apply_edits(data, request.get("edits", []))
+            return Payload(edited, "application/octet-stream", filename)
+
+        url = session.register_post("apply", apply_handler)
+        return {"url": url, "filename": filename, "blocks": blocks}
 
     def _selected_texture_conflict(self) -> dict | None:
         """The selected row, when it is a texture with something to compare.
@@ -1618,6 +1763,7 @@ class ConflictWindowsMixin:
             # Clicking a header sorts by that column; clicking it again reverses.
             tree.heading(c, text=txt, command=functools.partial(self._sort_conflict_tree, c))
             tree.column(c, width=w, anchor="w", stretch=(c in ("id", "winner")))
+        rtl.apply_rtl_to_treeview(tree)
         vsb = ttk.Scrollbar(topf, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=vsb.set)
         tree.grid(row=0, column=0, sticky="nsew")
@@ -2123,6 +2269,7 @@ class ConflictWindowsMixin:
         ):
             tree.heading(name, text=title)
             tree.column(name, width=width, anchor="e", stretch=False)
+        rtl.apply_rtl_to_treeview(tree)
         scroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=scroll.set)
         tree.grid(row=0, column=0, sticky="nsew")

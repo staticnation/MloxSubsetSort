@@ -31,8 +31,9 @@ test reports ``SKIPPED``, Tk or the display is missing and nothing was checked -
 from __future__ import annotations
 
 import sys
+import types
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
@@ -1726,6 +1727,205 @@ def _first_text_widget(widget: Any) -> Any:
         The widget, or ``None``.
     """
     return _first_widget_of_class(widget, "Text")
+
+
+class TestJournalChainsWindow:
+    """The Journal Chains window: resolved stages, their triggers, and every other effect.
+
+    This is exactly the kind of window ``test_gui_smoke.py``'s own module
+    docstring warns about: its detail pane is a scrollable frame of label
+    pairs built up field by field, not a Treeview whose shape a static
+    checker can see. Two real defects were only ever visible on a real
+    display -- a standalone Script's own ``Begin``/``End`` lines showing up
+    as if they were quest effects, and a shared enclosing condition printed
+    once for the triggering Journal call and again for the sibling effects
+    right after it, which read as the same line duplicated by mistake.
+    """
+
+    #: A quest whose single stage is set from a *standalone* Script, not its
+    #: own (typically empty) journal-type entry -- the realistic shape,
+    #: since most real quest scripts live outside the journal topic itself.
+    QUEST: Final = [
+        {"type": "Dialogue", "id": "AATL_Q_VSLDS", "dialogue_type": "Journal"},
+        {
+            "type": "DialogueInfo",
+            "id": "vslds_stage_10",
+            "text": "Barrier stage.",
+            "quest_state": "",
+            "flags": "",
+            "data": {"disposition": 10},
+            "script_text": "",
+        },
+    ]
+
+    #: Shaped to exercise both defects at once: a ``Begin``/``End`` pair
+    #: framing the whole script, and a three-level nested ``if`` whose
+    #: innermost block holds both the ``Cast`` (an ordinary effect) and the
+    #: ``Journal`` call (the trigger) side by side -- exactly the case where
+    #: the call's own condition and an effect group's condition are the same
+    #: text.
+    SCRIPT: Final = {
+        "type": "Script",
+        "id": "AATL_VSLDS_SCR_Barriers",
+        "flags": "",
+        "text": (
+            "Begin AATL_VSLDS_SCR_Barriers\n"
+            "if ( GetDisabled )\n"
+            "    set state to 1\n"
+            "endif\n"
+            'if ( state == 2 )\n'
+            '    if ( Player->HasItemEquipped "AATL_C_Dae_amu_Vas_u" == 0 )\n'
+            '        if ( Player->HasItemEquipped "AATL_C_Dae_amu_Vas" == 0 )\n'
+            '            Cast "AATL_VSLDS_SPL_Barrier" Player\n'
+            '            Journal "AATL_Q_VSLDS", 10\n'
+            "            return\n"
+            "        endif\n"
+            "    endif\n"
+            "endif\n"
+            "End\n"
+        ),
+    }
+
+    def _open_journal_view(self, app: Any, records: list[dict[str, Any]]) -> None:
+        """Wire a fake reading session and open the window, waiting for its background fill.
+
+        ``show_journal_view`` reads every plugin and resolves every quest on
+        a background thread, then hands the result back via
+        ``root.after(0, ...)``. That ``after`` callback is only ever
+        delivered while a real ``mainloop`` is pumping events -- polling
+        ``root.update()`` in a loop does not satisfy it, since ``after()``
+        called from a foreign thread needs the interpreter's own event loop
+        actually running to pick it up. So this runs the real loop, with its
+        own ``after``-scheduled check breaking out of it once the tree is
+        populated or a generous timeout elapses.
+
+        Args:
+            app: The application -- a ``fresh_app``, so this test's window
+                does not collide with a window an earlier test already
+                opened on the shared module-scoped one.
+            records: The plugin's decoded records, handed back for any path
+                the fake session is asked to read.
+        """
+
+        class _FakeSession:
+            exe = "tes3conv"
+
+            def records(self, _path: str) -> list[dict[str, Any]]:
+                return records
+
+        app._conf_session = _FakeSession()
+        app._conf_paths = {"Test.esp": "/fake/path"}
+        app._ensure_conflict_session = lambda conv=None: True
+        app.order_panel = types.SimpleNamespace(get_enabled=lambda: ["Test.esp"])
+        app._apply_exclusions = list
+
+        app.show_journal_view()
+
+        root = app.root
+        state = {"timed_out": False}
+
+        def _check() -> None:
+            nav = app._journal_nav
+            if not nav.exists("__loading__") and nav.get_children():
+                root.quit()
+            else:
+                root.after(50, _check)
+
+        def _give_up() -> None:
+            state["timed_out"] = True
+            root.quit()
+
+        root.after(50, _check)
+        root.after(5000, _give_up)
+        root.mainloop()
+        if state["timed_out"]:
+            pytest.fail("the journal view never finished its background read")
+
+    @staticmethod
+    def _detail_rows(app: Any) -> list[tuple[str, str]]:
+        """The detail pane's current (label, value) pairs, in display order.
+
+        Args:
+            app: The application, with its journal window already open.
+
+        Returns:
+            One pair per row -- the pane is a frame of two-label rows, not a
+            Treeview, so there is no ``.get_children()``/``.item()`` to read
+            this off directly.
+        """
+        return [
+            (row.winfo_children()[0].cget("text"), row.winfo_children()[1].cget("text"))
+            for row in app._journal_detail_body.winfo_children()
+            if len(row.winfo_children()) == 2
+        ]
+
+    def test_begin_and_end_are_not_shown_as_quest_effects(self, fresh_app: Any) -> None:
+        """A script's own Begin/End lines are structure, not something it does.
+
+        Args:
+            fresh_app: A fresh application, so it gets its own journal window.
+        """
+        self._open_journal_view(fresh_app, [*self.QUEST, self.SCRIPT])
+        window = fresh_app._journal_win
+        try:
+            nav = fresh_app._journal_nav
+            stage_node = nav.get_children("AATL_Q_VSLDS")[0]
+            nav.selection_set(stage_node)
+            fresh_app._on_journal_node()
+
+            also_happens = [v for label, v in self._detail_rows(fresh_app) if label == "Also happens"]
+            assert not any("Begin" in value for value in also_happens), also_happens
+            assert "End" not in also_happens, also_happens
+        finally:
+            window.destroy()
+
+    def test_a_shared_condition_is_shown_once_not_per_statement(self, fresh_app: Any) -> None:
+        """Consecutive statements under the same if-block share one condition row.
+
+        Regression test for the exact shape that read as a duplicated line:
+        ``Cast`` and the ``Journal`` call sit in the same three-level nested
+        ``if``, and showing the call's own condition and then the sibling
+        effect group's identical condition right after it looked like a
+        mistake rather than two facts that happen to agree.
+
+        Args:
+            fresh_app: A fresh application, so it gets its own journal window.
+        """
+        self._open_journal_view(fresh_app, [*self.QUEST, self.SCRIPT])
+        window = fresh_app._journal_win
+        try:
+            nav = fresh_app._journal_nav
+            stage_node = nav.get_children("AATL_Q_VSLDS")[0]
+            nav.selection_set(stage_node)
+            fresh_app._on_journal_node()
+
+            rows = self._detail_rows(fresh_app)
+            shared = "if ( state == 2 )"
+            matching = [value for label, value in rows if label == "if" and value.startswith(shared)]
+            assert len(matching) == 1, f"expected the shared condition once, got {matching}"
+
+            also_happens = [value for label, value in rows if label == "Also happens"]
+            assert any("Cast" in value for value in also_happens)
+            assert "return" in also_happens
+        finally:
+            window.destroy()
+
+    def test_the_stages_own_call_site_appears_under_it_in_the_tree(self, fresh_app: Any) -> None:
+        """The standalone Script setting the stage shows as a child of that stage.
+
+        Args:
+            fresh_app: A fresh application, so it gets its own journal window.
+        """
+        self._open_journal_view(fresh_app, [*self.QUEST, self.SCRIPT])
+        window = fresh_app._journal_win
+        try:
+            nav = fresh_app._journal_nav
+            stage_node = nav.get_children("AATL_Q_VSLDS")[0]
+            children = nav.get_children(stage_node)
+            assert len(children) == 1
+            assert "AATL_VSLDS_SCR_Barriers" in nav.item(children[0], "text")
+        finally:
+            window.destroy()
 
 
 class TestRuleMakerWindow:

@@ -25,7 +25,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import TYPE_CHECKING, Any, Final
 
-from wraithguard.gui import case_insensitive_filetypes
+from wraithguard.gui import case_insensitive_filetypes, rtl
 from wraithguard.gui.theme import DARK, apply_titlebar_theme
 from wraithguard.gui.widgets import add_tooltip
 from wraithguard.i18n import gettext as _
@@ -192,6 +192,7 @@ class PatchBuilderMixin:
         ):
             tree.heading(name, text=title)
             tree.column(name, width=width, anchor="w", stretch=(name == "source"))
+        rtl.apply_rtl_to_treeview(tree)
         scroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         tree.configure(yscrollcommand=scroll.set)
         tree.grid(row=0, column=0, sticky="nsew")

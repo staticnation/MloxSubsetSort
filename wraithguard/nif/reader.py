@@ -101,6 +101,19 @@ class NifParseError(Exception):
     """Raised when a file is not a readable Morrowind NIF."""
 
 
+class NifMalformedError(NifParseError):
+    """The file itself is malformed, as opposed to a gap in this reader.
+
+    Raised by the data-plausibility guards -- an implausible array count, a
+    bounding volume nested absurdly deep -- which fire on a value that no valid
+    Morrowind NIF holds. It is a subclass of :class:`NifParseError`, so callers
+    that only care whether reading stopped need not distinguish it; the point of
+    the separate type is that a survey can tell "this mod's mesh is broken" (even
+    Greatness7's own reader refuses it) from "a block layout here is wrong",
+    which are opposite conclusions that ``stopped_reason`` alone conflates.
+    """
+
+
 def _read_bounding_volume(cursor: _Cursor, name: str, depth: int = 0) -> None:
     """Read one bounding volume, which may contain others.
 
@@ -123,7 +136,7 @@ def _read_bounding_volume(cursor: _Cursor, name: str, depth: int = 0) -> None:
     kind = int(bound_type)
     if kind == _BOUND_UNION:
         if depth >= _MAX_BOUND_DEPTH:
-            raise NifParseError(
+            raise NifMalformedError(
                 f"{name}: bounding volumes nested more than {_MAX_BOUND_DEPTH} deep"
             )
         count = cursor.count(f"{name} union count")
@@ -158,6 +171,9 @@ class Block:
             that is wrong by a few bytes is diagnosed by comparing this against
             where the *next* type string actually begins, and that comparison
             is impossible after the fact without it.
+        raw: The block's body bytes verbatim, populated only when the file was
+            read with ``retain=True`` (for :func:`write_nif`); empty otherwise,
+            so the default scan pays nothing to keep them.
     """
 
     index: int
@@ -165,6 +181,7 @@ class Block:
     fields: dict[str, Any]
     offset: int = 0
     size: int = 0
+    raw: bytes = b""
 
     def link(self, name: str) -> int:
         """Read a link field, normalising "absent" to ``-1``.
@@ -196,6 +213,17 @@ class NifFile:
             missing type is a gap to fill, a known type that failed is a bug in
             its layout. Conflating them in a survey once sent a real
             investigation after the wrong thing.
+        stopped_malformed: ``True`` when reading stopped on a data-plausibility
+            guard (:class:`NifMalformedError`) -- the file is broken, not the
+            layout. A third distinct finding: not a gap to fill and not a bug to
+            fix, but a mesh even the reference reader refuses.
+        header: The file's preamble bytes -- the version line through the block
+            count -- kept only when read with ``retain=True``, so that
+            :func:`write_nif` can reproduce the header exactly.
+        footer: The bytes after the last block -- the root-object list -- kept on
+            the same ``retain=True`` terms. The block walk stops at the declared
+            block count and never reads these, so :func:`write_nif` must carry
+            them across itself.
     """
 
     version: int
@@ -204,6 +232,9 @@ class NifFile:
     stopped_at: str | None = None
     stopped_reason: str = ""
     stopped_unknown: bool = False
+    stopped_malformed: bool = False
+    header: bytes = b""
+    footer: bytes = b""
 
     @property
     def complete(self) -> bool:
@@ -275,11 +306,13 @@ class _Cursor:
             The count.
 
         Raises:
-            NifParseError: If the value exceeds :data:`_MAX_COUNT`.
+            NifMalformedError: If the value exceeds :data:`_MAX_COUNT`, which no
+                valid Morrowind NIF produces -- the file is broken, not the
+                layout.
         """
         (value,) = self.unpack("<I", what)
         if value > _MAX_COUNT:
-            raise NifParseError(f"{what}: implausible count {value} at offset {self.pos - 4}")
+            raise NifMalformedError(f"{what}: implausible count {value} at offset {self.pos - 4}")
         return int(value)
 
     def string(self, what: str) -> str:
@@ -323,7 +356,7 @@ def _printable(text: str, limit: int = 32) -> str:
     return f'"{escaped}{suffix}" ({len(text)} chars)'
 
 
-def read_nif_bytes(data: bytes, *, geometry: bool = False) -> NifFile:
+def read_nif_bytes(data: bytes, *, geometry: bool = False, retain: bool = False) -> NifFile:
     """Parse a NIF from memory.
 
     Args:
@@ -332,6 +365,9 @@ def read_nif_bytes(data: bytes, *, geometry: bool = False) -> NifFile:
             counts. Off by default: a scan over a mod folder reads tens of
             thousands of meshes and needs none of it, while one mesh in a
             viewer needs all of it.
+        retain: Keep each block's body bytes and the file header, so
+            :func:`write_nif` can reproduce the file exactly. Off by default,
+            for the same reason as ``geometry``: the scan does not need them.
 
     Returns:
         What could be read, including where it stopped.
@@ -354,11 +390,14 @@ def read_nif_bytes(data: bytes, *, geometry: bool = False) -> NifFile:
             f"this reader is deliberately limited to the versions the game loads"
         )
     block_count = cursor.count("block count")
+    header = data[: cursor.pos] if retain else b""
 
     blocks: list[Block] = []
     for index in range(block_count):
         try:
             type_name = cursor.string(f"block {index} type")
+        except NifMalformedError as exc:
+            return NifFile(version, block_count, blocks, "", str(exc), stopped_malformed=True)
         except NifParseError as exc:
             return NifFile(version, block_count, blocks, "", str(exc))
         if not _TYPE_NAME.fullmatch(type_name):
@@ -391,18 +430,26 @@ def read_nif_bytes(data: bytes, *, geometry: bool = False) -> NifFile:
         start = cursor.pos
         try:
             fields = _read_block(cursor, layout, geometry=geometry)
+        except NifMalformedError as exc:
+            return NifFile(
+                version, block_count, blocks, type_name, str(exc), stopped_malformed=True
+            )
         except NifParseError as exc:
             return NifFile(version, block_count, blocks, type_name, str(exc))
-        blocks.append(Block(index, type_name, fields, start, cursor.pos - start))
-    return NifFile(version, block_count, blocks)
+        raw = data[start : cursor.pos] if retain else b""
+        blocks.append(Block(index, type_name, fields, start, cursor.pos - start, raw))
+    footer = data[cursor.pos :] if retain else b""
+    return NifFile(version, block_count, blocks, header=header, footer=footer)
 
 
-def read_nif(path: str | Path, *, geometry: bool = False) -> NifFile:
+def read_nif(path: str | Path, *, geometry: bool = False, retain: bool = False) -> NifFile:
     """Parse a NIF from disk.
 
     Args:
         path: The file to read.
         geometry: Keep the bulk data as well as its counts; see
+            :func:`read_nif_bytes`.
+        retain: Keep the bytes :func:`write_nif` needs; see
             :func:`read_nif_bytes`.
 
     Returns:
@@ -417,7 +464,50 @@ def read_nif(path: str | Path, *, geometry: bool = False) -> NifFile:
         data = _Path(path).read_bytes()
     except OSError as exc:
         raise NifParseError(f"cannot read {path}: {exc}") from exc
-    return read_nif_bytes(data, geometry=geometry)
+    return read_nif_bytes(data, geometry=geometry, retain=retain)
+
+
+def write_nif(nif_file: NifFile) -> bytes:
+    """Serialise a NIF back to bytes, the inverse of :func:`read_nif_bytes`.
+
+    The reader is a structure walker: for the bulk arrays it keeps element
+    *counts*, not the elements, so a field-by-field writer could not reproduce
+    them. What it *can* keep, on request, is each block's body verbatim and the
+    file header (``read_nif_bytes(..., retain=True)``); this reassembles those
+    into the framing -- the header, then each block's type string followed by its
+    body. The result is byte-for-byte identical to the input, which is the
+    strongest statement of read/write parity available: every file the reader
+    understands, it can write back unchanged, and a caller that replaces a
+    block's :attr:`Block.raw` writes a modified file with every other block and
+    all the framing intact.
+
+    Args:
+        nif_file: A file read with ``retain=True``. Its :attr:`NifFile.header`
+            and every :attr:`Block.raw` must be populated.
+
+    Returns:
+        The encoded file bytes.
+
+    Raises:
+        NifParseError: If the file was not read with ``retain=True`` (its header
+            is empty), so there is nothing to write back; or if reading stopped
+            early, since a partial block list cannot be reassembled faithfully.
+    """
+    if nif_file.stopped_at is not None:
+        raise NifParseError(
+            f"write_nif cannot reassemble a file whose read stopped early "
+            f"({nif_file.stopped_reason or 'incomplete'})"
+        )
+    if not nif_file.header:
+        raise NifParseError("write_nif needs a file read with retain=True (its header is empty)")
+    parts = [nif_file.header]
+    for block in nif_file.blocks:
+        name = block.type_name.encode("cp1252")
+        parts.append(struct.pack("<I", len(name)))
+        parts.append(name)
+        parts.append(block.raw)
+    parts.append(nif_file.footer)
+    return b"".join(parts)
 
 
 def _read_block(
@@ -712,6 +802,14 @@ def _read_compound(
         return _read_texture_slots(cursor, seen)
     if kind == "source_texture_body":
         return _read_source_texture_body(cursor, seen)
+    if kind == "palette_array":
+        return _read_palette(cursor, name)
+    if kind == "connectivity_flags":
+        return _read_connectivity_flags(cursor, name, seen)
+    if kind == "skin_partition_array":
+        return _read_skin_partitions(cursor, name)
+    if kind == "sequence_array":
+        return _read_sequences(cursor, name)
     raise NifParseError(f"layout error: field {name!r} has unknown kind {kind!r}")
 
 
@@ -957,6 +1055,106 @@ def _read_skin_bones(cursor: _Cursor, seen: dict[str, Any]) -> list[int]:
         cursor.take(weighted * _SKIN_WEIGHT, f"bone {index} weights")
         counts.append(weighted)
     return counts
+
+
+def _read_palette(cursor: _Cursor, name: str) -> int:
+    """Read a ``NiPalette``'s colour table: a count, then that many RGBA quads.
+
+    Args:
+        cursor: The read head, at the palette count.
+        name: The field name, for error messages.
+
+    Returns:
+        The number of colours.
+    """
+    count = cursor.count(f"{name} count")
+    cursor.take(count * 4, name)
+    return count
+
+
+def _read_connectivity_flags(cursor: _Cursor, name: str, seen: dict[str, Any]) -> int:
+    """Read a ``NiLinesData``'s connectivity flags: one byte per vertex.
+
+    Sized by the vertices actually present: the reference reader counts
+    ``len(vertices)``, which is ``num_vertices`` only when ``has_vertices`` was
+    set and zero otherwise -- so a data block that declared a count but carried
+    no vertex array consumes nothing here.
+
+    Args:
+        cursor: The read head.
+        name: The field name, for error messages.
+        seen: Fields already read, for ``num_vertices`` and ``has_vertices``.
+
+    Returns:
+        The number of flag bytes (one per present vertex).
+    """
+    vertices = max(0, int(seen.get("num_vertices", 0) or 0)) if seen.get("has_vertices") else 0
+    cursor.take(vertices, name)
+    return vertices
+
+
+def _read_skin_partitions(cursor: _Cursor, name: str) -> int:
+    """Read a ``NiSkinPartition``: a count, then that many partitions.
+
+    Each partition is a five-``u16`` header giving the sizes of the arrays that
+    follow -- bones, a vertex map, per-vertex weights, then either a triangle
+    list or triangle strips -- and an optional bone palette. Only the partition
+    count is kept; a structure report needs no more.
+
+    Args:
+        cursor: The read head, at the partition count.
+        name: The field name, for error messages.
+
+    Returns:
+        The number of partitions.
+    """
+    count = cursor.count(f"{name} count")
+    for index in range(count):
+        num_vertices = int(cursor.unpack("<H", f"partition {index} vertices")[0])
+        num_triangles = int(cursor.unpack("<H", f"partition {index} triangles")[0])
+        num_bones = int(cursor.unpack("<H", f"partition {index} bones")[0])
+        num_strip_lengths = int(cursor.unpack("<H", f"partition {index} strip lengths")[0])
+        per_vertex = int(cursor.unpack("<H", f"partition {index} bones per vertex")[0])
+        cursor.take(num_bones * 2, f"partition {index} bone list")
+        cursor.take(num_vertices * 2, f"partition {index} vertex map")
+        cursor.take(per_vertex * num_vertices * 4, f"partition {index} weights")
+        if num_triangles:
+            cursor.take(num_triangles * 6, f"partition {index} triangles")
+        elif num_strip_lengths:
+            lengths = cursor.unpack(f"<{num_strip_lengths}H", f"partition {index} strip lengths")
+            cursor.take(sum(lengths) * 2, f"partition {index} strips")
+        has_palette = int(cursor.unpack("<B", f"partition {index} has palette")[0])
+        if has_palette:
+            cursor.take(per_vertex * num_vertices, f"partition {index} bone palette")
+    return count
+
+
+def _read_sequences(cursor: _Cursor, name: str) -> int:
+    """Read a ``NiKeyframeManager``'s sequences: a count, then that many.
+
+    Each sequence is a name, then either an external keyframe filename or an
+    inline int-and-link pair, then a count of ``(name, controller)`` pairs.
+
+    Args:
+        cursor: The read head, at the sequence count.
+        name: The field name, for error messages.
+
+    Returns:
+        The number of sequences.
+    """
+    count = cursor.count(f"{name} count")
+    for index in range(count):
+        cursor.string(f"sequence {index} name")
+        has_external = int(cursor.unpack("<B", f"sequence {index} has external kf")[0])
+        if has_external:
+            cursor.string(f"sequence {index} keyframe file")
+        else:
+            cursor.take(8, f"sequence {index} inline int and link")  # i32 + link
+        pairs = cursor.count(f"sequence {index} pair count")
+        for _ in range(pairs):
+            cursor.string(f"sequence {index} pair name")
+            cursor.take(4, f"sequence {index} pair controller")  # i32
+    return count
 
 
 def _read_texture_slots(cursor: _Cursor, seen: dict[str, Any]) -> dict[str, int]:

@@ -3114,31 +3114,40 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             else f"tes3conv JSON dump ({dest}) will be removed on close."
         )
 
-    def _get_session(self, conv: str | None) -> core.Tes3ConvSession | None:
-        """Return the shared disk-backed tes3conv session, creating it if needed.
+    def _get_session(self, conv: str | None) -> core.Tes3ConvSession:
+        """Return the shared disk-backed conflict session, creating it if needed.
 
-        Reused across scans, always dumping to the
-        same 'tes3conv_json' folder -- so every plugin is converted at most once per
-        run (Check Conflicts then Cell Map reuse the JSON, no re-running tes3conv).
-        A cached JSON is re-used only if it's newer than its plugin (mtime check in
-        core), so an edited plugin still re-converts. The 'Keep tes3conv JSON dump'
-        option only controls whether that folder is removed on close. Called from a
-        worker thread; self._keep_json is snapshotted on the main thread.
+        When ``conv`` names a tes3conv executable that is the backend; otherwise
+        the built-in reader is (:class:`core.NativeEspSession`), so field-level
+        conflicts, the cell map and Merged Lands work with no tes3conv installed.
+        Either way it is reused across scans, always dumping to the same
+        'tes3conv_json' folder -- so every plugin is converted at most once per run
+        (Check Conflicts then Cell Map reuse the JSON). A cached JSON is re-used
+        only if it's newer than its plugin (mtime check in core), so an edited
+        plugin still re-converts. The 'Keep tes3conv JSON dump' option only
+        controls whether that folder is removed on close. Called from a worker
+        thread; self._keep_json is snapshotted on the main thread.
         """
-        if not conv:
-            return None
         keep = bool(getattr(self, "_keep_json", False))
         s = getattr(self, "_session", None)
-        if s is not None and getattr(s, "exe", None) == conv:
+        # Reuse the current session when it is the same engine: the same tes3conv
+        # exe, or the native reader when there is no tes3conv.
+        same = (getattr(s, "exe", None) == conv) if conv else isinstance(s, core.NativeEspSession)
+        if s is not None and same:
             s.keep = keep  # same dump folder -> just track keep
             return s
-        if s is not None:  # engine path changed -> retire the old one
+        if s is not None:  # engine changed -> retire the old one
             try:
                 s.cleanup()
             except Exception:  # noqa: BLE001
                 # retiring a replaced engine session; failure must not block the new one
                 pass
-        s = core.Tes3ConvSession(conv, dump_dir=str(self._tes3conv_json_dir()), keep=keep)
+        dump = str(self._tes3conv_json_dir())
+        s = (
+            core.Tes3ConvSession(conv, dump_dir=dump, keep=keep)
+            if conv
+            else core.NativeEspSession(dump_dir=dump, keep=keep)
+        )
         self._session = s
         return s
 
@@ -3236,16 +3245,10 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         cfg_dir = (
             str(Path(self.cfg_var.get().strip()).parent) if self.cfg_var.get().strip() else None
         )
+        # tes3conv is used for the binary encoding when present, but the built-in
+        # writer encodes a byte-compatible plugin without it, so a merge no longer
+        # requires it -- conv may be None here and the service reads/writes natively.
         conv = core.find_tes3conv(explicit=self._tes3conv_override, extra_dirs=[cfg_dir])
-        if not conv:
-            messagebox.showwarning(
-                _("tes3conv needed"),
-                _(
-                    "Merging land needs tes3conv, which does the binary encoding.\n\n"
-                    "Use 'Set tes3conv...' in the Conflicts window to point at it."
-                ),
-            )
-            return
 
         folders = self._merged_lands_dirs()
         chosen = self._merged_lands_target(folders, order)
@@ -3443,7 +3446,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         return best
 
     def _merged_lands_worker(
-        self, data_files: list[Path], order: list[str], converter: str, target: Path
+        self, data_files: list[Path], order: list[str], converter: str | None, target: Path
     ) -> None:
         """Run the merge off the UI thread."""
         writer = QueueWriter(self.log_queue)
@@ -3798,7 +3801,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
                 print("=" * 70)
                 print(
                     _("  Engine: %(engine)s")
-                    % {"engine": "tes3conv" if conv else _("built-in parser")}
+                    % {"engine": "tes3conv" if conv else _("native esp reader")}
                 )
                 cov = core.build_cell_coverage(order, index, subset_names=subset, session=session)
                 trace(

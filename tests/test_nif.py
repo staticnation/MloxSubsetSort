@@ -18,6 +18,7 @@ a block type that is not a block type, a few blocks downstream.
 
 from __future__ import annotations
 
+import dataclasses
 import struct
 import sys
 from pathlib import Path
@@ -31,12 +32,14 @@ from check_nif_layouts import load_census
 from wraithguard.nif import (
     ACCEPTED_VERSIONS,
     NIF_VERSION_MORROWIND,
+    NifMalformedError,
     NifParseError,
     Structure,
     compare,
     read_nif,
     read_nif_bytes,
     summarise,
+    write_nif,
 )
 from wraithguard.nif.blocks import BLOCK_LAYOUTS
 from wraithguard.nif.report import normalise_texture, texture_key
@@ -1424,3 +1427,249 @@ class TestTextureIdentityIgnoresTheExtension:
         """``mod.v2/rock`` has no extension, and stripping one would corrupt it."""
         assert texture_key("mod.v2/rock") == "mod.v2/rock"
         assert texture_key("mod.v2/rock.dds") == "mod.v2/rock"
+
+
+def _node_with_property_count(count: int) -> bytes:
+    """A ``NiNode`` body whose property-link count is ``count``, links omitted.
+
+    Used to drive the implausible-count guard: a real body would follow the
+    count with that many links, but the guard fires on the count itself.
+
+    Args:
+        count: The value to write where the property-link count goes.
+
+    Returns:
+        The node body bytes, truncated right after the count.
+    """
+    return (
+        text("n")
+        + struct.pack("<ii", -1, -1)  # extra data, controller
+        + struct.pack("<H", 0)  # flags
+        + b"\0" * 12  # translation
+        + b"\0" * 36  # rotation
+        + struct.pack("<f", 1.0)  # scale
+        + b"\0" * 12  # velocity
+        + struct.pack("<I", count)  # property-link count
+    )
+
+
+class TestMalformedVersusLayout:
+    """A broken file and a wrong layout are different findings, kept apart.
+
+    The reader guards against a value no valid NIF holds -- an implausible array
+    count -- and reports it as :class:`NifMalformedError` / ``stopped_malformed``,
+    separate from a layout desync. This is the distinction that kept a real mod's
+    corrupt ``NiBSParticleNode`` (which Greatness7's own reader also refuses) out
+    of the "layout bug" tally, where it looked like a defect in this reader.
+    """
+
+    def test_malformed_error_is_a_parse_error(self) -> None:
+        """Callers that only care that reading stopped need not distinguish it."""
+        assert issubclass(NifMalformedError, NifParseError)
+
+    def test_an_implausible_count_is_flagged_malformed(self) -> None:
+        """A count no valid file holds stops with ``stopped_malformed`` set."""
+        result = read_nif_bytes(nif(("NiNode", _node_with_property_count(0xFFFFFFFF))))
+        assert result.stopped_malformed is True
+        assert result.stopped_at == "NiNode"
+        assert "implausible" in result.stopped_reason
+
+    def test_a_plausible_node_is_not_flagged_malformed(self) -> None:
+        """A well-formed node reads clean; the flag stays false."""
+        result = read_nif_bytes(nif(("NiNode", av_object("root"))))
+        assert result.complete
+        assert result.stopped_malformed is False
+
+
+class TestPortedBlocks:
+    """The four blocks ported from Greatness7's ``es3`` reference reader.
+
+    Each is checked by parsing it followed by a plain node: the node only reads
+    back at the right offset if the block before it consumed exactly its bytes,
+    so a two-block file that parses whole proves the new layout's width.
+    """
+
+    def _followed_by_node(self, type_name: str, body: bytes) -> None:
+        """Parse ``body`` as ``type_name`` then a node, and require both.
+
+        Args:
+            type_name: The block type to place first.
+            body: Its body bytes.
+        """
+        result = read_nif_bytes(nif((type_name, body), ("NiNode", av_object("after"))))
+        assert result.complete, result.stopped_reason
+        assert [block.type_name for block in result.blocks] == [type_name, "NiNode"]
+
+    def test_palette(self) -> None:
+        """A has-alpha byte, a count, then that many RGBA quads."""
+        body = struct.pack("<B", 1) + struct.pack("<I", 2) + b"\x00" * (2 * 4)
+        self._followed_by_node("NiPalette", body)
+
+    def test_lines_data(self) -> None:
+        """A geometry base with two vertices, then two connectivity bytes."""
+        body = (
+            struct.pack("<H", 2)  # num_vertices
+            + struct.pack("<I", 1)  # has_vertices
+            + b"\x00" * (2 * 3 * 4)  # two xyz vertices
+            + struct.pack("<I", 0)  # has_normals
+            + b"\x00" * 12  # center
+            + struct.pack("<f", 1.0)  # radius
+            + struct.pack("<I", 0)  # has_vertex_colors
+            + struct.pack("<H", 0)  # num_uv_sets
+            + struct.pack("<I", 0)  # has_uv
+            + b"\x00" * 2  # one connectivity flag per vertex
+        )
+        self._followed_by_node("NiLinesData", body)
+
+    def test_skin_partition(self) -> None:
+        """One partition, every array empty, no bone palette."""
+        partition = struct.pack("<5H", 0, 0, 0, 0, 0) + struct.pack("<B", 0)
+        self._followed_by_node("NiSkinPartition", struct.pack("<I", 1) + partition)
+
+    def test_renderer_specific_property(self) -> None:
+        """A bare property: name, extra, controller, flags."""
+        self._followed_by_node(
+            "NiRendererSpecificProperty", text("") + struct.pack("<iiH", -1, -1, 0)
+        )
+
+    def test_texture_property(self) -> None:
+        """A property plus one image link."""
+        body = text("") + struct.pack("<iiH", -1, -1, 0) + struct.pack("<i", -1)
+        self._followed_by_node("NiTextureProperty", body)
+
+    def test_particle_meshes(self) -> None:
+        """A geometry: the AV object, then data and skin-instance links."""
+        # av_object() writes the node tail (children + effects); trim it and add
+        # the two geometry links instead, exactly as a NiTriShape body is built.
+        head = av_object("mesh")[: -(4 + 4)]
+        self._followed_by_node("NiParticleMeshes", head + struct.pack("<ii", -1, -1))
+
+    def test_mirrored_node(self) -> None:
+        """A mirrored node is a plain node."""
+        self._followed_by_node("BSMirroredNode", av_object("mirror"))
+
+    def test_particle_mesh_modifier(self) -> None:
+        """A particle modifier base, then an empty mesh reference list."""
+        body = struct.pack("<ii", -1, -1) + struct.pack("<I", 0)  # next, controller, 0 meshes
+        self._followed_by_node("NiParticleMeshModifier", body)
+
+    def test_particle_meshes_data(self) -> None:
+        """A rotating-particles body, then one trailing modifier link.
+
+        The block is that base plus a single ``Ref``; a following node only
+        aligns if the base and the 4-byte link together consumed exactly the
+        block's bytes.
+        """
+        body = (
+            struct.pack("<H", 1)  # num_vertices
+            + struct.pack("<I", 1)  # has_vertices
+            + b"\x00" * 12  # one xyz vertex
+            + struct.pack("<I", 0)  # has_normals
+            + b"\x00" * 12  # center
+            + struct.pack("<f", 1.0)  # radius
+            + struct.pack("<I", 0)  # has_vertex_colors
+            + struct.pack("<H", 0)  # num_uv_sets
+            + struct.pack("<I", 0)  # has_uv
+            + struct.pack("<H", 1)  # num_particles
+            + struct.pack("<f", 1.0)  # particle_radius
+            + struct.pack("<H", 1)  # num_active
+            + struct.pack("<I", 0)  # has_sizes
+            + struct.pack("<I", 0)  # has_rotations
+            + struct.pack("<i", -1)  # modifier link
+        )
+        self._followed_by_node("NiParticleMeshesData", body)
+
+    def test_keyframe_manager(self) -> None:
+        """A time controller, then one inline sequence with no pairs."""
+        controller = (
+            struct.pack("<i", -1)  # next
+            + struct.pack("<H", 8)  # flags
+            + struct.pack("<4f", 1.0, 0.0, 0.0, 0.0)  # frequency, phase, start, stop
+            + struct.pack("<i", -1)  # target
+        )
+        sequence = (
+            text("seq")
+            + struct.pack("<B", 0)  # not external
+            + struct.pack("<ii", 0, -1)  # inline int + link
+            + struct.pack("<I", 0)  # no name/controller pairs
+        )
+        self._followed_by_node("NiKeyframeManager", controller + struct.pack("<I", 1) + sequence)
+
+
+class TestParticleMeshesFixture:
+    """The one real file that exercises ``NiParticleMeshesData``.
+
+    Unlike the synthetic fixtures, this is a whole authored mesh (a particle
+    system over a mesh template, built in NifSkope). It is the only file in the
+    reference corpus that carries a ``NiParticleMeshesData`` block, so it is
+    kept here to pin that layout against a genuine file, not just a hand-built
+    body: if the block's width regresses, the following blocks lose alignment
+    and the whole-file parse and round trip below both fail.
+    """
+
+    _FIXTURE = Path(__file__).resolve().parent.parent / "testdata" / "nif" / "NiParticleMeshes.nif"
+
+    def test_the_whole_file_parses_and_round_trips(self) -> None:
+        """All 26 blocks parse with no stop, and the file writes back unchanged."""
+        data = self._FIXTURE.read_bytes()
+        result = read_nif_bytes(data, retain=True)
+        assert result.complete, result.stopped_reason
+        assert len(result.blocks) == result.block_count == 26
+        assert write_nif(result) == data
+
+    def test_the_data_block_links_its_mesh_node(self) -> None:
+        """The block is present and its trailing modifier link resolves to a node."""
+        result = read_nif_bytes(self._FIXTURE.read_bytes())
+        data_block = next(b for b in result.blocks if b.type_name == "NiParticleMeshesData")
+        target = data_block.fields["modifier"]
+        assert result.blocks[target].type_name == "NiNode"
+
+
+class TestWriter:
+    """:func:`write_nif`, the inverse of the reader.
+
+    The reader keeps element counts, not the elements, so the writer works from
+    the block bodies and framing the ``retain=True`` read keeps. Its contract is
+    a byte-exact round trip -- verified over the whole corpus during development,
+    and pinned in miniature here -- plus the two refusals that keep it honest.
+    """
+
+    def _file(self) -> bytes:
+        """A two-node file with a root-list footer, as a real NIF has.
+
+        Returns:
+            The file bytes.
+        """
+        return nif(("NiNode", av_object("root")), ("NiNode", av_object("child"))) + struct.pack(
+            "<Ii", 1, 0
+        )  # footer: one root, index 0
+
+    def test_round_trips_byte_exact(self) -> None:
+        """A retained read written back equals the original, footer and all."""
+        data = self._file()
+        result = read_nif_bytes(data, retain=True)
+        assert result.complete
+        assert write_nif(result) == data
+
+    def test_a_read_without_retain_cannot_be_written(self) -> None:
+        """Without the kept bytes there is nothing to reassemble."""
+        result = read_nif_bytes(self._file())  # retain defaults off
+        with pytest.raises(NifParseError):
+            write_nif(result)
+
+    def test_an_incomplete_read_cannot_be_written(self) -> None:
+        """A file whose read stopped early would reassemble wrong; it refuses."""
+        data = HEADER + struct.pack("<II", NIF_VERSION_MORROWIND, 3)  # claims 3 blocks, has none
+        result = read_nif_bytes(data, retain=True)
+        assert result.stopped_at is not None
+        with pytest.raises(NifParseError):
+            write_nif(result)
+
+    def test_editing_one_block_leaves_the_rest_intact(self) -> None:
+        """Replacing a block's body rewrites just it; the framing survives."""
+        result = read_nif_bytes(self._file(), retain=True)
+        result.blocks[0] = dataclasses.replace(result.blocks[0], raw=av_object("renamed"))
+        rewritten = read_nif_bytes(write_nif(result), retain=True)
+        assert rewritten.complete
+        assert [block.type_name for block in rewritten.blocks] == ["NiNode", "NiNode"]
+        assert rewritten.blocks[0].fields["name"] == "renamed"

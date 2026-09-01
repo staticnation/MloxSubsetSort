@@ -57,7 +57,7 @@ wraithguard = ["py.typed"]
 # below and wraithguard.__version__ never drift apart.
 [project]
 name = "wraithguard-toolkit"
-version = "3.1.6"
+version = "3.1.7"
 description = "Sort your own Morrowind mods into a frozen MOMW load order."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -96,7 +96,7 @@ stream = ["ijson"]
 gui = ["PyYAML", "tkinterdnd2", "pywebview", "tkinterweb", "zstandard", "ijson"]
 
 # The gates, pinned. `pip install -e .[dev]` installs the exact tool versions
-# the standards claims in this file and in README/REMAINING_WORK are measured
+# the standards claims in this file and in README/CODE_REVIEW are measured
 # against. This exists because the empty runtime `dependencies` means nothing
 # else pins the toolchain: ruff and mypy keep adding and stabilising rules, so
 # an unpinned `python -m mypy` / `ruff check` drifts from "zero findings" to a

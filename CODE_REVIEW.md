@@ -4244,3 +4244,88 @@ Gate state on the latest full run: **3,646 passed, 2 skipped**
 (`test_differential`'s deliberate baseline skip; `test_viz_pages` for symlinks
 not permitted in that environment), **coverage 86.77%** against the 77% floor.
 `CHANGELOG.md`'s 3.1.5 entry has the user-facing side of all of the above.
+
+## §45 A fourth audit, and three documents retired into this log
+
+Run on a fresh checkout at **3.1.6** (Python 3.10.12, Linux, no Tk, no
+network), the same conditions as the 3.1.2 audit that became `AUDIT_REPORT.md`.
+Every gate is clean and there was **no code to change**: `ruff check .` passes
+under the full strict select, `black --check` clean, `python -m mypy` reports
+*no issues found in 178 source files* (up from the 109 the docs still cited --
+the package grew, the gate kept pace), `check_undefined` / `check_placeholders`
+ok, `make_pot.py --check` current. `vulture` at confidence 70 finds **zero**
+unused functions, classes, methods or imports across `wraithguard/` and both
+root scripts -- for 117k lines that is the notable result. `pytest --collect-only`
+in this hermetic checkout collects **5,578 tests**.
+
+That last number is the point of this section. The test count has been written
+into prose in four places and has been wrong in all of them for some time:
+`REMAINING_WORK.md` said 3,289, `PROJECT_LAYOUT.md` said 3,442 in one paragraph
+and 3,202 in the next, §44 above recorded 3,646, and the suite now collects
+5,578. A count hand-copied into prose rots the moment the next test lands; the
+3.1.2 audit already diagnosed exactly this drift and it recurred anyway. So the
+fix this time is structural rather than another round of find-and-replace:
+
+- **`AUDIT_REPORT.md` retired.** It was the 3.1.2 audit with every finding
+  marked resolved and re-verified at 3.1.3 -- a point-in-time record whose
+  living conclusions are this section, and whose resolution narrative is already
+  duplicated in the changelog. Deleted rather than left to drift a third time.
+- **`REMAINING_WORK.md` retired**, its still-live content migrated below so
+  nothing forward-looking is lost. What it mostly held was a status snapshot
+  (all items `~~struck through~~` as done) plus the four drifted numbers.
+- **`PROJECT_LAYOUT.md` folded into `README.md`.** The directory tree and the
+  `viz/assets` three.js `--add-data` build caveat moved into a new *Project
+  layout* section and the packaging notes; its own stale counts did not.
+
+Documentation dropped from 19 tracked markdown files to 16. `README`,
+`QUICKSTART` and `MLOX_RULES` (the Help menu's `HELP_DOCUMENTS`) are untouched;
+`CHANGELOG`, `CREDITS`, `SMOKE_TEST`, `MERGED_LANDS`, `NIF_PROVENANCE` and this
+log all stay -- each is cited by CI, a test, a generator or a source module for
+provenance, and none carried a rotting number.
+
+### Migrated from REMAINING_WORK §1 -- ruff families deliberately not enabled
+
+Each would pass judgement on real code; listed with finding counts so the
+decision to leave it off is informed rather than implicit. `TC` from the
+original list is **done** (in `select` now); the rest stand:
+
+| Family | Findings | Assessment |
+|---|---|---|
+| `C901` complexity | 42 | Overlaps the oversized-functions list below. Enabling it without first splitting those functions would just add 42 `noqa`s, which is worse than the status quo. Split first, then consider it. |
+| `ARG` unused arguments | 37 | Mostly Tk callback signatures (`_event` parameters that must exist but are unused). Enabling means ~37 renames to `_`-prefixed names. Cosmetic. |
+| `EM`/`TRY` exception style | 51 | Would rewrite every `raise SystemExit("...")` into a pre-assigned message variable. Ruff's preferred style; this codebase's inline messages are clearer. Leave off. |
+| `SLF` private access | 20 | Almost entirely tests reaching into internals deliberately. Would need a per-file exemption saying exactly that. Low value. |
+| `PT` pytest style | 26 | 24 are composite `assert a and b`; splitting gives better failure messages -- a mild, real benefit. |
+
+### Migrated from REMAINING_WORK §3 -- oversized functions, left alone on purpose
+
+Every one is *sequential* rather than tangled, which is why they read better
+than their length suggests. Pinned by the differential baseline; touch only with
+it running.
+
+| Function | Lines | Why it stays |
+|---|---|---|
+| `generate_customizations_toml` | 327 | A single linear emitter with no internal stage boundaries; splitting means inventing seams rather than following them. |
+| `_anchor_positions` (sort) | 258 | The transitive anchor resolver; the nested `_final_pos` closure is the hard part. Genuinely intricate. |
+| `build_arg_parser` | 197 | 40+ `add_argument` calls. Long by nature; splitting by group would be cosmetic. |
+| `simulate_configurator_apply` | 181 | Reproduces momw-configurator step for step, sharp edges included; splitting would obscure the correspondence. |
+
+### Migrated from REMAINING_WORK §6 -- what NOT to do
+
+Each considered and rejected on evidence:
+
+- **Do not "fix" the skipped differential test.** It guards the baseline.
+- **Do not narrow the 40 `BLE001` catches** without reading each reason --
+  untrusted downloaded rule files, optional imports, Tk quirks (§13 records the
+  two refusals and why).
+- **Do not change `T3_NEVER_CLEAN`** or anything on the tes3cmd path.
+  Morrowind.esm / Tribunal.esm / Bloodmoon.esm must never be cleaned.
+- **Do not enable `EM`/`TRY`.** The resulting style is worse here.
+- **Do not delete the mixin `TYPE_CHECKING` blocks** in `gui/t3.py` and
+  `gui/conflicts.py` -- the documented host contract mypy checks `App` against.
+- **Do not reformat with `ruff format`.** `quote-style = "preserve"` is set on
+  purpose; black owns formatting here.
+
+The coverage story (79% overall, the GUI's smoke-test-only verification, the
+`tools/` gap and the untranslated `.mo`) is unchanged from §4 of the retired
+document and recorded across §8.5, §22 and §44 above; it is not repeated here.

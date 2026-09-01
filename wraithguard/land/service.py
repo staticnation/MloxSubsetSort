@@ -187,7 +187,7 @@ def resolve_plugin(name: str, directories: Sequence[Path]) -> Path | None:
 
 
 def _records_via(
-    converter: str,
+    converter: str | None,
     plugin: Path,
     scratch: Path,
     sidecar_dir: Path | None = None,
@@ -236,6 +236,14 @@ def _records_via(
         cached = landscape_records_from_sidecar(plugin, sidecar_dir)
         if cached is not None:
             return cached, ""
+
+    if not converter:
+        # No tes3conv configured: read the terrain in process rather than fail a
+        # subprocess per plugin. Same records the converter path returns.
+        try:
+            return read_landscape_records(plugin), ""
+        except NativeReadError as exc:
+            return [], f"reading {plugin.name} directly failed: {exc}"
 
     target = scratch / (plugin.stem + ".json")
     try:
@@ -321,7 +329,7 @@ def _describe_meta(meta: PluginMeta) -> str:
 def build_merged_lands(
     data_files: Path | Sequence[Path],
     load_order: Sequence[str],
-    converter: str,
+    converter: str | None,
     output: Path | None = None,
     strategy: ConflictStrategy = ConflictStrategy.AUTO,
     include_cells: bool = False,
@@ -337,7 +345,8 @@ def build_merged_lands(
         data_files: The Data Files directory, or every ``data=`` folder in
             search order. OpenMW load orders routinely span many.
         load_order: Plugin file names, in load order, masters first.
-        converter: Path to ``tes3conv``.
+        converter: Path to ``tes3conv``, or ``None`` to read and encode with the
+            built-in reader/writer -- a merge needs no external tool either way.
         output: Where to write, or ``None`` for ``Merged Lands.esp`` beside
             the plugins.
         strategy: How to settle a vertex two mods both moved.
@@ -818,16 +827,21 @@ def _write(
     master_names: Sequence[str],
     directories: Sequence[Path],
     target: Path,
-    converter: str,
+    converter: str | None,
 ) -> None:
-    """Serialise the records and let tes3conv encode them.
+    """Serialise the records and encode them to a plugin.
+
+    With a ``converter`` this hands the JSON to ``tes3conv`` (the verified path);
+    without one it encodes in process with the native writer, which produces a
+    byte-compatible plugin -- verified by having ``tes3conv`` read the native
+    output back identically to its own. So a merge no longer needs ``tes3conv``.
 
     Args:
         records: Every record after the header.
         master_names: The masters to declare.
         directories: Data folders to find them in.
         target: The plugin to write.
-        converter: The tes3conv executable.
+        converter: The tes3conv executable, or ``None`` to encode natively.
 
     Raises:
         MergeServiceError: If a master cannot be measured, or the conversion
@@ -845,6 +859,14 @@ def _write(
 
     document = build_plugin(records, masters)
     target.parent.mkdir(parents=True, exist_ok=True)
+    if not converter:
+        from wraithguard.esp import EspError, plugin_from_json, write_plugin
+
+        try:
+            target.write_bytes(write_plugin(plugin_from_json(document)))
+        except (OSError, EspError, ValueError) as exc:
+            raise MergeServiceError(f"could not encode the merged plugin natively: {exc}") from exc
+        return
     with tempfile.TemporaryDirectory() as scratch:
         as_json = Path(scratch) / "merged.json"
         as_json.write_text(json.dumps(document), encoding="utf-8")

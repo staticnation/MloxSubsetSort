@@ -193,6 +193,16 @@ _NI_PARTICLES_DATA: Final[Layout] = (
     ("sizes", "opt_float_array", "has_sizes"),
 )
 
+#: ``NiRotatingParticlesData`` is ``NiParticlesData`` followed by an optional
+#: per-particle rotation array. Shared so ``NiParticleMeshesData`` -- which is
+#: this same body plus one trailing link -- can build on it without repeating
+#: the fields or the reasoning behind them.
+_NI_ROTATING_PARTICLES_DATA: Final[Layout] = (
+    *_NI_PARTICLES_DATA,
+    ("has_rotations", "bool32"),
+    ("rotations", "quat_array", "has_rotations"),
+)
+
 #: Every particle modifier's preamble: the next modifier in the chain and the
 #: controller that owns it. Both are ``-1`` when absent, and both were read off
 #: the fixtures directly -- the values are block indices or -1 in every file.
@@ -203,6 +213,25 @@ _NI_PARTICLE_MODIFIER: Final[Layout] = (
 
 #: Extra data blocks chain to one another and declare their own length.
 _NI_EXTRA_DATA: Final[Layout] = (("next_extra_data", "link"), ("bytes_remaining", "u32"))
+
+#: The geometry-data base every mesh-data block shares: optional vertex, normal,
+#: colour and UV arrays around a bounding sphere. ``NiTriShapeData`` and
+#: ``NiTriStripsData`` inline these same fields and then add their own topology;
+#: ``NiLinesData`` reuses them and adds only per-vertex connectivity flags.
+_NI_GEOMETRY_DATA: Final[Layout] = (
+    ("num_vertices", "u16"),
+    ("has_vertices", "bool32"),
+    ("vertices", "vec3_array", "has_vertices"),
+    ("has_normals", "bool32"),
+    ("normals", "vec3_array", "has_normals"),
+    ("center", "vector3"),
+    ("radius", "f32"),
+    ("has_vertex_colors", "bool32"),
+    ("vertex_colors", "color4_array", "has_vertex_colors"),
+    ("num_uv_sets", "u16"),
+    ("has_uv", "bool32"),
+    ("uv_sets", "uv_array", "num_uv_sets"),
+)
 
 #: The blocks this reader understands, by the type string written before each
 #: one in the file. Anything absent stops the read rather than being skipped:
@@ -305,6 +334,26 @@ BLOCK_LAYOUTS: Final[dict[str, Layout]] = {
     # Line geometry, which shares the geometry shape and then stores one
     # connectivity byte per vertex rather than faces. Taken from tes3.
     "NiLines": (*_NI_AV_OBJECT, ("data", "link"), ("skin_instance", "link")),
+    # The geometry-data base, then one connectivity-flag byte per vertex.
+    "NiLinesData": (*_NI_GEOMETRY_DATA, ("vertex_connectivity_flags", "connectivity_flags")),
+    # A byte-indexed colour table: a has-alpha flag, then a count of RGBA quads.
+    "NiPalette": (("has_alpha", "u8"), ("palettes", "palette_array")),
+    # A count of skin partitions, each a self-describing header plus its arrays.
+    "NiSkinPartition": (("partitions", "skin_partition_array"),),
+    # A time controller, then a count of named animation sequences.
+    "NiKeyframeManager": (*_NI_TIME_CONTROLLER, ("sequences", "sequence_array")),
+    # The three blocks neither tes3 nor es3 models, derived from the corpus's own
+    # demo meshes (see NIF_PROVENANCE.md) rather than any GPL format table:
+    # a bare property; a property plus its image link (the legacy single-texture
+    # property); and a particle-mesh geometry, which is a plain geometry base.
+    "NiRendererSpecificProperty": _NI_PROPERTY,
+    "NiTextureProperty": (*_NI_PROPERTY, ("image", "link")),
+    "NiParticleMeshes": (*_NI_AV_OBJECT, ("data", "link"), ("skin_instance", "link")),
+    # A mirrored node is a plain node (es3); a mesh modifier is the particle
+    # modifier base (next, controller) plus its list of mesh references, derived
+    # from the demo mesh's bytes since neither reference library models it.
+    "BSMirroredNode": _NI_NODE,
+    "NiParticleMeshModifier": (*_NI_PARTICLE_MODIFIER, ("meshes", "ref_list")),
     "NiTriShapeData": (
         ("num_vertices", "u16"),
         ("has_vertices", "bool32"),
@@ -404,11 +453,18 @@ BLOCK_LAYOUTS: Final[dict[str, Layout]] = {
     # had the layout under two derived names and simply never had this one,
     # which is the cheapest kind of gap and the least visible.
     "NiParticlesData": _NI_PARTICLES_DATA,
-    "NiRotatingParticlesData": (
-        *_NI_PARTICLES_DATA,
-        ("has_rotations", "bool32"),
-        ("rotations", "quat_array", "has_rotations"),
-    ),
+    "NiRotatingParticlesData": _NI_ROTATING_PARTICLES_DATA,
+    # ``NiParticleMeshesData`` is a ``NiRotatingParticlesData`` body followed by
+    # a single ``Ref``. Measured from the one corpus sample (NifCorpus's
+    # ``NiParticleMeshes.NIF``, 43 particles): the rotating-particles base
+    # consumes 1428 of the block's 1432 bytes -- all 43 rotations are exact unit
+    # quaternions, so the base is right, not merely a size that happens to fit --
+    # and the remaining 4 bytes are one link that resolves to the master mesh
+    # ``NiNode``. The link closing exactly on the next block's type string is the
+    # check. Earlier this block was left unmodeled because the trailer was
+    # measured against ``NiParticlesData`` (no rotation array), which left 696
+    # unexplained bytes; the rotations are what those bytes are.
+    "NiParticleMeshesData": (*_NI_ROTATING_PARTICLES_DATA, ("modifier", "link")),
     "NiColorData": (("keys", "color_key_group"),),
     "NiParticleColorModifier": (*_NI_PARTICLE_MODIFIER, ("color_data", "link")),
     # -- taken from tes3 ---------------------------------------------------

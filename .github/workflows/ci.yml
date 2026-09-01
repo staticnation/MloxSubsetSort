@@ -1,6 +1,6 @@
 # Continuous integration.
 #
-# Runs exactly the gate list from PROJECT_LAYOUT.md "Testing", plus the two
+# Runs exactly the gate list from README.md "Developing", plus the two
 # project-specific checkers, so CI and a local run cannot drift apart. Added
 # per CODE_REVIEW.md §9.3, which asked for this as the cheapest guard against
 # regressing the state 3.0 stabilised.

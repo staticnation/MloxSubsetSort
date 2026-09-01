@@ -3,8 +3,8 @@
 Every renderer here is a **pure function from data to an HTML string**: no Tk,
 no file I/O, no network. That is what makes them testable in the hermetic
 suite, which matters more than usual because the GUI they are reached from has
-no automated coverage at all (``REMAINING_WORK.md`` §4). The GUI's job is
-reduced to writing the returned string to a file and opening it.
+no automated coverage beyond the headless Tk smoke pass (``SMOKE_TEST.md``). The
+GUI's job is reduced to writing the returned string to a file and opening it.
 
 The pages answer questions the text diff cannot:
 

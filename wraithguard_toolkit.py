@@ -1611,6 +1611,10 @@ class Tes3ConvSession:
     # can legitimately sit at world origin too).
     _SIDECAR_VER = 3
 
+    #: Which reader produced this session's JSON, for the engine label a scan
+    #: prints and records in its stats. Overridden by the native subclass.
+    engine_name: str = "tes3conv"
+
     def __init__(self, exe: str, dump_dir: str | None = None, keep: bool = False) -> None:
         """Open a session backed by ``exe``, spooling JSON to ``dump_dir``."""
         import tempfile
@@ -2013,6 +2017,85 @@ class Tes3ConvSession:
             shutil.rmtree(self.dump_dir, ignore_errors=True)
 
 
+class NativeEspSession(Tes3ConvSession):
+    """A :class:`Tes3ConvSession` that converts plugins in-process, without tes3conv.
+
+    The parent is built entirely on one primitive -- :meth:`_json_for`, which
+    turns a plugin into an on-disk JSON file -- so a native backend overrides only
+    that: it reads the plugin with :mod:`wraithguard.esp` and writes the same
+    ``tes3conv``-schema JSON (:func:`wraithguard.esp.plugin_to_json`, whose output
+    is verified byte-for-byte against ``tes3conv``). Every higher method --
+    ``record_map``, ``record_subset``, ``cells``, ``landscape_records``, the
+    sidecars, the ``ijson`` streaming -- then works unchanged, reading that file.
+
+    This is the fallback that makes ``tes3conv`` optional: with it, record- and
+    field-level conflict detection, the cell map and Merged Lands all run on the
+    built-in reader alone. ``tes3conv`` stays the default when it is present -- it
+    is the community's trusted converter and its zstd framing is canonical -- but
+    its absence no longer reduces conflict detection to bare record counts.
+    """
+
+    engine_name = "native"
+
+    def __init__(self, dump_dir: str | None = None, keep: bool = False) -> None:
+        """Open a native session, spooling JSON to ``dump_dir`` (a temp dir if None).
+
+        Args:
+            dump_dir: Where to write the ``.json`` spool, or ``None`` for a temp
+                dir removed on :meth:`cleanup`.
+            keep: Leave the dump in place on cleanup even if it is a temp dir.
+        """
+        super().__init__(exe="", dump_dir=dump_dir, keep=keep)
+
+    def _json_for(self, path: str | Path) -> str | None:
+        """Convert one plugin to on-disk JSON in process, reusing a fresh cache.
+
+        Mirrors the parent's cache and staleness handling exactly; only the
+        conversion differs -- :func:`wraithguard.esp.read_plugin` plus
+        :func:`wraithguard.esp.record_to_json` in place of a subprocess. Records
+        the built-in reader does not model (OpenMW-only tags, which come back as
+        ``UnknownRecord``) are skipped rather than failing the file, so a plugin
+        ``tes3conv`` would refuse outright still yields its ordinary records.
+
+        Args:
+            path: The plugin file to convert.
+
+        Returns:
+            The path to the JSON on disk, or ``None`` if the plugin could not be
+            read.
+        """
+        import json as _json
+
+        from wraithguard.esp import EspError, UnknownRecord, read_plugin, record_to_json
+
+        key = str(path)
+        with self._json_lock:
+            jp = self._json_paths.get(key)
+        if jp and Path(jp).exists():
+            return jp
+        out = self.dump_dir / (Path(path).stem + ".json")
+        if out.exists() and not self._stale(out, path):
+            with self._json_lock:
+                self._json_paths[key] = str(out)
+            trace(f"native esp: REUSE {out.name}")
+            return str(out)
+        try:
+            trace(f"native esp: CONVERT {Path(path).name} -> {out.name}")
+            records = read_plugin(Path(path).read_bytes())
+            objs = [record_to_json(r) for r in records if not isinstance(r, UnknownRecord)]
+            with out.open("w", encoding="utf-8") as fh:
+                _json.dump(objs, fh)
+        except (OSError, EspError, ValueError):
+            # OSError: unreadable/vanished plugin or dump. EspError: malformed
+            # plugin bytes. ValueError covers EspJsonError (a record with no JSON
+            # form). Any of them means "no JSON for this plugin", as a failed
+            # tes3conv run returns None.
+            return None
+        with self._json_lock:
+            self._json_paths[key] = str(out)
+        return str(out)
+
+
 def diff_record_fields(
     session: Tes3ConvSession | None, conflict: Mapping[str, Any], paths: Mapping[str, str]
 ) -> tuple[list[str], dict[str, dict[str, Any]], set[str]]:
@@ -2286,7 +2369,7 @@ def detect_conflicts(
         "unreadable": unreadable,
         "records": rec_count,
         "conflicts": len(conflicts),
-        "engine": "tes3conv" if session is not None else "builtin",
+        "engine": session.engine_name if session is not None else "builtin",
         "paths": paths,
     }
     return conflicts, stats
@@ -2350,7 +2433,7 @@ def _list_singles(
         "unreadable": unreadable,
         "records": rec_count,
         "singles": len(records),
-        "engine": "tes3conv" if session is not None else "builtin",
+        "engine": session.engine_name if session is not None else "builtin",
         "paths": paths,
     }
     return records, stats
@@ -5140,7 +5223,9 @@ def _conflict_and_cellmap_scans(
         csession = (
             Tes3ConvSession(conv, dump_dir=str(_dump) if _dump else None, keep=bool(_dump))
             if conv
-            else None
+            # No tes3conv on the system: the built-in reader converts in process,
+            # so field-level conflicts, the cell map and Merged Lands still work.
+            else NativeEspSession(dump_dir=str(_dump) if _dump else None, keep=bool(_dump))
         )  # disk-backed, shared across both scans
         if csession and _dump:
             print(_("  Keeping tes3conv JSON dump in: %(path)s") % {"path": csession.dumped_dir()})
@@ -5151,7 +5236,7 @@ def _conflict_and_cellmap_scans(
                 _("  Engine: %(engine)s")
                 % {
                     "engine": (
-                        f"tes3conv ({conv})" if conv else _("built-in parser (record-level)")
+                        f"tes3conv ({conv})" if conv else _("native esp reader (field-level)")
                     )
                 }
             )

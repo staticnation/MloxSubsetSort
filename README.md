@@ -47,9 +47,79 @@ inside the program as well.
   theme (see [Theming the app](#theming-the-app)).
 - `CREDITS.md` - acknowledgements for the projects this tool ports, references,
   and depends on (mlox, plox, tes3conv, modmapper, OpenMW, MOMW, and more).
-- `CHANGELOG.md` - what changed between releases (current: **3.1.3**).
-- `REMAINING_WORK.md` - the honest list of what is still outstanding in the
-  codebase and against PEP standards, measured rather than recalled.
+- `CHANGELOG.md` - what changed between releases (current: **3.1.7**).
+- `CODE_REVIEW.md` - the running engineering log: defects found, and the
+  reasoning behind decisions that look odd (including linter suggestions
+  deliberately refused because following them would introduce bugs).
+
+---
+
+## Project layout
+
+Everything needed to **build, run and test** the toolkit lives in this folder.
+Reference material (the upstream projects whose formats this tool mirrors) and
+scratch output are deliberately left outside it.
+
+```
+WraithguardToolkit/
+├── *.md                          Docs at the top level: README, QUICKSTART,
+│                                 CHANGELOG, CREDITS, CODE_REVIEW, MLOX_RULES,
+│                                 NIF_PROVENANCE, MERGED_LANDS, SMOKE_TEST.
+├── License/                      This project's MIT licence (`LICENSE`), plus
+│                                 one file per upstream project whose licence
+│                                 travels with code ported or adapted here.
+├── wraithguard_toolkit.py        Engine + CLI. No GUI import; runs headless.
+├── wraithguard_toolkit_gui.py    Tkinter front-end. Imports the engine.
+├── wraithguard/                  Shared foundation package.
+│   ├── i18n.py                   gettext translation, the _() marker.
+│   ├── logging_setup.py          Levelled logging (stderr) + trace file.
+│   ├── gui/                      GUI support (needs Tk): theming, widgets,
+│   │                             tes3cmd + conflict-window mixins, app dir.
+│   ├── mwscript/                 Compiled-script (SCDT) reading + disassembly.
+│   ├── tes3fields/               Decodes binary LAND / PGRD fields for the diff
+│   │                             window, plus the generated TES3 record schema.
+│   ├── viz/                      Maps and visualisations as self-contained HTML:
+│   │                             cell coverage map, conflict map, terrain
+│   │                             deltas, path-grid graphs, 3D surface, and the
+│   │                             Markdown renderer behind in-app Help. No CDN.
+│   ├── images/                   Every texture format the game and mods use,
+│   │                             decoded without a dependency (DDS incl. BC7,
+│   │                             Targa, bitmap, a zlib-only PNG writer), picked
+│   │                             by inspecting bytes, plus texture-role slots.
+│   ├── nif/                      Morrowind NIF meshes: block reader, geometry,
+│   │                             texture resolution, BSA-aware VFS, 3D viewer.
+│   ├── land/                     The Merged Lands port: reference landmass,
+│   │                             per-plugin diff, merge strategies, seam repair.
+│   ├── patch/                    Building a *new* patch plugin from records
+│   │                             chosen in the diff viewer; never writes a
+│   │                             source mod. Conflict-status model + roll-ups.
+│   ├── rules/                    mlox rule handling: patterns, parser, expr.
+│   ├── configurator/             openmw.cfg: read, simulate, emit TOML.
+│   ├── momw.py                   MOMW plugin-order.yml (curated lists).
+│   ├── net/                      Downloads: rule files, curated order.
+│   ├── plugins/                  Plugin location + header metadata.
+│   ├── sort/                     Load-order sort: graph primitives + engine.
+│   ├── tracing.py                Crash-survival trace logs (main + sort).
+│   └── versions.py               Version regex + mlox's canonical form.
+├── tools/                        Developer scripts (not shipped): the gate
+│                                 checkers, the code generators, make_pot.py.
+├── tests/                        pytest suite: the hermetic set plus a Tk smoke
+│                                 set that runs under xvfb in CI.
+├── testdata/                     Copies of a real setup, used by the tests.
+├── locale/                       wraithguard_toolkit.pot + translator guide.
+├── art/                          Icons, banner, Nexus description, AST graphs.
+├── build/                        PyInstaller / auto-py-to-exe configuration.
+├── pyproject.toml                ruff / black / pytest / mypy configuration.
+└── theme_template.json           Commented starting point for a custom theme.
+```
+
+Only the standard library is required to run. Optional extras (`tkinterdnd2`,
+`PyYAML`, `pywebview`/`tkinterweb`, `tomli` on Python < 3.11) each enable one
+feature and degrade gracefully when missing. Kept *outside* this folder because
+none of it is needed to build or run: the reference sources read while porting
+(credited in `CREDITS.md`), the third-party Perl/`tes3cmd` tools the app drives,
+and run output (logs, `cell_map.html`, `resource_conflicts.csv`, the packaged
+`.exe`).
 
 ---
 
@@ -114,6 +184,24 @@ If you'd rather avoid the WebView2 dependency, bundle **tkinterweb** instead
 (`pip install tkinterweb`; `--collect-all tkinterweb`). It renders the SVG map in
 a real in-app window (the tab buttons need a full browser, so use *Open in
 browser* for those). Without either library, the map opens in your browser.
+
+**One data folder must be added by hand: the 3D viewer library.** PyInstaller
+follows imports, not data, so the vendored three.js build under
+`wraithguard/viz/assets/` (loaded as `assets/three.cjs`) is not collected
+automatically. Map it into the build:
+
+```
+--add-data "wraithguard/viz/assets;assets"
+```
+
+Without it the app runs normally and the **View in 3D** button reports that the
+library was not shipped - deliberately a clear message rather than a blank
+window. You do **not** need to add `wraithguard/` or `locale/` by hand:
+PyInstaller collects the package by following the import graph, and `locale/` is
+a developer directory (no `.mo` catalogues ship yet). Verify any build from the
+Log panel's first line - a build stamp `Wraithguard Toolkit <version> --
+frozen=True built=<timestamp>`; a stale build looks exactly like a code bug. See
+`SMOKE_TEST.md` §5a.
 
 Run the GUI:
 
@@ -547,23 +635,28 @@ keyed by their script path - whether declared in an `.omwscripts` file or in an
 `.omwaddon`'s `LuaScriptsCfg` - so two mods attaching the same script path show up
 as a conflict.
 
-**Two engines:**
+**Two engines, both full-featured:**
 
-- **Built-in (default, no dependencies)** - record-level: which plugins touch the
-  same record. Handles the common types including scripts (by name), interior
-  cells (by name), exterior cells / landscape (by grid coords), and Lua scripts
-  (by path, from `.omwscripts` and `.omwaddon`).
-- **tes3conv (optional) - adds field-level diffs.** If a
-  [`tes3conv`](https://github.com/Greatness7/tes3conv) binary is available, the
-  Conflicts window shows a **field-by-field comparison** for the selected record
-  (each plugin's value side by side, differing fields in red, last column wins) -
-  the same JSON approach TES3 Conflictsolver uses. Point the tool at it via the
-  **Set tes3conv...** button, the `--tes3conv` CLI flag, `$MLOX_TES3CONV`, your
-  `PATH`, or by dropping the binary next to the script.
+- **Built-in (default, no dependencies)** - a native in-process reader that
+  parses every TES3 record type and gives you both record-level detection (which
+  plugins touch the same record) *and* the field-by-field diff. It reproduces
+  `tes3conv`'s exact JSON schema, so the Conflicts window's field comparison,
+  the cell map and Merged Lands all work with nothing installed. (Handles scripts
+  by name, interior cells by name, exterior cells / landscape by grid, and Lua
+  scripts by path.)
+- **tes3conv (optional, preferred when present)** - the community's trusted
+  converter. When a [`tes3conv`](https://github.com/Greatness7/tes3conv) binary is
+  found it is used instead of the native reader, and it is still what does the
+  binary *encoding* for Merged Lands. Point the tool at it via the **Set
+  tes3conv...** button, the `--tes3conv` CLI flag, `$MLOX_TES3CONV`, your `PATH`,
+  or by dropping the binary next to the script. Installing `zstandard` makes the
+  native reader's landscape/script output byte-identical to tes3conv's.
 
-Depth is record-level for detection (not a full record schema like xEdit); use it
-to spot overlaps worth a patch, and the field diff (with tes3conv) to see exactly
-what differs. Confirm anything subtle in TES3View if needed.
+The field-by-field comparison shows each plugin's value side by side, differing
+fields in red, last column wins - the same JSON approach TES3 Conflictsolver
+uses. Depth is record/field level (not a full editable schema like xEdit); use it
+to spot overlaps worth a patch and see exactly what differs. Confirm anything
+subtle in TES3View if needed.
 
 ### Data-path resource (VFS) conflicts
 
@@ -693,8 +786,10 @@ OpenMW fork; the function-by-function account of what is ported, checked and
 deliberately changed is in [MERGED_LANDS.md](MERGED_LANDS.md).
 
 **Running it.** Click **Merge Lands** (second button row - it is a
-file-producing action, not a read-only scan). It needs a `tes3conv` binary
-(**Set tes3conv...**) and a sort so it knows the load order. It writes
+file-producing action, not a read-only scan). It needs only a sort so it knows
+the load order - the built-in reader and writer handle the terrain and the
+binary encoding, so no `tes3conv` is required (it is used for the encoding when
+present). It writes
 `Merged Lands.esp` to your output folder and a `Merged Lands.mergedlands.toml`
 marker beside it; **enable the plugin and load it LAST**. A second run ignores
 its own previous output rather than merging a merge.
@@ -841,7 +936,7 @@ Key flags:
 | `--check-conflicts` | Scan active plugins for TES3 record-level conflicts. |
 | `--conflicts-out` | Write the conflict list to a CSV (with `--check-conflicts`). |
 | `--conflicts-subset-only` | Only report conflicts involving your custom mods. |
-| `--tes3conv` | Path to tes3conv (switches to its engine; enables field-level diffs). |
+| `--tes3conv` | Path to tes3conv (preferred engine when present; field-level diffs work without it). |
 | `--json-dump-dir` | Keep the per-plugin tes3conv JSON spool in this folder (reused between runs). |
 | `--resource-conflicts` | Scan `data=` folders for loose-file (VFS) conflicts. |
 | `--resources-out` | Write the resource-conflict list to a CSV. |
@@ -902,6 +997,257 @@ Deliberately different from full mlox (by design):
 
 ---
 
+## Advanced guide (every tool, in depth)
+
+The walkthrough above is the happy path. This section is the power-user
+reference: what each tool actually does, how the tools combine, the CLI flag
+behind every GUI button, and the sharp edges worth knowing. It assumes you have
+read the walkthrough and understand the core idea - the curated `content=` order
+already in `openmw.cfg` is **frozen**, and this tool only decides where *your*
+subset of custom plugins slots into it.
+
+### The mental model
+
+Three decisions define every run, in the GUI and on the command line alike:
+
+1. **What is the subset?** The plugins this run is allowed to move. Everything
+   else is frozen context that positions them but never itself reorders.
+2. **What gets read for placement?** The mlox rule database, and optionally
+   MOMW's `plugin-order.yml` and per-plugin headers.
+3. **What gets written, if anything?** Nothing (preview), a corrected
+   customizations TOML (durable), or `openmw.cfg` in place (one-off).
+
+Get those three right and every feature below is a variation on them.
+
+### Tool inventory
+
+Every user-facing tool, where it lives in the GUI, the CLI flag behind it, and
+whether it can change files. Everything marked read-only is safe to run on a
+live setup; it computes and reports, and writes only where you point it.
+
+| Tool | GUI | CLI | Writes? |
+|---|---|---|---|
+| Subset sort | `1. Sort` / `Preview` | (default) | read-only until you write |
+| Write durable fix | `Write .toml` | `--emit-toml FILE` | writes a customizations TOML |
+| Patch `openmw.cfg` | `Write openmw.cfg directly` | `--write-cfg` | edits the cfg (backup first) |
+| Mods-folder scanner | `Scan` | `--scan-dir DIR --subset-file F` | writes the subset file |
+| Pull orphans | `Pull unmanaged (orphan)` | `--subset-from-cfg` | read-only |
+| Declare groundcover | `Declare as groundcover` | `--groundcover P...` | via the written output |
+| Sort data= paths | `Sort data= paths too` | `--sort-data-paths` | via the written output |
+| plugin-order.yml checks | `plugin-order.yml` panel | `--plugin-order-yml F --list-name N` | read-only |
+| Record conflicts | `Conflicts` | `--check-conflicts` | read-only (CSV via `--conflicts-out`) |
+| Field-level diffs | conflict diff viewer | built-in (`--tes3conv` optional) | read-only |
+| Patch Builder | `Patch Builder...` | (GUI only) | writes a new patch plugin |
+| Resource (VFS) conflicts | `Resource Conflicts` | `--resource-conflicts` | read-only (CSV via `--resources-out`) |
+| Cell map | `Cell Map` | `--cell-map FILE` | writes an HTML file |
+| Conflict map | `Conflict Map` | (via `--check-conflicts` + viz) | writes an HTML file |
+| Lint | `Lint` | `--lint` | read-only |
+| Save Check | `Save Check` | (GUI only) | read-only |
+| Master check / resync | `Resync master sizes` | (part of the sort) | edits master sizes in output |
+| tes3cmd frontend | `tes3cmd` | (GUI only) | drives tes3cmd (cleaning writes) |
+| Merged Lands | `Merged Lands` | `tools/build_merged_lands.py` | writes `Merged Lands.esp` |
+| 3D terrain view | `Show in 3D` | (GUI only) | read-only (`Export 3D file` writes) |
+| Texture comparison | `Show difference` | (GUI only) | read-only (`Export comparison` writes) |
+| Update rules | `Update Rules...` | (manual, or use `plox`) | downloads rule files |
+| Rule maker | `New Rule...` | (GUI only) | writes your personal rules file |
+
+### Choosing the subset - five sources, and how they combine
+
+The subset is the heart of a run, and there are five ways to name it. They are
+additive: give several and the union is sorted.
+
+- **A customizations TOML** (`--customizations`, or the GUI's file picker) is
+  the normal source - the `insert` blocks in a `momw-customizations.toml` are
+  exactly the mods you added on top of a curated list.
+- **An explicit list** (`--subset A.esp B.esp`) for a quick one-off.
+- **A subset file** (`--subset-file`) - one plugin per line, or a minimal
+  `subset = [...]` TOML. Shorter to maintain than a full customizations block.
+- **The mods-folder scanner** (`--scan-dir`, GUI `Scan`) walks a mods directory,
+  turns every folder that holds an asset subfolder or a plugin into a `data=`
+  entry and its plugins into `content=`, and writes the result to a subset file.
+  This folds in the old `mod_scan.py`; matched branches are not descended into.
+- **Orphan pull** (`--subset-from-cfg`, GUI `Pull unmanaged`) reads the cfg
+  itself and sorts every `content=` plugin *and* `data=` path that is on neither
+  the curated list nor your customizations. The base masters and the game's Data
+  Files folder are never pulled. Use this to fold hand-added mods back under
+  management. (`data=` orphans are only *repositioned* with `--sort-data-paths`;
+  otherwise they are listed but left where they are.)
+
+### Writing the result - durable vs one-off
+
+Preview writes nothing. When you do commit, there are two targets and they are
+not equivalent:
+
+- `--emit-toml` (GUI `Write .toml`) rewrites the customizations TOML with your
+  plugins re-anchored, preserving every other block (`removeContent`, `replace`,
+  `append`). This is the durable fix: feed it back through momw-configurator and
+  the order survives the next rebuild. Set `--list-name` so the TOML names the
+  curated list it belongs to - momw-configurator requires it.
+- `--write-cfg` patches `openmw.cfg` in place. Immediate, but the next
+  configurator rebuild overwrites it. Use it for a setup you do not rebuild, or
+  to test before emitting the TOML.
+
+A timestamped `.bak-<time>` copy is written before either overwrite, unless you
+pass `--no-backup`. **Groundcover** plugins (`--groundcover`, GUI `Declare as
+groundcover`) are kept out of `content=` and written as `groundcover=` instead;
+their `data=` folder still goes in so OpenMW can find the file, so name that
+folder in the subset as usual.
+
+### Data-path anchoring
+
+`--sort-data-paths` is opt-in because mlox has no concept of `data=` order, so a
+plain sort never touches it. When on: an explicit `after`/`before` anchor you
+wrote in the TOML always wins. For an insert with no anchor, the tool scans the
+folder (non-recursively) for plugins; if it holds a plugin that is also in the
+sorted `content=` order, the `data=` line is placed next to whichever existing
+`data=` path owns the nearest neighbouring plugin. Every failure mode (missing
+path, no plugins, plugin not in this sort) falls through to appended-at-the-end
+rather than erroring.
+
+### The rule engine and the rule maker
+
+Rules are read in increasing priority - pass `mlox_base.txt` first and
+`mlox_user.txt` (or your own file) last, exactly as mlox layers user over base.
+Fidelity is covered under Rule-engine fidelity above; the advanced points:
+
+- **`<VER>` and wildcards** (`*`, `?`) match the way mlox's own escaping does,
+  so rules copied from mlox behave identically.
+- **`[Order]` chains bridge missing plugins** - `[Order] A, B, C` with `B` absent
+  still enforces `A` before `C`.
+- **Predicate warnings** (`[Requires]`, `[Conflict]`, `[Note]`) are evaluated
+  read-only against the final active list, with full `ALL`/`ANY`/`NOT`/`DESC`
+  nesting and the `[VER]`/`[SIZE]`/`[DESC]` functions (which read real version,
+  size and header description from your `data=` folders, falling back
+  conservatively when a file is unreachable). They print; they never reorder or
+  block. `--no-predicate-warnings` skips the step.
+- **The rule maker** (`New Rule...`) writes to your personal rules file, with a
+  picker for each rule type and a syntax guide. This is how you pin a placement
+  the database gets wrong, without editing `mlox_user.txt` by hand. `Update
+  Rules...` refreshes the downloaded database (or use `plox`).
+
+### plugin-order.yml integration and the four checks
+
+Point the tool at MOMW's `plugin-order.yml` with `--plugin-order-yml` and name
+your list with `--list-name`. Curated plugins for that list are then excluded
+from the sort - they are never reordered - so only your additions move, and four
+read-only sanity checks run: **redundant** (a custom plugin already on the list),
+**orphan** (in your cfg but on neither list nor customizations), **needs-cleaning**
+(via tes3cmd), and a **base-order drift** check against the list's canonical
+order. PyYAML is used if installed, otherwise a built-in parser.
+
+### Conflict detection and the Patch Builder
+
+`--check-conflicts` (GUI `Conflicts`) scans the active plugins for TES3
+record-level conflicts - two or more plugins defining the same record, where the
+last in load order wins. Two engines back it:
+
+- The **built-in native reader** needs nothing. It parses every record type,
+  gives exact record ids, and drives the **field-level diff viewer** on its own -
+  it reproduces tes3conv's JSON schema in process, so tes3conv is optional.
+- **tes3conv** (`--tes3conv`, or `Set tes3conv...`) is used in preference when
+  present (the community's trusted converter), including for Merged Lands'
+  binary encoding - though the built-in writer encodes a byte-compatible plugin
+  when it is absent, so nothing here requires it. With either backend the diff
+  viewer shows the side-by-side of what each plugin sets on a shared record, down
+  to compiled script bytecode, landscape fields and path-grid edges.
+
+Scope and cost controls: `--conflicts-subset-only` reports only conflicts that
+involve your mods (skips base-vs-base), `--exclude 'pattern*'` drops noisy mods
+(grass, light fixes, delta patches) from the scan, and `--conflicts-out` writes
+the full list to CSV. Big lists can be slow; the exclude patterns are the lever.
+
+From the diff viewer you build a **patch plugin** without ever writing to a
+source mod:
+
+- `Add record to patch` takes the winning (or any chosen) version of a
+  conflicting record.
+- `Merge this plugin's fields...` lets you pick a plugin and the specific fields
+  it should win, composing a record from several sources.
+- `Include my mods' non-conflicting records` folds in your uniquely-added
+  records too, and `Highlight only conflicts that lose work` filters the list to
+  the ones where a plugin's edit is actually being overridden.
+- `Write patch...` emits the new plugin. It is a normal load-order member; sort
+  it like anything else.
+
+### Resource (VFS) conflicts
+
+`--resource-conflicts` (GUI `Resource Conflicts`) is the loose-file counterpart
+to record conflicts: it scans the cfg's `data=` folders for the same relative
+path appearing in two or more of them, where the later folder wins - the same
+thing MO2's Data tab shows. Read-only; `--resources-out` writes CSV. This is how
+you catch a texture or mesh being silently shadowed even when no plugin
+conflicts at all.
+
+### Cell map and conflict map
+
+`--cell-map FILE` writes a self-contained, modmapper-style HTML page: an
+exterior-cell heatmap (brighter = more mods touch the cell) plus an
+interior-cell list, with the cells your custom mods touch highlighted. The
+**conflict map** is the same geography weighted by *conflict* rather than
+coverage - two mods can edit one cell happily, so coverage and conflict are
+different questions. Both are self-contained HTML with no CDN, openable in any
+browser or the in-app viewer. `Tidy old HTML views` clears out stale generated
+pages.
+
+### Lint, Save Check, and the watchdogs
+
+`--lint` (GUI `Lint`) runs tes3lint-style checks over the active list, VFS-aware:
+evil GMSTs, the interior fog-density-0 bug, interior cells with no path-grid,
+expansion-function use without the expansion mastered, `omwaddon`/`omwscripts`
+twin mismatches, and blank custom headers. **Save Check** analyses an OpenMW save
+against the current order to flag mods a save depends on. The **master
+check / resync** verifies and can rewrite recorded master file sizes in the
+output, which is what stops OpenMW's "wrong master size" load warnings.
+
+### Merged Lands
+
+Landscape edits from different mods overwrite each other cell by cell unless
+merged. `Merged Lands` builds a `Merged Lands.esp` that combines them, with a
+per-cell strategy: `Overwrite` (last wins), `Resolve` (merge non-conflicting
+layers), `Ignore`, or `Curvature` (conditioned on slope). `Compare strategies`
+renders each result plus each plugin's own terrain in the 3D view so you can see
+the difference before committing. A per-plugin `.mergedlands.toml` pins choices,
+and `Verbose Merged Lands log` names every plugin that carries settings and
+exactly what each layer is set to. The CLI generator is `tools/build_merged_lands.py`.
+
+### 3D terrain and texture comparison
+
+`Show in 3D` opens a rotatable terrain surface with relief shading, contours and
+multidirectional lighting - hand-rolled on a canvas, no library, so it works in
+the frozen build. Layers include raw height, baked vertex colours (terrain
+lighting), the low-res world-map heightmap, and which land texture paints each
+square. `Export 3D file` saves it. `Show difference` compares two textures
+side by side (a normal map is never compared against a diffuse - the tool
+classifies each texture's role first); `Export comparison` saves that.
+
+### tes3cmd cleaning - and the plugins it must never touch
+
+`Locate tes3cmd` points the frontend at your binary; the tool then drives it for
+cleaning. **The three base masters - `Morrowind.esm`, `Tribunal.esm`,
+`Bloodmoon.esm` - are never cleaned**, by design (`T3_NEVER_CLEAN`); cleaning
+them corrupts the game. The `needs-cleaning` warning from the plugin-order.yml
+checks tells you which of *your* mods tes3cmd thinks are dirty.
+
+### Diagnostics and reproducibility
+
+- `--trace [FILE]` writes a debug trace (default `wraithguard_toolkit_trace.log`)
+  - the first thing to enable when a run does something you cannot explain.
+- `-v` shows progress on stderr, `-vv` per-item detail; the report itself always
+  goes to stdout, so `-vv` never pollutes a piped result.
+- `--json-dump-dir DIR` keeps the per-plugin tes3conv JSON conversions (normally
+  a temp dir wiped on exit) so you can inspect exactly what the conflict engine
+  read, or reuse them across runs.
+
+### Where files land
+
+Settings, the trace log, `cell_map.html` and the tes3conv JSON spool are written
+next to the executable, falling back to a per-user data dir if that folder is not
+writable (see Packaging, above). Backups sit beside the file they copy. Nothing
+is written next to a frozen build's temp `__file__`, so your outputs survive an
+exe rebuild.
+
+---
+
 ## Safety
 
 - Default is preview/dry-run - nothing is written until you say so.
@@ -922,11 +1268,11 @@ the exact versions these standards are measured against (see the `dev` extra in
 `pyproject.toml`), so the gates don't drift as the tools add new rules.
 
 ```bash
-python -m pytest                # 3,202 tests: no network, no Tk, no real mods needed
+python -m pytest                # the full suite (5,500+ tests): no network, no Tk, no real mods
                                 # (the GUI smoke set skips without Tk; CI runs it under xvfb)
 python -m ruff check .          # PEP 8 style, naming, import order, security, perf
 python -m black --check .       # formatting
-python -m mypy                  # PEP 484 types; gates all 109 shipped files
+python -m mypy                  # PEP 484 types; gates all 178 shipped files
 python tools/check_undefined.py wraithguard_toolkit_gui.py
 python tools/check_placeholders.py   # i18n %(key)s placeholders vs their dicts
 python tools/make_pot.py --check     # the .pot template must be current

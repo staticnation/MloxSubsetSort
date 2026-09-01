@@ -1,6 +1,79 @@
 # Changelog
 
 
+## 3.1.7
+
+The theme of this release is **self-sufficiency**: the toolkit no longer needs
+`tes3conv` for anything, and its native NIF reader gained a writer. Both were
+achieved by finishing the in-process ports the previous releases began, and
+validating them against the real tools byte-for-byte rather than trusting them.
+
+### Added
+
+- **`tes3conv` is now optional for everything, not just record counts.** The
+  built-in `wraithguard.esp` reader gained a JSON layer that reproduces
+  `tes3conv`'s schema exactly, so record- and field-level conflict detection, the
+  cell map and Merged Lands all run with no external converter. `tes3conv` is
+  still used in preference when present (the community's trusted tool), but its
+  absence no longer reduces anything. The Conflicts window's engine line, and the
+  scan's `engine` field, now report `native` versus `tes3conv` honestly. Verified
+  value-for-value against a real `tes3conv` binary across every record type of a
+  full Tamriel Rebuilt mainland ESM -- 115,380 records, 37 types, zero
+  differences.
+
+- **Merged Lands runs without `tes3conv`.** The merge reads terrain with the
+  built-in reader and encodes the result with the built-in writer; a native
+  merge produces a plugin value-identical to a `tes3conv` merge of the same
+  input, readable by both. The GUI's "tes3conv needed" gate on Merge Lands is
+  gone.
+
+- **A NIF *writer*.** `wraithguard.nif.write_nif` is the inverse of the reader:
+  a `retain=True` read keeps each block's body plus the file header and footer,
+  and the writer reassembles the framing. The guarantee is a byte-exact round
+  trip -- every file the reader understands, it writes back unchanged -- verified
+  over all 761 fully-parsed files of the reference corpus.
+
+- **Ten more NIF blocks -- the reader now has no gaps.** `NiPalette`,
+  `NiLinesData`, `NiSkinPartition`, `NiKeyframeManager` (from the MIT `es3`
+  reference); `NiTextureProperty`, `NiParticleMeshes`,
+  `NiRendererSpecificProperty`, `NiParticleMeshModifier`, `BSMirroredNode`, and
+  `NiParticleMeshesData` (derived from the corpus's own bytes, since no
+  permissive reference models them). The last of these was previously left
+  unmodeled: measured against the wrong base (`NiParticlesData`) it looked like
+  an undecodable ~84-byte trailer, but its true base is `NiRotatingParticlesData`
+  -- once its per-particle rotation array (43 exact unit quaternions in the one
+  sample) is accounted for, the block is that base plus a single link, and parses
+  and round-trips exactly. Every block type in the 765-file corpus is now
+  modelled (761 parse whole; the other four are malformed or unreadable files, no
+  missing types). See `NIF_PROVENANCE.md` for how each layout was obtained.
+
+### Changed
+
+- **Documentation consolidated, 19 files to 16.** The spent point-in-time
+  records `AUDIT_REPORT.md` and `REMAINING_WORK.md` were retired (their live
+  content folded into `CODE_REVIEW.md`), and `PROJECT_LAYOUT.md` was merged into
+  `README.md`, which also gained an "Advanced guide" section covering every tool
+  in depth. Stale figures (test counts, version, mypy file count) were refreshed
+  or removed so nothing lies.
+
+- **The dead `wasm/` bridge was removed.** The uncompiled Rust `tes3`-to-viewer
+  bridge is obsolete now that the native NIF reader serves the viewer; it is
+  gone, along with its references.
+
+- **The NIF reader distinguishes a malformed file from a wrong layout.** A
+  data-plausibility guard (an implausible array count, an absurdly nested
+  bounding volume) now raises `NifMalformedError` and sets `stopped_malformed`,
+  so a survey can tell "this mesh is broken" (the reference reader refuses it
+  too) from "a layout here is wrong" -- the two need opposite responses.
+
+### Fixed
+
+- **Merged Lands emitted three extra padding bytes in each `VHGT` field.**
+  `tes3conv` silently truncated the over-long value to its fixed array, so the
+  bug was invisible until the native writer took it literally and desynchronised
+  the record. The height data field is now the heights alone.
+
+
 ## 3.1.6
 
 ### Added

@@ -25,7 +25,7 @@ from wraithguard.gui import HELP_DOCUMENTS
 from wraithguard.viz.docs import DOCS_CSS, docs_page, inline, render_markdown
 
 #: The project's own documents, which the renderer exists to display.
-DOCS = ("README.md", "QUICKSTART.md", "CHANGELOG.md", "REMAINING_WORK.md", "MLOX_RULES.md")
+DOCS = ("README.md", "QUICKSTART.md", "CHANGELOG.md", "MLOX_RULES.md")
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -72,7 +72,7 @@ class TestInline:
         assert inline("snake_case_name") == "snake_case_name"
 
     def test_strikethrough(self) -> None:
-        """Used by REMAINING_WORK to mark items as done."""
+        """Used by CHANGELOG and CODE_REVIEW to mark items as done."""
         assert inline("~~done~~") == "<del>done</del>"
 
     def test_links_render(self) -> None:

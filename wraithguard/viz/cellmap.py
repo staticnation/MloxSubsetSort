@@ -1,9 +1,10 @@
 """The cell map: which mods touch which cells.
 
 Moved out of ``wraithguard_toolkit.py``, where it was one 216-line f-string that
-``REMAINING_WORK.md`` §5 flagged as effectively uneditable -- every brace
-doubled, no way to test a part of it, and 216 lines of presentation sitting in
-the middle of the sort engine. It is now assembled from small functions that
+was effectively uneditable -- every brace doubled, no way to test a part of it,
+and 216 lines of presentation sitting in the middle of the sort engine (the
+move is recorded in ``CODE_REVIEW.md`` §29). It is now assembled from small
+functions that
 each return a fragment, so a change to the legend cannot break the script and
 each piece can be asserted on directly.
 

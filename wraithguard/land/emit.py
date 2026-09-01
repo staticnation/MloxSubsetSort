@@ -438,7 +438,12 @@ def build_landscape_record(
     if heights is not None:
         rows = [list(row) for row in heights]
         offset, payload, clamped = encode_vertex_heights(rows)
-        record["vertex_heights"] = {"offset": offset, "data": encode_field(payload[4:])}
+        # payload is the whole VHGT body: the 4-byte offset, the height bytes,
+        # then 3 bytes of subrecord padding. The ``data`` field is the heights
+        # alone -- tes3conv truncates a longer value to its fixed array, but the
+        # native writer takes it literally, so include only the heights.
+        heights_data = payload[4 : 4 + FIELD_SIZES["vertex_heights"]]
+        record["vertex_heights"] = {"offset": offset, "data": encode_field(heights_data)}
         computed = normals if normals is not None else vertex_normals_from_heights(rows)
         record["vertex_normals"] = {
             "data": encode_field(pack_vertex_normals([list(row) for row in computed]))

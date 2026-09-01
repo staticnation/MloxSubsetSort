@@ -10,9 +10,9 @@ loses its script tag when the network is down is worse than one that never had
 it. Everything here is inline, which is also why the 3D view is hand-rolled on
 a canvas rather than reaching for a library.
 
-**No f-string templates.** The cell map's generator is one 185-line f-string
-with ``{{``/``}}`` escaping throughout, and ``REMAINING_WORK.md`` §5 flags it as
-effectively uneditable. The helpers here take content as arguments and do their
+**No f-string templates.** The cell map's generator was one 185-line f-string
+with ``{{``/``}}`` escaping throughout, effectively uneditable (the rework is in
+``CODE_REVIEW.md`` §29). The helpers here take content as arguments and do their
 own escaping, so a page is assembled from pieces that can each be tested.
 """
 

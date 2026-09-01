@@ -108,7 +108,9 @@ def survey(root: Path, limit: int) -> int:
     parsed_types: Counter[str] = Counter()
     missing_types: Counter[str] = Counter()
     bad_layouts: Counter[str] = Counter()
+    malformed: Counter[str] = Counter()
     examples: dict[str, str] = {}
+    malformed_examples: dict[str, str] = {}
     errors: list[tuple[Path, str]] = []
     for path in files:
         try:
@@ -128,6 +130,15 @@ def survey(root: Path, limit: int) -> int:
                 missing_types[result.stopped_at] += 1
             else:
                 desynced += 1
+        elif result.stopped_malformed:
+            # A data-plausibility guard fired: the file holds a value no valid
+            # NIF does (an implausible array count). That is the mesh being
+            # broken, not a layout being wrong -- Greatness7's own reader refuses
+            # the same files -- so it must not be counted as a layout bug.
+            malformed[result.stopped_at or "?"] += 1
+            malformed_examples.setdefault(
+                result.stopped_at or "?", f"{path.name}: {result.stopped_reason}"
+            )
         elif result.stopped_at is not None:
             bad_layouts[result.stopped_at] += 1
             examples.setdefault(result.stopped_at, f"{path.name}: {result.stopped_reason}")
@@ -138,6 +149,7 @@ def survey(root: Path, limit: int) -> int:
     print(f"  fully parsed          : {complete}")
     print(f"  stopped, type missing : {sum(missing_types.values())}")
     print(f"  stopped, layout wrong : {sum(bad_layouts.values())}")
+    print(f"  malformed input file  : {sum(malformed.values())}")
     print(f"  lost alignment        : {desynced}")
     print(f"  refused or errored    : {len(errors)}")
     if parsed_types:
@@ -162,6 +174,14 @@ def survey(root: Path, limit: int) -> int:
         for name, count in bad_layouts.most_common(40):
             print(f"  {count:>6}  {name}")
             print(f"          e.g. {examples[name]}")
+    if malformed:
+        # Not a bug here: the file itself is broken (an implausible count), and
+        # the reference reader refuses it too. Listed so it is visible, and kept
+        # out of the layout-bug count it would otherwise inflate.
+        print("\nmalformed files rejected by a plausibility guard (not layout bugs):")
+        for name, count in malformed.most_common(40):
+            print(f"  {count:>6}  stopped on {name}")
+            print(f"          e.g. {malformed_examples[name]}")
     if desynced:
         print(
             f"\n{desynced} file(s) read something that is not a type name at all. "

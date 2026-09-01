@@ -29,6 +29,13 @@ verbatim rather than lost, so the reader is always safe to run.
 from __future__ import annotations
 
 from wraithguard.esp.io import EspError, Reader, Writer
+from wraithguard.esp.json import (
+    EspJsonError,
+    plugin_from_json,
+    plugin_to_json,
+    record_from_json,
+    record_to_json,
+)
 from wraithguard.esp.plugin import read_header, read_plugin, write_plugin
 from wraithguard.esp.record import Record, UnknownRecord
 from wraithguard.esp.records import (
@@ -146,6 +153,7 @@ __all__ = [
     "Enchanting",
     "EnchantingData",
     "EspError",
+    "EspJsonError",
     "Faction",
     "FactionData",
     "FactionReaction",
@@ -200,7 +208,11 @@ __all__ = [
     "WeaponData",
     "WeatherChances",
     "Writer",
+    "plugin_from_json",
+    "plugin_to_json",
     "read_header",
     "read_plugin",
+    "record_from_json",
+    "record_to_json",
     "write_plugin",
 ]

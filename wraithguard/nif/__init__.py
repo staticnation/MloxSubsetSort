@@ -42,9 +42,11 @@ from wraithguard.nif.reader import (
     NIF_VERSION_MORROWIND,
     Block,
     NifFile,
+    NifMalformedError,
     NifParseError,
     read_nif,
     read_nif_bytes,
+    write_nif,
 )
 from wraithguard.nif.report import (
     COLLISION_NODES,
@@ -68,6 +70,7 @@ __all__ = [
     "MeshAnalyser",
     "MeshFinding",
     "NifFile",
+    "NifMalformedError",
     "NifParseError",
     "Shape",
     "Structure",
@@ -82,4 +85,5 @@ __all__ = [
     "read_nif_bytes",
     "summarise",
     "world_meshes",
+    "write_nif",
 ]

@@ -621,3 +621,78 @@ either of them, and stronger than either project's own tests. Every error found
 in this project - the typed bounding box, the BSA data offset, the texture
 extension comparison, BC5's clamped normals - came from a cross-check against
 something that did not share its assumptions.
+
+## Closing the corpus, and a writer, 31 August 2026
+
+Nine block types the corpus contained but this reader lacked were added, and
+each is marked in `blocks.py` with which kind of fact it rests on:
+
+- **From `es3` (MIT, `lib/es3/` only):** `NiPalette`, `NiLinesData`,
+  `NiSkinPartition` (and its `NiPartition` sub-record), `NiKeyframeManager`
+  (and `NiSequence`), and `BSMirroredNode`. These are transcriptions of the
+  reference's own `load` order, the permitted MIT source.
+- **Derived from bytes, no code read:** `NiTextureProperty`,
+  `NiParticleMeshes`, `NiRendererSpecificProperty` and `NiParticleMeshModifier`.
+  Neither `tes3` nor `es3` models these, so they were reverse-engineered from
+  the corpus's own single demo mesh of each, bounded by the next block's type
+  string, and cross-checked only against the **public inheritance facts** the
+  UESP Construction Set wiki documents (`NiProperty → NiTextureProperty`,
+  `NiGeometry → NiParticles → NiParticleMeshes`) - facts about Bethesda's
+  format, not anyone's implementation.
+
+**pyffi was not used.** The pyffi library is BSD, but the layouts it reads from
+live in `nif.xml`, which is GPL and on the wrong side of the boundary Rule 1
+draws. It was neither imported (it does not run on Python 3.10) nor read; the
+four blocks above came from bytes instead, the same method as everything derived
+before 28 July 2026.
+
+**The last block, and how a wrong base hid it.**
+`NiParticleMeshesData` is the one block no permissively-licensed reference
+models, and the corpus holds exactly one example (43 particles, kept as the
+regression fixture `testdata/nif/NiParticleMeshes.nif`).
+For a while it was left unmodeled, because measured against `NiParticlesData` --
+the base a first reading assumed -- its 1432-byte body left ~696 unexplained
+bytes that looked like an undecodable per-particle trailer. The base was wrong.
+The block inherits `NiRotatingParticlesData`, which is `NiParticlesData` *plus*
+an optional per-particle rotation array; measured against that base, the body
+consumes 1428 of its 1432 bytes and the "trailer" collapses to **four**: a
+single `Ref`. The rotation array is what the 696 bytes were -- and it is
+provably a rotation array, not a coincidental fit, because all 43 of its
+quaternions are exact unit quaternions (`|q| = 1.0`), which random bytes are
+not. The remaining `Ref` resolves to the master mesh `NiNode`, and the block
+ends exactly on the next block's type string. So the layout is
+`NiRotatingParticlesData` followed by one link -- derived from bytes, checked by
+the unit-length rotations and the closing offset, needing no `nif.xml` and no
+second file. With it, this single corpus example parses whole (all 26 blocks,
+no stop) and round-trips byte-exact. The lesson is the document's thesis again:
+the bytes were always derivable; what had been missing was the right base to
+measure them against.
+
+**pyffi was tried as a sample source, and ruled out on the merits, not the
+licence.** The idea was sound: a GPL tool's *output* is data, not a derivative of
+its source, so generating meshes with pyffi and deriving from their bytes would
+have been as clean as reading tes3conv's output or any modded mesh. pyffi even
+runs, given a one-line `time.clock` shim for Python 3. It was ruled out because
+it does not work on the files that matter: pointed at this corpus, pyffi read
+**1 of 120** real Morrowind meshes before desynchronising -- typically back at
+`NiTriShapeData`, a block this reader parses in thousands of files. Its
+`nif.xml`-derived layouts diverge from what Morrowind's own exporters actually
+wrote, so it can neither be ground truth for the real file nor generate samples
+that would match one. That 1-of-120, against this reader's 761-of-765 (the four
+remaining are malformed or unreadable files, not missing block types -- every
+block type the corpus contains is now modeled), is the whole document's argument
+in miniature: the generic multi-version model is wrong for Morrowind
+specifically, which is why the layouts here were measured from Morrowind's bytes
+rather than copied from a reference.
+
+**A writer, and what makes it a parity claim.** `write_nif` is the inverse of
+the reader. Because the reader keeps element counts rather than the elements, a
+field-by-field writer could not reproduce bulk arrays; instead a
+`retain=True` read keeps each block's body verbatim and the file's header and
+footer, and the writer reassembles the framing around them. The test that it is
+right is a **byte-exact round trip over all 761 fully-parsed corpus files** -
+every file the reader understands, it writes back unchanged. The block walk stops
+at the declared block count and never reads the trailing root-object list, so the
+footer is carried across separately; that eight-byte gap was the whole of the
+first round-trip's error and is the kind of thing only a full-corpus byte
+comparison surfaces.

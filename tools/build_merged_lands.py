@@ -325,12 +325,10 @@ def main(argv: list[str] | None = None) -> int:
     tool = find_tes3conv(args.tes3conv)
     if tool is None and not args.dry_run:
         print(
-            "tes3conv was not found, and it is what turns our JSON into a "
-            "plugin. Pass --tes3conv, or use --dry-run to see the merge "
-            "without writing anything.",
+            "tes3conv was not found; encoding the merged plugin with the "
+            "built-in writer instead (byte-compatible, verified against tes3conv).",
             file=sys.stderr,
         )
-        return 2
 
     order = read_order(args.order) if args.order else []
     if not order:

@@ -194,7 +194,9 @@ class TestEmitterVariety:
 
     def test_append_blocks_from_the_source_are_carried_over(self) -> None:
         """``append`` and ``appendBlock`` entries in the source TOML survive."""
-        original = {"Customizations": [{"append": [{"append": "foo=bar"}, {"appendBlock": "a\nb"}]}]}
+        original = {
+            "Customizations": [{"append": [{"append": "foo=bar"}, {"appendBlock": "a\nb"}]}]
+        }
         toml = generate_customizations_toml(original, ["Morrowind.esm"], set(), {})
         assert "append = 'foo=bar'" in toml
         assert "appendBlock" in toml
@@ -243,9 +245,7 @@ class TestEmitterVariety:
         # and that name is duplicated -- neither the bare name nor the whole line
         # is unique, so the content-side "before" fallback fires.
         final = ["Mine.esp", "Dup.esp", "Dup.esp"]
-        toml = generate_customizations_toml(
-            {}, final, {"mine.esp"}, {"Mine.esp": "Mine.esp"}
-        )
+        toml = generate_customizations_toml({}, final, {"mine.esp"}, {"Mine.esp": "Mine.esp"})
         assert "Dup.esp" in toml
         assert "matches 2 openmw.cfg lines" in capsys.readouterr().out
 

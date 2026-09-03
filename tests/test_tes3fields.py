@@ -246,9 +246,7 @@ class TestTotality:
     def test_a_non_numeric_offset_sibling_defaults_the_base_height(self) -> None:
         """A malformed ``offset`` sibling degrades to a zero base, not a crash."""
         flat = _b64(bytes(LAND_NUM_VERTS))
-        out = text_for_field(
-            "vertex_heights.data", flat, {"vertex_heights.offset": "not a number"}
-        )
+        out = text_for_field("vertex_heights.data", flat, {"vertex_heights.offset": "not a number"})
         assert out is not None
         assert "VHGT" in out  # rendered normally, base silently taken as 0.0
         assert "offset=0" in out

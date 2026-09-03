@@ -163,9 +163,7 @@ class TestReferencesFollowTheirOwnSource:
         """Two reference choices from the same plugin reuse its cached index map."""
         # Both choices point at Other.esp, so mapping_for('Other.esp') is asked
         # for twice; the second call must reuse what the first built.
-        out = merged(
-            FieldChoice("references", "Other.esp"), FieldChoice("references", "Other.esp")
-        )
+        out = merged(FieldChoice("references", "Other.esp"), FieldChoice("references", "Other.esp"))
         assert [r["mast_index"] for r in out["references"]] == [5, 3]
 
 

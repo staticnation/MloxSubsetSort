@@ -124,7 +124,9 @@ class TestParserResilience:
     def test_an_order_block_with_no_names_yields_no_block(self, tmp_path, capsys):
         """A block whose lines name no plugin contributes nothing, not an empty chain."""
         path = tmp_path / "rules.txt"
-        path.write_text("[Order]\n[DESC /x/ Foo.esp]\nsome prose with no plugin\n", encoding="utf-8")
+        path.write_text(
+            "[Order]\n[DESC /x/ Foo.esp]\nsome prose with no plugin\n", encoding="utf-8"
+        )
         assert parse_mlox_file(path) == []
 
     def test_one_unparseable_rule_file_is_skipped_not_fatal(self, tmp_path, monkeypatch, capsys):

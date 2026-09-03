@@ -346,9 +346,7 @@ class TestMergeMasterLayers:
         existing = LandscapeLayers(
             coords=(0, 0), declared=LandData.VERTEX_HEIGHTS, heights=[9, 9, 9, 9]
         )
-        incoming = LandscapeLayers(
-            coords=(0, 0), declared=LandData.VERTEX_HEIGHTS, heights=None
-        )
+        incoming = LandscapeLayers(coords=(0, 0), declared=LandData.VERTEX_HEIGHTS, heights=None)
         merge_master_layers(existing, incoming)
         assert existing.heights == [9, 9, 9, 9]  # untouched
 
@@ -454,9 +452,7 @@ class TestCellContention:
         from wraithguard.land.diff import LandscapeDiff
 
         old = CellContention(coords=(0, 0), changes=[LandscapeDiff((0, 0), "a.esp")])
-        new = CellContention(
-            coords=(0, 0), changes=[LandscapeDiff((0, 0), "a.esp", new_land=True)]
-        )
+        new = CellContention(coords=(0, 0), changes=[LandscapeDiff((0, 0), "a.esp", new_land=True)])
         assert old.is_new_land is False
         assert new.is_new_land is True
 

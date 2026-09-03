@@ -785,9 +785,7 @@ def _check_conventions(rule: Rule, problems: list[Problem]) -> None:
         )
 
     if (  # pragma: no cover - format_ref always spaces a URL before ')', so this cannot fire
-        rule.ref.strip()
-        and _URL.search(rule.ref)
-        and not format_ref(rule.ref).endswith(" )")
+        rule.ref.strip() and _URL.search(rule.ref) and not format_ref(rule.ref).endswith(" )")
     ):
         problems.append(
             Problem("warning", "a URL citation needs whitespace before the closing parenthesis")

@@ -70,9 +70,7 @@ def test_list_plugins_returns_empty_for_an_uninterpretable_path(tmp_path, monkey
     assert list_plugins_in_dir("rel", base_dir=tmp_path) == []
 
 
-def test_list_plugins_skips_a_directory_that_raises_on_listing(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_list_plugins_skips_a_directory_that_raises_on_listing(tmp_path: Path, monkeypatch) -> None:
     """A directory that raises while being listed contributes nothing."""
 
     def refuse(_self: Path):

@@ -123,9 +123,7 @@ def test_existing_land_heights_use_the_default_strategy() -> None:
     That takes the ``chosen = default`` path instead of the new-land overwrite,
     exercising the branch where the vertex-height overwrite does not apply.
     """
-    reference, known = build_reference(
-        [PluginRecords("m.esm", [_heights_record((9, 9), 10)])]
-    )
+    reference, known = build_reference([PluginRecords("m.esm", [_heights_record((9, 9), 10)])])
     outcome = merge_landmass(
         reference, [PluginRecords("mod.esp", [_heights_record((9, 9), 90)])], known
     )
@@ -137,9 +135,7 @@ def test_a_sidecar_strategy_bypasses_the_auto_choice() -> None:
     """When a sidecar states a concrete strategy, the AUTO defaulting is skipped."""
     from wraithguard.land.merge import ConflictStrategy
 
-    reference, known = build_reference(
-        [PluginRecords("m.esm", [_heights_record((9, 9), 10)])]
-    )
+    reference, known = build_reference([PluginRecords("m.esm", [_heights_record((9, 9), 10)])])
     metas = {
         "mod.esp": PluginMeta(
             meta_type="Patch",

@@ -29,7 +29,9 @@ def test_is_rtl_true_for_rtl_tags(tag: str) -> None:
     assert rtl.is_rtl(tag) is True
 
 
-@pytest.mark.parametrize("tag", ["en", "de", "pt_BR", "zh", "ja", "ru", "", None, "arabic", "en_AR"])
+@pytest.mark.parametrize(
+    "tag", ["en", "de", "pt_BR", "zh", "ja", "ru", "", None, "arabic", "en_AR"]
+)
 def test_is_rtl_false_for_ltr_or_unknown(tag: str | None) -> None:
     assert rtl.is_rtl(tag) is False
 

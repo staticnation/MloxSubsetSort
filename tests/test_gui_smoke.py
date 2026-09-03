@@ -1773,7 +1773,7 @@ class TestJournalChainsWindow:
             "if ( GetDisabled )\n"
             "    set state to 1\n"
             "endif\n"
-            'if ( state == 2 )\n'
+            "if ( state == 2 )\n"
             '    if ( Player->HasItemEquipped "AATL_C_Dae_amu_Vas_u" == 0 )\n'
             '        if ( Player->HasItemEquipped "AATL_C_Dae_amu_Vas" == 0 )\n'
             '            Cast "AATL_VSLDS_SPL_Barrier" Player\n'
@@ -1873,7 +1873,9 @@ class TestJournalChainsWindow:
             nav.selection_set(stage_node)
             fresh_app._on_journal_node()
 
-            also_happens = [v for label, v in self._detail_rows(fresh_app) if label == "Also happens"]
+            also_happens = [
+                v for label, v in self._detail_rows(fresh_app) if label == "Also happens"
+            ]
             assert not any("Begin" in value for value in also_happens), also_happens
             assert "End" not in also_happens, also_happens
         finally:
@@ -1901,7 +1903,9 @@ class TestJournalChainsWindow:
 
             rows = self._detail_rows(fresh_app)
             shared = "if ( state == 2 )"
-            matching = [value for label, value in rows if label == "if" and value.startswith(shared)]
+            matching = [
+                value for label, value in rows if label == "if" and value.startswith(shared)
+            ]
             assert len(matching) == 1, f"expected the shared condition once, got {matching}"
 
             also_happens = [value for label, value in rows if label == "Also happens"]

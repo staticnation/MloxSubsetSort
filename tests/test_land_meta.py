@@ -31,7 +31,10 @@ _LAYER = next(iter(LAYER_NAMES))
 def test_a_valid_document_parses() -> None:
     """A well-formed sidecar yields its layers and meta type."""
     meta = parse_meta(
-        {"version": SUPPORTED_VERSION, _LAYER: {"included": False, "conflict_strategy": "Overwrite"}}
+        {
+            "version": SUPPORTED_VERSION,
+            _LAYER: {"included": False, "conflict_strategy": "Overwrite"},
+        }
     )
     assert _LAYER in meta.layers
     assert meta.layers[_LAYER].included is False

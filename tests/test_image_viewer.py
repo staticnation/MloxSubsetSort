@@ -41,14 +41,18 @@ class TestWhyNoDifference:
         return Comparison(verdict, detail)
 
     def test_a_not_comparable_pair_shows_its_detail(self) -> None:
-        assert _why_no_difference(self._cmp(Verdict.NOT_COMPARABLE, "roles differ")) == "roles differ"
+        assert (
+            _why_no_difference(self._cmp(Verdict.NOT_COMPARABLE, "roles differ")) == "roles differ"
+        )
 
     def test_identical_images_say_the_difference_is_blank(self) -> None:
         out = _why_no_difference(self._cmp(Verdict.IDENTICAL))
         assert "identical" in out
 
     def test_an_undecodable_pair_shows_its_detail(self) -> None:
-        assert _why_no_difference(self._cmp(Verdict.UNDECODABLE, "cannot decode")) == "cannot decode"
+        assert (
+            _why_no_difference(self._cmp(Verdict.UNDECODABLE, "cannot decode")) == "cannot decode"
+        )
 
 
 def test_the_verdict_line_names_mismatched_roles() -> None:

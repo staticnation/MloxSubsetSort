@@ -85,9 +85,7 @@ def test_shift_refuses_a_vertex_it_cannot_move() -> None:
 
 def test_an_authoritative_cell_is_never_moved() -> None:
     """Every vertex of a borrowed cell is pinned, so a steep step stays put."""
-    report = limit_slopes(
-        {(0, 0): _cell({(32, 32): 5_000})}, authoritative=frozenset({(0, 0)})
-    )
+    report = limit_slopes({(0, 0): _cell({(32, 32): 5_000})}, authoritative=frozenset({(0, 0)}))
     assert report.adjusted == 0
     assert report.pinned > 0
 

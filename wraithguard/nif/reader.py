@@ -854,7 +854,9 @@ def _read_compound(
         return _read_sequences(cursor, name)
     # Every kind used by BLOCK_LAYOUTS has a branch above; this guards a layout
     # table naming a kind the reader does not model (a code bug), so it is dead.
-    raise NifParseError(f"layout error: field {name!r} has unknown kind {kind!r}")  # pragma: no cover
+    raise NifParseError(
+        f"layout error: field {name!r} has unknown kind {kind!r}"
+    )  # pragma: no cover
 
 
 def _optional_run(

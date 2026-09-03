@@ -79,6 +79,32 @@ class TestLintCell:
         assert facts is not None
         assert facts.cell_id == "balmora, guild of mages"
 
+    def test_an_unrecognized_subrecord_is_skipped(self) -> None:
+        """A CELL can carry subrecords this lint doesn't care about (e.g. REGN); ignore them."""
+        body = (
+            sub("NAME", zstr("Some Interior"))
+            + sub("REGN", zstr("SomeRegion"))
+            + sub("DATA", struct.pack("<Iif", 1, 0, 0.5))
+        )
+        facts = core._lint_cell(body)
+        assert facts is not None
+        assert facts.fog_bug is False
+
+
+class TestLintEvilGmst:
+    def test_a_matching_name_and_value_is_flagged(self) -> None:
+        name, (tag, raw_value) = next(iter(core._EVIL_GMSTS.items()))
+        body = sub("NAME", zstr(name)) + sub(tag, raw_value)
+
+        assert core._lint_evil_gmst(body) == name
+
+    def test_an_unrecognized_subrecord_is_skipped(self) -> None:
+        """A GMST can carry subrecords this lint doesn't key on (e.g. FNAM); ignore them."""
+        name, (tag, raw_value) = next(iter(core._EVIL_GMSTS.items()))
+        body = sub("NAME", zstr(name)) + sub("FNAM", zstr("Some Label")) + sub(tag, raw_value)
+
+        assert core._lint_evil_gmst(body) == name
+
 
 class TestLintInteriorPathgrid:
     def test_grid_zero_zero_with_a_name_is_an_interior(self) -> None:
@@ -94,6 +120,11 @@ class TestLintInteriorPathgrid:
 
     def test_a_missing_data_subrecord_returns_none(self) -> None:
         body = sub("NAME", zstr("Some Interior"))
+        assert core._lint_interior_pathgrid(body) is None
+
+    def test_a_data_subrecord_too_short_to_hold_grid_coords_is_ignored(self) -> None:
+        """DATA shorter than the 8-byte grid pair is not usable -- treated as absent."""
+        body = sub("NAME", zstr("Some Interior")) + sub("DATA", struct.pack("<i", 0))
         assert core._lint_interior_pathgrid(body) is None
 
 
@@ -144,3 +175,29 @@ class TestRecDeleted:
 
     def test_neither_flags_nor_deleted_present_is_not_deleted(self) -> None:
         assert core._rec_deleted({}) is False
+
+
+class TestInteriorCellNames:
+    def test_a_named_interior_cell_by_int_flags_is_collected(self) -> None:
+        records = [{"type": "Cell", "id": "Balmora, Guild", "data": {"flags": 0x01}}]
+        assert core._interior_cell_names(records) == {"balmora, guild"}
+
+    def test_a_named_interior_cell_by_string_flags_is_collected(self) -> None:
+        records = [{"type": "Cell", "name": "Balmora, Guild", "data": {"flags": "INTERIOR"}}]
+        assert core._interior_cell_names(records) == {"balmora, guild"}
+
+    def test_an_exterior_cell_is_not_collected(self) -> None:
+        records = [{"type": "Cell", "id": "Seyda Neen", "data": {"flags": 0}}]
+        assert core._interior_cell_names(records) == set()
+
+    def test_an_interior_cell_with_no_id_or_name_is_skipped(self) -> None:
+        """The interior flag alone isn't enough; there has to be something to key on."""
+        records = [{"type": "Cell", "data": {"flags": 0x01}}]
+        assert core._interior_cell_names(records) == set()
+
+    def test_a_non_cell_record_is_skipped(self) -> None:
+        records = [{"type": "Static", "id": "torch_01"}]
+        assert core._interior_cell_names(records) == set()
+
+    def test_a_non_dict_entry_is_skipped(self) -> None:
+        assert core._interior_cell_names(["not a dict", 42]) == set()

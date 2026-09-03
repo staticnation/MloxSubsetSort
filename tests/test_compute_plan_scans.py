@@ -105,6 +105,90 @@ class TestSubsetLines:
         assert any(d["value"] == str(mod_dir) for d in plan_with["data_inserts"])
 
 
+class TestPredicateWarnings:
+    def _plan(self, tmp_path: Path, rule_text: str, *extra: str) -> dict:
+        data = tmp_path / "Data Files"
+        data.mkdir()
+        write_plugin(data / "Morrowind.esm")
+        write_plugin(data / "Mine.esp", masters=("Morrowind.esm",), sizes=(0,))
+        cfg, rules = _cfg_and_rules(tmp_path, data, ["Morrowind.esm"])
+        rules.write_text(rule_text, encoding="utf-8")
+        args = _args(cfg, rules, *extra)
+        args.subset_lines = ["Mine.esp"]
+        return core.compute_plan(args)
+
+    def test_a_triggered_note_is_reported(self, tmp_path: Path) -> None:
+        plan = self._plan(tmp_path, "[Note a triggered note]\nMine.esp\n")
+        assert len(plan["predicate_warnings"]) == 1
+        assert "a triggered note" in plan["predicate_warnings"][0]
+
+    def test_no_predicate_warnings_flag_skips_the_check_entirely(self, tmp_path: Path) -> None:
+        """--no-predicate-warnings must not even run check_predicates."""
+        plan = self._plan(
+            tmp_path, "[Note a triggered note]\nMine.esp\n", "--no-predicate-warnings"
+        )
+        assert plan["predicate_warnings"] == []
+
+
+class TestHeaderMasterReadIsAdvisoryOnly:
+    def test_an_unexpected_read_failure_degrades_to_no_masters_known(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """read_plugin_masters is meant to never raise; this proves the wiring survives it anyway.
+
+        The header read here is explicitly "advisory only" (see its own
+        comment) precisely because it runs over arbitrary third-party binary
+        files -- so the guard is proven by simulating a genuinely broken
+        reader, not by trying to construct bytes that defeat a hardened
+        parser no fixture here has managed to break.
+        """
+        data = tmp_path / "Data Files"
+        data.mkdir()
+        write_plugin(data / "Morrowind.esm")
+        write_plugin(data / "Mine.esp", masters=("Morrowind.esm",), sizes=(0,))
+        cfg, rules = _cfg_and_rules(tmp_path, data, ["Morrowind.esm"])
+        args = _args(cfg, rules)
+        args.subset_lines = ["Mine.esp"]
+
+        def _boom(*_a: object, **_k: object) -> None:
+            raise RuntimeError("simulated: a genuinely broken plugin reader")
+
+        monkeypatch.setattr(core, "read_plugin_masters", _boom)
+
+        plan = core.compute_plan(args)  # must not raise
+
+        assert plan["final_order"] is not None
+        assert "Mine.esp" in plan["final_order"]
+
+    def test_a_frozen_order_drift_prints_the_internal_warning(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """build_and_sort's own contract (curated order is never touched) is pinned in
+        test_sort_engine.py; this pins that compute_plan notices and reports a violation
+        rather than silently shipping a corrupted order, by simulating one directly."""
+        data = tmp_path / "Data Files"
+        data.mkdir()
+        write_plugin(data / "Morrowind.esm")
+        write_plugin(data / "A.esp")
+        write_plugin(data / "B.esp")
+        write_plugin(data / "Mine.esp", masters=("Morrowind.esm",), sizes=(0,))
+        cfg, rules = _cfg_and_rules(tmp_path, data, ["Morrowind.esm", "A.esp", "B.esp"])
+        args = _args(cfg, rules)
+        args.subset_lines = ["Mine.esp"]
+
+        def _reversed_curated_order(
+            base_order_names: list[str], subset: list[str], *_a: object, **_k: object
+        ) -> list[str]:
+            frozen = [n for n in base_order_names if n.lower() not in {s.lower() for s in subset}]
+            return [*subset, *reversed(frozen)]
+
+        monkeypatch.setattr(core, "build_and_sort", _reversed_curated_order)
+
+        core.compute_plan(args)
+
+        assert "INTERNAL WARNING: curated (frozen) order drifted" in capsys.readouterr().out
+
+
 class TestCustomizationsPath:
     """--customizations threaded all the way through compute_plan."""
 
@@ -330,3 +414,64 @@ class TestCellMapScan:
 
         assert len(plan["conflicts"]) == 1
         assert out.exists()
+
+    def test_json_dump_dir_prints_where_it_kept_the_dump(self, tmp_path: Path) -> None:
+        data = tmp_path / "Data Files"
+        data.mkdir()
+        write_plugin(data / "Morrowind.esm")
+        cfg, rules = _cfg_and_rules(tmp_path, data, ["Morrowind.esm"])
+        dump_dir = tmp_path / "dump"
+
+        args = _args_with_empty_subset(
+            tmp_path, cfg, rules, "--check-conflicts", "--json-dump-dir", str(dump_dir)
+        )
+        import io
+        from contextlib import redirect_stdout
+
+        out = io.StringIO()
+        with redirect_stdout(out):
+            core.compute_plan(args)
+
+        assert "Keeping tes3conv JSON dump in" in out.getvalue()
+
+    def test_a_conflicts_csv_write_failure_is_logged_not_raised(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        data = tmp_path / "Data Files"
+        data.mkdir()
+        write_plugin(data / "Morrowind.esm")
+        write_plugin(
+            data / "A.esp", extra=static_record("torch_01"), masters=("Morrowind.esm",), sizes=(0,)
+        )
+        write_plugin(
+            data / "B.esp", extra=static_record("torch_01"), masters=("Morrowind.esm",), sizes=(0,)
+        )
+        cfg, rules = _cfg_and_rules(tmp_path, data, ["Morrowind.esm", "A.esp", "B.esp"])
+
+        def _boom(*_a: object, **_k: object) -> None:
+            raise OSError("simulated: disk full")
+
+        monkeypatch.setattr(core, "write_conflict_csv", _boom)
+        args = _args_with_empty_subset(
+            tmp_path, cfg, rules, "--check-conflicts", "--conflicts-out", str(tmp_path / "out.csv")
+        )
+
+        core.compute_plan(args)  # must not raise
+
+    def test_a_cell_map_write_failure_is_logged_not_raised(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        data = tmp_path / "Data Files"
+        data.mkdir()
+        write_plugin(data / "Morrowind.esm")
+        cfg, rules = _cfg_and_rules(tmp_path, data, ["Morrowind.esm"])
+
+        def _boom(*_a: object, **_k: object) -> None:
+            raise OSError("simulated: disk full")
+
+        monkeypatch.setattr(core, "generate_cell_map_html", _boom)
+        args = _args_with_empty_subset(
+            tmp_path, cfg, rules, "--cell-map", str(tmp_path / "cellmap.html")
+        )
+
+        core.compute_plan(args)  # must not raise

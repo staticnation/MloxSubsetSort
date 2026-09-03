@@ -15,15 +15,16 @@ before this file.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from conftest import write_plugin
+from conftest import rec, sub, write_plugin, zstr
 
 import wraithguard_toolkit as core
 from wraithguard.plugins import PluginFileIndex
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    import pytest
 
 
 def _index(data_dir: Path) -> PluginFileIndex:
@@ -190,4 +191,96 @@ class TestMasterSize:
             order, _index(data_dir)
         )
 
+        assert size_notes == []
+
+
+class TestNonPluginEntriesAndUnresolvableMasters:
+    def test_an_omwscripts_entry_with_no_masters_is_skipped_not_counted(
+        self, tmp_path: Path
+    ) -> None:
+        """.omwscripts is a valid VFS entry (PLUGIN_EXTS) but never carries a master list.
+
+        The extension guard here is narrower than PLUGIN_EXTS on purpose: an
+        omwscripts file legitimately has no MAST/DATA pairs, and that must
+        not count as "checked" the way an empty .esp genuinely would.
+        """
+        data_dir = tmp_path / "Data Files"
+        data_dir.mkdir()
+        write_plugin(data_dir / "Extra.omwscripts")
+        order = ["Extra.omwscripts"]
+
+        _missing, _order, _notes, checked, _names = core.check_missing_masters(
+            order, _index(data_dir)
+        )
+
+        assert checked == 0
+
+    def test_a_master_listed_in_the_order_but_with_no_physical_file_is_skipped(
+        self, tmp_path: Path
+    ) -> None:
+        """A master's name can be in the load order text without ever resolving to a file.
+
+        ``ml in pos`` only checks the load-order *text*, so a broken load
+        order that lists a master which was never actually installed must
+        not crash the size check when it tries to resolve that master's path.
+        """
+        data_dir = tmp_path / "Data Files"
+        data_dir.mkdir()
+        write_plugin(data_dir / "Mine.esp", masters=("GhostMaster.esm",), sizes=(999,))
+        order = ["GhostMaster.esm", "Mine.esp"]  # listed, but never installed
+
+        missing, order_problems, size_notes, _checked, _names = core.check_missing_masters(
+            order, _index(data_dir)
+        )
+
+        assert missing == []
+        assert order_problems == []
+        assert size_notes == []
+
+    def test_a_master_whose_size_cannot_be_measured_produces_no_note(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """stat() failing on an otherwise-resolvable master must not crash the size check."""
+        data_dir = tmp_path / "Data Files"
+        data_dir.mkdir()
+        (data_dir / "Morrowind.esm").write_bytes(b"x" * 500)
+        write_plugin(data_dir / "Mine.esp", masters=("Morrowind.esm",), sizes=(999,))
+        order = ["Morrowind.esm", "Mine.esp"]
+        index = _index(data_dir)
+        index.find("Morrowind.esm")  # force _build() with the real stat, before patching it
+        real_stat = Path.stat
+
+        def flaky_stat(self: Path, *args: object, **kwargs: object) -> object:
+            if self.name == "Morrowind.esm":
+                raise OSError("stat failed")
+            return real_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", flaky_stat)
+
+        _missing, _order, size_notes, _checked, _names = core.check_missing_masters(order, index)
+
+        assert size_notes == []
+
+    def test_a_master_with_no_recorded_size_skips_the_size_check_only(self, tmp_path: Path) -> None:
+        """A MAST with no DATA (rec_size is None) is a structurally odd but real header shape.
+
+        Distinct from a recorded size of exactly 0 (test_a_recorded_size_of_
+        exactly_zero_gets_the_damaged_sync_hint): here there is nothing to
+        compare at all, so the size check must skip cleanly rather than
+        treat ``None`` as a size of zero.
+        """
+        data_dir = tmp_path / "Data Files"
+        data_dir.mkdir()
+        (data_dir / "Morrowind.esm").write_bytes(b"x" * 500)
+        # Two MASTs in a row: the first never gets a paired DATA subrecord.
+        body = sub("MAST", zstr("Morrowind.esm")) + sub("MAST", zstr("Morrowind.esm"))
+        (data_dir / "Mine.esp").write_bytes(rec("TES3", body))
+        order = ["Morrowind.esm", "Mine.esp"]
+
+        missing, order_problems, size_notes, _checked, _names = core.check_missing_masters(
+            order, _index(data_dir)
+        )
+
+        assert missing == []
+        assert order_problems == []
         assert size_notes == []

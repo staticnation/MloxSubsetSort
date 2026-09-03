@@ -48,6 +48,10 @@ class TestExtractGroundcoverDeclarations:
     def test_a_line_that_is_not_a_groundcover_declaration_is_ignored(self) -> None:
         assert core.extract_groundcover_declarations(["MyMod.esp", "# a comment"]) == []
 
+    def test_a_value_that_is_all_whitespace_names_nothing(self) -> None:
+        """The regex can still match on pure whitespace; stripped, there is no name at all."""
+        assert core.extract_groundcover_declarations(["groundcover=   "]) == []
+
     def test_an_empty_input_returns_an_empty_list(self) -> None:
         assert core.extract_groundcover_declarations([]) == []
 
@@ -108,3 +112,28 @@ class TestStripLineComment:
 
     def test_a_line_with_no_hash_at_all_is_unchanged(self) -> None:
         assert core._strip_line_comment("MyMod.esp") == "MyMod.esp"
+
+
+class TestExtractSubsetFromSubsetFileTomlFallback:
+    def test_a_toml_subset_file_parses_via_tomli_without_the_real_package(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Mirrors the same tomllib->tomli ladder pinned in test_configurator_apply.py.
+
+        This is a *different* function with its own copy of the same
+        try/except -- not exercised there -- so this sandbox (Python 3.11+,
+        no tomli installed) never proves this one's fallback line runs either.
+        """
+        import sys
+        import types
+
+        import tomllib as _real_toml
+
+        monkeypatch.setitem(sys.modules, "tomllib", None)
+        monkeypatch.setitem(sys.modules, "tomli", types.SimpleNamespace(loads=_real_toml.loads))
+        subset_file = tmp_path / "subset.toml"
+        subset_file.write_text('subset = ["MyMod.esp"]\n', encoding="utf-8")
+
+        plugins, _data_inserts = core.extract_subset_from_subset_file(subset_file)
+
+        assert plugins == ["MyMod.esp"]

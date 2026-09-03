@@ -182,6 +182,35 @@ class TestLintChecks:
         fog = [w for w in warnings if "[FOGBUG]" in w]
         assert len(fog) == 1 and "dark room" in fog[0]
 
+    def test_an_exterior_cell_is_not_fog_checked_and_does_not_crash_the_scan(self, core, data_dir):
+        """_lint_cell returns None for an exterior cell; the scan must just move past it."""
+        exterior = rec(
+            "CELL",
+            sub("NAME", zstr("Seyda Neen"))
+            + sub("DATA", struct.pack("<iii", 0, 1, 1)),  # flags=0: exterior
+        )
+        write_plugin(data_dir / "Ext.esp", masters=VANILLA, extra=exterior)
+        index = PluginFileIndex([str(data_dir)])
+
+        warnings, _ = core.lint_plugins(["Ext.esp"], index, subset_names=["Ext.esp"])
+
+        assert not [w for w in warnings if "[FOGBUG]" in w]
+
+    def test_an_exterior_pathgrid_does_not_count_toward_missing_interior_pathgrids(
+        self, core, data_dir
+    ):
+        """A PGRD for grid != (0, 0) is exterior; it must not satisfy an interior's requirement."""
+        write_plugin(data_dir / "Cell.esp", masters=VANILLA, extra=interior_cell("lonely", 0.4))
+        write_plugin(data_dir / "Grid.esp", masters=VANILLA, extra=pathgrid("elsewhere", 2, 3))
+        index = PluginFileIndex([str(data_dir)])
+
+        warnings, _ = core.lint_plugins(
+            ["Cell.esp", "Grid.esp"], index, subset_names=["Cell.esp", "Grid.esp"]
+        )
+
+        missing = [w for w in warnings if "[NO PATHGRID]" in w]
+        assert len(missing) == 1 and "lonely" in missing[0]
+
     def test_missing_pathgrid_resolves_across_the_whole_load_order(self, core, data_dir):
         """Improves on the reference script: a grid supplied by any plugin
         counts, not just an earlier one."""
@@ -222,6 +251,21 @@ class TestLintChecks:
         assert "Wolf.esp" in dep[0] and "BecomeWerewolf" in dep[0]
         assert "PlaceAtMe" not in dep[0], "comment text was scanned"
 
+    def test_tribunal_functions_without_the_master(self, core, data_dir):
+        """Mirrors test_expansion_functions_without_the_master for the Tribunal side."""
+        write_plugin(
+            data_dir / "Assassins.esp",
+            masters=VANILLA,
+            extra=script_record("s", "begin s\nAddToLevCreature\nend"),
+        )
+        index = PluginFileIndex([str(data_dir)])
+
+        warnings, _ = core.lint_plugins(["Assassins.esp"], index, subset_names=["Assassins.esp"])
+
+        dep = [w for w in warnings if "[EXP-DEP]" in w]
+        assert len(dep) == 1
+        assert "Assassins.esp" in dep[0] and "AddToLevCreature" in dep[0]
+
     def test_scripts_twin_mismatch(self, core, data_dir):
         write_plugin(data_dir / "Twin.omwaddon", masters=VANILLA)
         (data_dir / "Twin.omwscripts").write_text("return {}")
@@ -231,6 +275,50 @@ class TestLintChecks:
 
         twin = [w for w in warnings if "[TWIN]" in w]
         assert len(twin) == 1 and "Twin.omwscripts" in twin[0]
+
+    def test_omwscripts_twin_mismatch_the_other_direction(self, core, data_dir):
+        """An active .omwscripts with an un-loaded .esp/.omwaddon twin is flagged too."""
+        (data_dir / "Twin.omwscripts").write_text("return {}")
+        write_plugin(data_dir / "Twin.esp", masters=VANILLA)
+        index = PluginFileIndex([str(data_dir)])
+
+        warnings, _ = core.lint_plugins(
+            ["Twin.omwscripts"], index, subset_names=["Twin.omwscripts"]
+        )
+
+        twin = [w for w in warnings if "[TWIN]" in w]
+        assert len(twin) == 1 and "Twin.esp" in twin[0]
+        assert "scripts may reference content that never loads" in twin[0]
+
+    def test_a_subset_plugin_the_index_cannot_resolve_is_skipped_by_the_twin_check(
+        self, core, data_dir
+    ):
+        """A load-order entry that doesn't actually resolve to a file has no twin to check."""
+        index = PluginFileIndex([str(data_dir)])
+
+        warnings, _ = core.lint_plugins(["Ghost.esp"], index, subset_names=["Ghost.esp"])
+
+        assert not [w for w in warnings if "[TWIN]" in w]
+
+    def test_an_omwscripts_plugin_with_neither_twin_present_gets_no_warning(self, core, data_dir):
+        """Both candidate extensions are checked; neither existing must not raise or warn."""
+        (data_dir / "Standalone.omwscripts").write_text("return {}")
+        index = PluginFileIndex([str(data_dir)])
+
+        warnings, _ = core.lint_plugins(
+            ["Standalone.omwscripts"], index, subset_names=["Standalone.omwscripts"]
+        )
+
+        assert not [w for w in warnings if "[TWIN]" in w]
+
+    def test_a_non_esp_non_omwscripts_subset_plugin_has_no_twin_check_at_all(self, core, data_dir):
+        """.esm (a master) is neither of the two extensions the twin check looks at."""
+        write_plugin(data_dir / "Base.esm")
+        index = PluginFileIndex([str(data_dir)])
+
+        warnings, _ = core.lint_plugins(["Base.esm"], index, subset_names=["Base.esm"])
+
+        assert not [w for w in warnings if "[TWIN]" in w]
 
     def test_vanilla_masters_are_skipped(self, core, data_dir):
         evil = rec("GMST", sub("NAME", zstr("sProfitValue")) + sub("STRV", b"Profit Value"))

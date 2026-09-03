@@ -210,3 +210,65 @@ class TestStaleness:
         )
 
         assert "[STALE]" in capsys.readouterr().out
+
+
+class TestFailureModesAreAdvisoryOnly:
+    def test_a_candidate_whose_mtime_cannot_be_read_is_skipped(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        """One candidate's stat() failing (e.g. deleted mid-run) must not stop the others."""
+        data = tmp_path / "Data Files"
+        data.mkdir()
+        write_plugin(data / "delta-merged.omwaddon")
+        _touch(data / "delta-merged.omwaddon", offset_seconds=-3600)
+        write_plugin(data / "A.esp")
+        write_plugin(data / "B.esp")
+        from pathlib import Path as RealPath
+
+        original_stat = RealPath.stat
+        calls: dict[str, int] = {}
+
+        def flaky_stat(self: RealPath, *args, **kwargs):
+            if self.name == "A.esp":
+                calls["A.esp"] = calls.get("A.esp", 0) + 1
+                if calls["A.esp"] > 1:  # let is_file() during indexing succeed; fail the real check
+                    raise OSError("simulated: deleted mid-run")
+            return original_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(RealPath, "stat", flaky_stat)
+
+        core._staleness_watchdog(
+            ["A.esp", "B.esp", "delta-merged.omwaddon"],
+            ["A.esp", "B.esp", "delta-merged.omwaddon"],
+            _data_order(data),
+            [],
+            [],
+        )
+
+        out = capsys.readouterr().out
+        assert "[STALE]" in out
+        assert "B.esp" in out  # the one candidate that could still be compared
+
+    def test_an_unexpected_failure_is_swallowed_not_raised(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        """Purely cosmetic: any failure anywhere in this check must not surface at all."""
+        data = tmp_path / "Data Files"
+        data.mkdir()
+        write_plugin(data / "delta-merged.omwaddon")
+        write_plugin(data / "A.esp")
+
+        def _boom(*_a, **_k):
+            raise RuntimeError("simulated: a genuinely broken index")
+
+        monkeypatch.setattr(core, "PluginFileIndex", _boom)
+
+        core._staleness_watchdog(
+            ["A.esp", "delta-merged.omwaddon"],
+            ["A.esp", "delta-merged.omwaddon"],
+            _data_order(data),
+            [],
+            [],
+        )  # must not raise
+
+        assert capsys.readouterr().out == ""

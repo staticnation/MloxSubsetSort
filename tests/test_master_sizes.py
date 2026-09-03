@@ -10,7 +10,9 @@ None of the three had any coverage before this file.
 
 from __future__ import annotations
 
+import shutil
 import struct
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from conftest import rec, sub, write_plugin, zstr
@@ -19,7 +21,7 @@ import wraithguard_toolkit as core
 from wraithguard.plugins import PluginFileIndex
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    import pytest
 
 
 class TestReadPluginMasters:
@@ -209,3 +211,88 @@ class TestSyncPluginMasterSizes:
         assert updated == []
         assert unresolved == []
         assert error is not None and "can't read" in error
+
+    def test_a_data_subrecord_shorter_than_8_bytes_is_left_alone(self, tmp_path: Path) -> None:
+        """A malformed DATA field (too short to even hold a size) is skipped, not crashed on."""
+        data_dir = tmp_path / "Data Files"
+        data_dir.mkdir()
+        (data_dir / "Morrowind.esm").write_bytes(b"x" * 500)
+        body = sub("MAST", zstr("Morrowind.esm")) + sub("DATA", struct.pack("<I", 999))
+        plugin = data_dir / "Mine.esp"
+        plugin.write_bytes(rec("TES3", body))
+        index = PluginFileIndex([str(data_dir)])
+
+        updated, unresolved, error = core.sync_plugin_master_sizes(plugin, index)
+
+        assert updated == []
+        assert unresolved == []
+        assert error is None
+
+    def test_a_master_whose_size_cannot_be_measured_is_left_alone(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """stat() failing on a resolved master (e.g. a permissions race) must not crash the fix."""
+        data_dir = tmp_path / "Data Files"
+        data_dir.mkdir()
+        (data_dir / "Morrowind.esm").write_bytes(b"x" * 500)
+        plugin = write_plugin(data_dir / "Mine.esp", masters=("Morrowind.esm",), sizes=(999,))
+        index = PluginFileIndex([str(data_dir)])
+        index.find("Morrowind.esm")  # force _build() with the real stat, before patching it
+        real_stat = Path.stat
+
+        def flaky_stat(self: Path, *args: object, **kwargs: object) -> object:
+            if self.name == "Morrowind.esm":
+                raise OSError("stat failed")
+            return real_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", flaky_stat)
+
+        updated, unresolved, error = core.sync_plugin_master_sizes(plugin, index)
+
+        assert updated == []
+        assert unresolved == []
+        assert error is None
+
+    def test_a_backup_write_failure_aborts_before_touching_the_plugin(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If the safety backup can't be written, the plugin itself must stay untouched."""
+        data_dir = tmp_path / "Data Files"
+        data_dir.mkdir()
+        (data_dir / "Morrowind.esm").write_bytes(b"x" * 500)
+        plugin = write_plugin(data_dir / "Mine.esp", masters=("Morrowind.esm",), sizes=(999,))
+        original_bytes = plugin.read_bytes()
+        index = PluginFileIndex([str(data_dir)])
+
+        def failing_copy2(*_a: object, **_k: object) -> None:
+            raise OSError("disk full")
+
+        monkeypatch.setattr(shutil, "copy2", failing_copy2)
+
+        updated, _unresolved, error = core.sync_plugin_master_sizes(plugin, index)
+
+        assert updated == []
+        assert error is not None and "couldn't write backup" in error
+        assert plugin.read_bytes() == original_bytes  # not modified
+
+    def test_a_plugin_write_failure_is_reported(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The final rewrite can fail too (e.g. the plugin became read-only mid-run)."""
+        data_dir = tmp_path / "Data Files"
+        data_dir.mkdir()
+        (data_dir / "Morrowind.esm").write_bytes(b"x" * 500)
+        plugin = write_plugin(data_dir / "Mine.esp", masters=("Morrowind.esm",), sizes=(999,))
+        index = PluginFileIndex([str(data_dir)])
+
+        def failing_write_bytes(self: Path, *_a: object, **_k: object) -> int:
+            raise OSError("read-only file system")
+
+        monkeypatch.setattr(Path, "write_bytes", failing_write_bytes)
+
+        updated, _unresolved, error = core.sync_plugin_master_sizes(
+            plugin, index, make_backup=False
+        )
+
+        assert updated == []
+        assert error is not None and "couldn't write plugin" in error

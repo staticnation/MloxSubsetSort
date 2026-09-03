@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import wraithguard.esp as esp_module
 import wraithguard_toolkit as core
 from wraithguard.esp import (
     Cell,
@@ -33,6 +34,8 @@ from wraithguard.esp.flags import CellFlags
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import pytest
 
 
 def _plugin(path: Path) -> str:
@@ -97,3 +100,28 @@ class TestNativeSession:
         first = session.records(path)
         assert (tmp_path / "mine.json").is_file()
         assert session.records(path) == first
+
+    def test_a_json_already_on_disk_from_a_prior_run_is_reused_without_reconverting(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A fresh session (empty in-memory cache) still finds a valid spool file on disk."""
+        path = _plugin(tmp_path / "mine.esp")
+        core.NativeEspSession(dump_dir=str(tmp_path), keep=True).records(path)  # writes mine.json
+        assert (tmp_path / "mine.json").is_file()
+
+        def _boom(*_a: object, **_k: object) -> None:
+            raise AssertionError("re-read the plugin instead of reusing the on-disk JSON")
+
+        monkeypatch.setattr(esp_module, "read_plugin", _boom)
+        fresh_session = core.NativeEspSession(dump_dir=str(tmp_path), keep=True)
+        records = fresh_session.records(path)
+
+        assert any(r.get("type") == "Header" for r in records)
+
+    def test_an_unreadable_plugin_returns_no_records(self, tmp_path: Path) -> None:
+        """A file that isn't a valid plugin at all fails read_plugin, not a crash."""
+        bad = tmp_path / "corrupt.esp"
+        bad.write_bytes(b"not a plugin")
+        session = core.NativeEspSession(dump_dir=str(tmp_path), keep=True)
+
+        assert session.records(str(bad)) == []

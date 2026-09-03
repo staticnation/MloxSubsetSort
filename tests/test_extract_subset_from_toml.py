@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 import wraithguard_toolkit as core
 
 if TYPE_CHECKING:
@@ -25,6 +27,41 @@ def _toml(tmp_path: Path, text: str) -> Path:
     path = tmp_path / "customizations.toml"
     path.write_text(text, encoding="utf-8")
     return path
+
+
+class TestBlankOrNonStringInsertValues:
+    def test_an_empty_string_insert_value_names_nothing(self, tmp_path: Path) -> None:
+        path = _toml(
+            tmp_path,
+            '[[Customizations]]\nlistName = "L"\n[[Customizations.insert]]\ninsert = ""\n',
+        )
+        subset, data_inserts, _replace, _listnames = core.extract_subset_from_toml(path)
+        assert subset == []
+        assert data_inserts == []
+
+    def test_a_non_string_insert_value_is_ignored_not_raised(self, tmp_path: Path) -> None:
+        """A TOML author's mistake (a number, a table) must not crash the read."""
+        path = _toml(
+            tmp_path,
+            '[[Customizations]]\nlistName = "L"\n[[Customizations.insert]]\ninsert = 42\n',
+        )
+        subset, data_inserts, _replace, _listnames = core.extract_subset_from_toml(path)
+        assert subset == []
+        assert data_inserts == []
+
+
+class TestNoTomlLibraryAvailable:
+    def test_neither_tomllib_nor_tomli_exits_with_a_clear_message(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        import sys
+
+        monkeypatch.setitem(sys.modules, "tomllib", None)
+        monkeypatch.setitem(sys.modules, "tomli", None)
+        path = _toml(tmp_path, '[[Customizations]]\nlistName = "L"\n')
+
+        with pytest.raises(SystemExit, match="Need Python 3"):
+            core.extract_subset_from_toml(path)
 
 
 class TestSingleInsert:

@@ -9,12 +9,13 @@ so no real tes3conv binary is needed. Previously untested.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import wraithguard_toolkit as core
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    import pytest
 
 
 def _seed(dump_dir: Path, stem: str, records: list[dict]) -> None:
@@ -95,3 +96,33 @@ class TestWithSession:
         core.dump_tes3conv_json(session, ["A.esp"], {"A.esp": str(plugin_a)}, outdir)
 
         assert outdir.is_dir()
+
+    def test_a_write_failure_for_one_plugin_does_not_stop_the_others(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        plugin_a = tmp_path / "A.esp"
+        plugin_b = tmp_path / "B.esp"
+        plugin_a.write_bytes(b"\x00")
+        plugin_b.write_bytes(b"\x00")
+        dump_dir = tmp_path / "dump"
+        dump_dir.mkdir()
+        _seed(dump_dir, "A", [{"type": "Armor", "id": "a1"}])
+        _seed(dump_dir, "B", [{"type": "Armor", "id": "b1"}])
+        session = core.Tes3ConvSession(exe="unused", dump_dir=str(dump_dir), keep=True)
+        outdir = tmp_path / "out"
+        real_write_text = Path.write_text
+
+        def flaky_write_text(self: Path, *args: object, **kwargs: object) -> int:
+            if self.name == "A.json":
+                raise OSError("disk full")
+            return real_write_text(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "write_text", flaky_write_text)
+
+        n = core.dump_tes3conv_json(
+            session, ["A.esp", "B.esp"], {"A.esp": str(plugin_a), "B.esp": str(plugin_b)}, outdir
+        )
+
+        assert n == 1
+        assert not (outdir / "A.json").exists()
+        assert (outdir / "B.json").exists()

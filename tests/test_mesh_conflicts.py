@@ -40,6 +40,97 @@ def mesh(blocks: int = 0) -> bytes:
     return HEADER + struct.pack("<II", 0x04000002, blocks)
 
 
+def _text(value: str) -> bytes:
+    raw = value.encode("cp1252")
+    return struct.pack("<I", len(raw)) + raw
+
+
+def _av_body(name: str, children: tuple[int, ...] = ()) -> bytes:
+    body = _text(name) + struct.pack("<iiH", -1, -1, 0)
+    body += struct.pack("<3f", 0.0, 0.0, 0.0)  # translation
+    body += struct.pack("<9f", 1, 0, 0, 0, 1, 0, 0, 0, 1)  # rotation
+    body += struct.pack("<f", 1.0)  # scale
+    body += struct.pack("<3f", 0.0, 0.0, 0.0)  # velocity
+    body += struct.pack("<I", 0)  # properties
+    body += struct.pack("<I", 0)  # bounding-box flag
+    body += struct.pack("<I", len(children)) + b"".join(struct.pack("<i", c) for c in children)
+    body += struct.pack("<I", 0)  # collision object index
+    return body
+
+
+def mesh_with_collision(has_collision: bool) -> bytes:
+    """A minimal, real NiNode -- optionally with a RootCollisionNode child.
+
+    Just enough structure for the real collision check in
+    :mod:`wraithguard.nif.report` to see -- not a full mesh, since nothing
+    here looks at geometry.
+
+    Args:
+        has_collision: Whether to add the RootCollisionNode block.
+
+    Returns:
+        The file bytes.
+    """
+    blocks: list[tuple[str, bytes]] = [
+        ("NiNode", _av_body("root", children=(1,) if has_collision else ()))
+    ]
+    if has_collision:
+        blocks.append(("RootCollisionNode", _av_body("collide")))
+    out = [HEADER, struct.pack("<II", 0x04000002, len(blocks))]
+    for type_name, body in blocks:
+        out.append(_text(type_name))
+        out.append(body)
+    return b"".join(out)
+
+
+def _source_texture(path: str) -> bytes:
+    return (
+        _text("tex")
+        + struct.pack("<ii", -1, -1)  # extra, controller
+        + struct.pack("<B", 1)  # use_external
+        + _text(path)  # the external filename
+        + struct.pack("<III", 0, 0, 0)  # pixel layout, mipmaps, alpha
+        + struct.pack("<B", 1)  # is static
+    )
+
+
+def _vis_controller() -> bytes:
+    return (
+        struct.pack("<i", -1)  # next_controller
+        + struct.pack("<H", 0)  # flags
+        + struct.pack("<4f", 0.0, 0.0, 0.0, 0.0)  # frequency, phase, start, stop
+        + struct.pack("<i", -1)  # target
+        + struct.pack("<i", -1)  # data
+    )
+
+
+def mesh_with_everything(has_collision: bool) -> bytes:
+    """A NiNode, optionally with collision, plus a texture and a controller.
+
+    The texture and controller blocks need no link to the node to be
+    counted -- :func:`wraithguard.nif.report.summarise` just scans every
+    block in the file for them.
+
+    Args:
+        has_collision: Whether to add the RootCollisionNode block.
+
+    Returns:
+        The file bytes.
+    """
+    blocks: list[tuple[str, bytes]] = [
+        ("NiNode", _av_body("root", children=(1,) if has_collision else ())),
+    ]
+    if has_collision:
+        blocks.append(("RootCollisionNode", _av_body("collide")))
+    blocks.append(("NiSourceTexture", _source_texture("textures/rock.dds")))
+    blocks.append(("NiVisController", _vis_controller()))
+    out = [HEADER, struct.pack("<II", 0x04000002, len(blocks))]
+    for type_name, body in blocks:
+        out.append(_text(type_name))
+        out.append(body)
+    return b"".join(out)
+
+
 def two_providers(tmp_path: Path, name: str, left: bytes, right: bytes) -> dict[str, Any]:
     """Build a conflict entry backed by two real files on disk.
 
@@ -100,6 +191,33 @@ class TestOnlyContestedMeshesAreOpened:
         ]
         assert analyse_mesh_conflicts(entries, limit=2)["analysed"] == 2
 
+    def test_a_lost_collision_counts_as_a_finding(self, tmp_path: Path) -> None:
+        """The real path from two genuine NIFs through to stats["findings"], not a hand-built one."""
+        entry = two_providers(
+            tmp_path, "meshes/a.nif", mesh_with_collision(True), mesh_with_collision(False)
+        )
+        stats = analyse_mesh_conflicts([entry])
+        assert stats["findings"] == 1
+        assert entry["mesh"].worth_reporting
+
+    def test_an_unreadable_provider_counts_toward_unreadable_not_findings(
+        self, tmp_path: Path
+    ) -> None:
+        entry = two_providers(tmp_path, "meshes/a.nif", b"not a nif at all", mesh(0))
+        stats = analyse_mesh_conflicts([entry])
+        assert stats["unreadable"] == 1
+        assert stats["findings"] == 0
+
+    def test_a_loser_matching_the_winner_leaves_no_losses_to_analyse(self, tmp_path: Path) -> None:
+        """entry["providers"] can list the winner itself (a single true provider); no loss to report."""
+        entry = two_providers(tmp_path, "meshes/a.nif", mesh(0), mesh(1))
+        entry["providers"] = [entry["winner"]]  # only the winner "provides" it
+
+        stats = analyse_mesh_conflicts([entry])
+
+        assert stats["analysed"] == 0
+        assert "mesh" not in entry
+
 
 class TestTheReportNeverOverstates:
     """A finding the parse cannot support must not reach the page."""
@@ -158,6 +276,20 @@ class TestTheReportNeverOverstates:
         )
         assert "1 mesh conflict changes what the asset does" in text
         assert "loses collision" in text
+
+    def test_a_limit_smaller_than_the_conflict_count_says_how_many_more(
+        self, tmp_path: Path
+    ) -> None:
+        entries = [
+            two_providers(tmp_path / f"c{index}", f"meshes/{index}.nif", mesh(0), mesh(1))
+            for index in range(3)
+        ]
+        text = format_resource_report(
+            entries,
+            {"dirs": 2, "files": 2, "conflicts": 3, "identical": 0, "differing": 3},
+            limit=2,
+        )
+        assert "and 1 more (save the full report)" in text
 
 
 class TestCsvBlanksMeanNotEstablished:
@@ -242,6 +374,29 @@ class TestOnDemandDetail:
         partial = [line for line in lines if "PARTIAL" in line]
         assert partial, lines
         assert all("no collision" not in line for line in partial)
+
+    def test_no_providers_at_all_reads_nothing(self, tmp_path: Path) -> None:
+        """A malformed entry (no providers) is treated like a non-mesh selection, not a crash."""
+        entry = two_providers(tmp_path, "meshes/a.nif", mesh(0), mesh(1))
+        entry["providers"] = []
+
+        assert describe_mesh_detail(MeshAnalyser(), entry) == []
+
+    def test_collision_animation_textures_and_a_real_difference_note_all_show_up(
+        self, tmp_path: Path
+    ) -> None:
+        """The traits line, the animation/texture traits, the comparison note, and the
+        textures line, all from one real pair -- not hand-built Structure/MeshFinding
+        objects."""
+        entry = two_providers(
+            tmp_path, "meshes/a.nif", mesh_with_everything(True), mesh_with_everything(False)
+        )
+        lines = describe_mesh_detail(MeshAnalyser(), entry)
+
+        assert any("collision" in line and "no collision" not in line for line in lines)
+        assert any("animated" in line for line in lines)
+        assert any("the winner" in line for line in lines)  # the comparison note
+        assert any("Textures referenced" in line and "rock.dds" in line for line in lines)
 
 
 class TestTheWinnerIsTakenFromTheEntryNotThePosition:

@@ -120,6 +120,35 @@ class TestFindTes3cmd:
     def test_nothing_found_anywhere_returns_none(self) -> None:
         assert core.find_tes3cmd() is None
 
+    def test_a_path_hit_is_used_when_nothing_more_specific_is_given(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        exe = tmp_path / "tes3cmd.exe"
+        exe.write_bytes(b"")
+        monkeypatch.setattr(
+            shutil, "which", lambda name: str(exe) if name == "tes3cmd.exe" else None
+        )
+
+        assert core.find_tes3cmd() == str(exe)
+
+    def test_a_candidate_that_cannot_be_checked_does_not_stop_the_search(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        real = tmp_path / "real_tes3cmd"
+        real.write_bytes(b"")
+        monkeypatch.setenv("MLOX_TES3CMD", str(real))
+
+        original_is_file = Path.is_file
+
+        def _flaky(self: Path) -> bool:
+            if self.name == "unreachable":
+                raise OSError("simulated: dead network share")
+            return original_is_file(self)
+
+        monkeypatch.setattr(Path, "is_file", _flaky)
+
+        assert core.find_tes3cmd(explicit=str(tmp_path / "unreachable")) == str(real)
+
 
 class TestTes3cmdInvocation:
     def test_an_exe_suffix_runs_directly_without_reading_the_file(self, tmp_path: Path) -> None:

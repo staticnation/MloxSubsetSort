@@ -167,6 +167,10 @@ class TestGroundcoverOnRealData:
     heuristic would get wrong.
     """
 
+    def test_a_blank_groundcover_line_is_skipped(self, core) -> None:
+        """``groundcover=`` with nothing after it (a stray blank line) names no plugin."""
+        assert core.read_groundcover_names(["groundcover=", "groundcover=  "]) == []
+
     def test_the_real_cfg_declares_grass_separately(self, core) -> None:
         """A real MOMW-style setup has both kinds of line, in quantity.
 

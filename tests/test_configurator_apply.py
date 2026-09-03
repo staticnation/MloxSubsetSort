@@ -164,6 +164,28 @@ class TestTomlFallbacks:
         ok, _ = preview_configurator_result(["content=A"], toml, ["B"], [])
         assert ok is True
 
+    def test_preview_falls_back_to_tomli_without_the_real_package(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """preview_configurator_result's own tomllib->tomli ladder, proven without tomli installed.
+
+        test_it_falls_back_to_tomli above skips entirely where tomli is not
+        actually installed (Python 3.11+ does not need it), which is exactly
+        this sandbox -- so that test alone never proves this function's
+        second import line runs. A fake module standing in for tomli, built
+        on the real tomllib parser this interpreter already has, proves the
+        fallback wiring without needing the package.
+        """
+        import types
+
+        import tomllib as _real_toml
+
+        monkeypatch.setitem(sys.modules, "tomllib", None)
+        monkeypatch.setitem(sys.modules, "tomli", types.SimpleNamespace(loads=_real_toml.loads))
+        toml = '[[Customizations]]\n[[Customizations.replace]]\nsource = "A"\ndest = "B"\n'
+        ok, _ = preview_configurator_result(["content=A"], toml, ["B"], [])
+        assert ok is True
+
     def test_no_toml_library_skips_the_preview(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """With neither tomllib nor tomli, the preview is skipped with a note."""
         monkeypatch.setitem(sys.modules, "tomllib", None)

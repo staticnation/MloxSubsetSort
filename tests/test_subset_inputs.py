@@ -79,6 +79,30 @@ class TestDeclaredGroundcover:
         args = _args(tmp_path, "--subset-file", str(tmp_path / "does-not-exist.txt"))
         assert core.declared_groundcover(args) == []
 
+    def test_a_malformed_toml_groundcover_section_is_silently_ignored(self, tmp_path: Path) -> None:
+        """The subset reader reports the malformed TOML properly; this just must not also crash."""
+        subset_file = tmp_path / "subset.toml"
+        subset_file.write_text("not [ valid toml", encoding="utf-8")
+        args = _args(tmp_path, "--subset-file", str(subset_file))
+        assert core.declared_groundcover(args) == []
+
+    def test_a_toml_groundcover_key_parses_via_tomli_without_the_real_package(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A fourth copy of the same tomllib->tomli ladder, in this function specifically."""
+        import sys
+        import types
+
+        import tomllib as _real_toml
+
+        monkeypatch.setitem(sys.modules, "tomllib", None)
+        monkeypatch.setitem(sys.modules, "tomli", types.SimpleNamespace(loads=_real_toml.loads))
+        subset_file = tmp_path / "subset.toml"
+        subset_file.write_text('groundcover = ["Vurt_Grass.esp"]\n', encoding="utf-8")
+        args = _args(tmp_path, "--subset-file", str(subset_file))
+
+        assert core.declared_groundcover(args) == ["Vurt_Grass.esp"]
+
 
 class TestReadSubsetInputsGuards:
     def test_scan_dir_without_subset_file_exits_with_a_clear_message(self, tmp_path: Path) -> None:
@@ -88,6 +112,19 @@ class TestReadSubsetInputsGuards:
 
         with pytest.raises(SystemExit, match="requires --subset-file"):
             core._read_subset_inputs(args)
+
+    def test_scan_dir_with_subset_file_runs_the_scan(self, tmp_path: Path) -> None:
+        """The success path this guard exists to gate: a real scan actually runs."""
+        mods_dir = tmp_path / "mods"
+        (mods_dir / "MyMod").mkdir(parents=True)
+        (mods_dir / "MyMod" / "MyMod.esp").write_bytes(b"\x00")
+        subset_file = tmp_path / "scanned.txt"
+        args = _args(tmp_path, "--scan-dir", str(mods_dir), "--subset-file", str(subset_file))
+
+        core._read_subset_inputs(args)
+
+        assert subset_file.is_file()
+        assert "MyMod.esp" in subset_file.read_text(encoding="utf-8")
 
     def test_no_input_source_at_all_exits_with_a_clear_message(self, tmp_path: Path) -> None:
         args = _args(tmp_path)
@@ -159,6 +196,30 @@ class TestReadSubsetInputsDataPathNotes:
 
         assert data_inserts == []
         assert "found but not sorted" in capsys.readouterr().out
+
+    def test_emit_toml_parses_via_tomli_without_the_real_package(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A fifth copy of the same tomllib->tomli ladder, gated behind --emit-toml."""
+        import sys
+        import types
+
+        import tomllib as _real_toml
+
+        monkeypatch.setitem(sys.modules, "tomllib", None)
+        monkeypatch.setitem(sys.modules, "tomli", types.SimpleNamespace(loads=_real_toml.loads))
+        toml = tmp_path / "customizations2.toml"
+        toml.write_text(
+            '[[Customizations]]\n\n[[Customizations.insert]]\ninsert = "MyMod.esp"\n',
+            encoding="utf-8",
+        )
+        args = _args(
+            tmp_path, "--customizations", str(toml), "--emit-toml", str(tmp_path / "out.toml")
+        )
+
+        result = core._read_subset_inputs(args)
+
+        assert result[4] == {"Customizations": [{"insert": [{"insert": "MyMod.esp"}]}]}
 
 
 class TestReadSubsetInputsOrigins:

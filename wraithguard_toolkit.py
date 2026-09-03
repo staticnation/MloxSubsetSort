@@ -806,7 +806,7 @@ def stage_for_tes3cmd(
     masters = read_plugin_masters(p)
     staged_names, missing = [], []
 
-    def _ensure(src: Path, allow_link: bool) -> Path | None:
+    def _ensure(src: Path) -> Path | None:
         dest = df / src.name
         try:
             if dest.exists():
@@ -814,12 +814,11 @@ def stage_for_tes3cmd(
                 if d.st_size == s.st_size and int(d.st_mtime) == int(s.st_mtime):
                     return dest  # cached from a previous run
                 dest.unlink()
-            if allow_link:
-                try:
-                    os.link(src, dest)  # same-volume: instant, no disk cost
-                    return dest
-                except OSError:
-                    pass  # cross-volume etc. -> copy
+            try:
+                os.link(src, dest)  # same-volume: instant, no disk cost
+                return dest
+            except OSError:
+                pass  # cross-volume etc. -> copy
             _sh.copy2(src, dest)
             return dest
         except OSError as e:
@@ -835,7 +834,7 @@ def stage_for_tes3cmd(
         if src is None:
             missing.append(m)
             continue
-        if _ensure(Path(src), allow_link=True) is not None:
+        if _ensure(Path(src)) is not None:
             staged_names.append(Path(src).name)
         else:
             missing.append(m)
@@ -3177,7 +3176,10 @@ def _iter_cells(
             mm = re.match(r"^Exterior \((-?\d+), (-?\d+)\)", rid)
             if mm:
                 yield ("ext", int(mm.group(1)), int(mm.group(2)))
-            elif rid.startswith("Interior: "):
+            else:
+                # A CELL's rid from _tes3_record_key is always one of these
+                # two shapes (see its CELL branch); the interior case is the
+                # only one left once the exterior regex hasn't matched.
                 yield ("int", rid[len("Interior: ") :], None)
 
 
@@ -5281,8 +5283,7 @@ def _conflict_and_cellmap_scans(
             except OSError as e:
                 _LOG.error(_("could not write cell map: %(error)s"), {"error": e})
 
-        if csession is not None:
-            csession.cleanup()  # drop the temp JSON spool (no-op if --json-dump-dir kept it)
+        csession.cleanup()  # drop the temp JSON spool (no-op if --json-dump-dir kept it)
     return conflicts
 
 
@@ -5380,12 +5381,11 @@ def _plan_data_paths(
 
     """
     data_result = None
-    if data_inserts and not args.sort_data_paths:
-        _section(f"{len(data_inserts)} DATA PATH(S) FOUND BUT NOT SORTED")
-        print(_("  Pass --sort-data-paths to enable:"))
-        for d in data_inserts:
-            print(f"  {d['value']}")
-
+    # data_inserts is only ever populated (in _read_subset_inputs) when
+    # args.sort_data_paths is already True -- every source that would add to
+    # it prints its own "found but not sorted" note and skips the insert
+    # instead, whenever the flag is off. So reaching here with a non-empty
+    # data_inserts implies the flag is on.
     if data_inserts and args.sort_data_paths:
         _section(f"SORTING {len(data_inserts)} DATA PATH(S)")
         infer_data_path_anchors(data_inserts, data_order, list(final_order or []), args.cfg)

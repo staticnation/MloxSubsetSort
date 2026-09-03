@@ -242,6 +242,27 @@ class TestRecordsViaReportsWhy:
         _records_via("tes3conv", tmp_path / "a.esm", tmp_path)
         assert seen.get("creationflags") == 0x08000000
 
+    def test_a_sidecar_with_no_matching_entry_falls_through_to_conversion(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A stale or absent sidecar entry must not stop the plugin from converting.
+
+        The sidecar folder exists (unlike TestAnAbsentSidecarFolder below), but
+        holds nothing for this particular plugin -- the case a merge over a
+        partially re-scanned load order hits routinely.
+        """
+        import wraithguard.land.service as svc
+
+        monkeypatch.setattr(svc, "has_landscape", lambda *_a, **_k: True)
+        monkeypatch.setattr(svc, "landscape_records_from_sidecar", lambda *_a, **_k: None)
+        monkeypatch.setattr(svc, "read_landscape_records", lambda *_a, **_k: [{"type": "Header"}])
+        sidecar_dir = tmp_path / "sidecars"
+        sidecar_dir.mkdir()
+
+        records, failure = _records_via(None, tmp_path / "a.esm", tmp_path, sidecar_dir)
+        assert failure == ""
+        assert records == [{"type": "Header"}]
+
 
 class TestSplitOrder:
     """Masters are the reference; mods are what gets merged onto it."""
@@ -500,6 +521,18 @@ class TestDeclaredMasters:
             self._outcome(["ghost.esp"]), [], self._reference("Morrowind.esm"), ["Morrowind.esm"]
         )
         assert declared == ["Morrowind.esm", "ghost.esp"]
+
+    def test_a_cell_absent_from_the_reference_declares_no_origin(self) -> None:
+        """A brand-new cell no master ever defined has no origin to add.
+
+        ``reference.sources`` simply has nothing for its coordinates -- the
+        editors are still declared, just without an origin master tagging along.
+        """
+        empty_reference = Landmass(name="reference")
+        declared = _contributors(
+            self._outcome(["a.esp"]), [], empty_reference, ["Morrowind.esm", "a.esp"]
+        )
+        assert declared == ["a.esp"]
 
 
 class TestNonPluginsAreNotMerged:
@@ -868,6 +901,43 @@ class TestWrite:
         _write([], ["a.esm"], [tmp_path], tmp_path / "out.esp", "tes3conv")
         assert seen.get("creationflags") == 0x08000000
 
+    def test_a_native_encode_failure_is_reported(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``converter=None`` still has a failure path -- the native encoder can refuse too.
+
+        Mirrors test_a_nonzero_exit_is_reported, but for the in-process writer:
+        no tes3conv (real or fake) needed to prove it, since a record type
+        neither backend recognises is refused the same way natively.
+        """
+        import wraithguard.land.service as svc
+
+        (tmp_path / "a.esm").write_bytes(b"x" * 100)
+        monkeypatch.setattr(svc, "resolve_plugin", lambda *_a, **_k: tmp_path / "a.esm")
+        bad_record = {"type": "NotARealRecordType", "flags": ""}
+        with pytest.raises(MergeServiceError, match="could not encode the merged plugin natively"):
+            _write([bad_record], ["a.esm"], [tmp_path], tmp_path / "out.esp", None)
+
+    def test_a_nonzero_tes3conv_exit_is_reported_without_a_real_binary(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The same outcome as test_a_nonzero_exit_is_reported, without needing real_tes3conv.
+
+        subprocess.run's return handling is what is under test here, not
+        tes3conv's own JSON validation -- a fake with a nonzero returncode
+        proves it identically and runs everywhere, tes3conv installed or not.
+        """
+        import wraithguard.land.service as svc
+
+        def fake_run(argv: list[str], **_kw: object) -> types.SimpleNamespace:
+            return types.SimpleNamespace(returncode=1, stdout="", stderr="tes3conv says no")
+
+        (tmp_path / "a.esm").write_bytes(b"x" * 100)
+        monkeypatch.setattr(svc, "resolve_plugin", lambda *_a, **_k: tmp_path / "a.esm")
+        monkeypatch.setattr(svc.subprocess, "run", fake_run)
+        with pytest.raises(MergeServiceError, match="refused the merged JSON"):
+            _write([], ["a.esm"], [tmp_path], tmp_path / "out.esp", "tes3conv")
+
 
 class TestBuildMergedLandsHappyPath:
     """End-to-end coverage for build_merged_lands' main body.
@@ -1086,3 +1156,206 @@ class TestBuildMergedLandsHappyPath:
             sidecars=tmp_path / "no-such-sidecar-folder",
         )
         assert result.cells_written == 1
+
+    def test_a_master_that_fails_both_backends_is_fatal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A master neither tes3conv nor the native reader can parse must abort the merge.
+
+        Unlike a missing master (TestMasterFailuresAreExplained), this one
+        resolves fine -- the file is right there -- but is unreadable by
+        either backend, which has to stop the run rather than build a
+        reference from nothing.
+        """
+        heights = [[100.0] * 65 for _ in range(65)]
+        data_dir = self._rig(
+            tmp_path, monkeypatch, {"Morrowind.esm": [self._land((0, 0), heights)]}
+        )
+        # On disk, but absent from every fixture: the fake tes3conv refuses
+        # it (no entry to serve), and the native fallback refuses it too --
+        # it is dummy bytes, not a real plugin.
+        (data_dir / "Bad.esm").write_bytes(b"x" * 1000)
+
+        with pytest.raises(MergeServiceError, match="could not read master Bad"):
+            build_merged_lands(
+                data_files=[data_dir],
+                load_order=["Morrowind.esm", "Bad.esm"],
+                converter="tes3conv",
+            )
+
+    def test_a_mod_that_fails_both_backends_is_reported_not_fatal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A mod (unlike a master) that neither backend can read is unreadable, not fatal.
+
+        Distinct from test_a_missing_mod_is_reported_not_fatal: that mod was
+        never found at all. This one resolves and is read for, but both
+        backends refuse it -- a real, corrupt file rather than an absent one.
+        """
+        heights = [[100.0] * 65 for _ in range(65)]
+        data_dir = self._rig(
+            tmp_path, monkeypatch, {"Morrowind.esm": [self._land((0, 0), heights)]}
+        )
+        (data_dir / "Corrupt.esp").write_bytes(b"x" * 1000)
+
+        result = build_merged_lands(
+            data_files=[data_dir],
+            load_order=["Morrowind.esm", "Corrupt.esp"],
+            converter="tes3conv",
+            verbose=True,
+        )
+        assert any("Corrupt.esp (" in line and "not found" not in line for line in result.lines)
+
+    def test_settings_are_named_only_in_verbose_output(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The headline 'carries settings' line does not need verbose; the per-plugin detail does.
+
+        Complements test_a_mods_settings_are_named_in_verbose_output, which
+        always ran with verbose=True and so never exercised the non-verbose
+        half of this same branch.
+        """
+        data_dir = self._rig(tmp_path, monkeypatch, self._conflicting_fixture())
+        write_settings(
+            data_dir / "ModHeights.esp",
+            PluginMeta(layers={"world_map_data": MergeSettings(included=True)}),
+        )
+
+        result = build_merged_lands(
+            data_files=[data_dir],
+            load_order=["Morrowind.esm", "ModHeights.esp", "ModColors.esp"],
+            converter="tes3conv",
+        )
+        assert any("carry .mergedlands.toml settings" in line for line in result.lines)
+        assert not any("ModHeights.esp: meta_type=" in line for line in result.lines)
+
+    def test_a_plugin_excluded_entirely_is_skipped_and_reported(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An every-layer-excluded plugin is skipped by the merge, and the skip is reported.
+
+        The skip itself is pinned at the pipeline level
+        (test_a_plugin_with_every_layer_excluded_is_skipped); this pins that
+        build_merged_lands actually says so.
+        """
+        records_by_name = self._conflicting_fixture()
+        data_dir = self._rig(tmp_path, monkeypatch, records_by_name)
+        write_settings(
+            data_dir / "ModColors.esp",
+            PluginMeta(layers={name: MergeSettings(included=False) for name in LAYER_NAMES}),
+        )
+
+        result = build_merged_lands(
+            data_files=[data_dir],
+            load_order=["Morrowind.esm", "ModHeights.esp", "ModColors.esp"],
+            converter="tes3conv",
+        )
+        assert any("skipped ModColors.esp: every layer excluded" in line for line in result.lines)
+
+    def test_include_cells_emits_cell_records(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """include_cells=True adds CELL records alongside the LAND records."""
+        records_by_name = self._conflicting_fixture()
+        cell_record = {"type": "Cell", "data": {"grid": [0, 0], "flags": ""}}
+        records_by_name["Morrowind.esm"] = [*records_by_name["Morrowind.esm"], cell_record]
+        data_dir = self._rig(tmp_path, monkeypatch, records_by_name)
+
+        result = build_merged_lands(
+            data_files=[data_dir],
+            load_order=["Morrowind.esm", "ModHeights.esp", "ModColors.esp"],
+            converter="tes3conv",
+            include_cells=True,
+        )
+        assert result.cell_records == 1
+        assert any("CELL record(s)" in line for line in result.lines)
+
+    def test_a_marker_write_failure_after_a_successful_merge_is_reported(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The plugin can be written and still fail at the very last step: the marker.
+
+        write_merged_marker's own failure mode is pinned directly
+        (test_an_unwritable_location_is_reported); this pins that
+        build_merged_lands converts it into a MergeServiceError rather than
+        leaving a written plugin with no marker and no explanation.
+        """
+        import wraithguard.land.service as svc
+
+        data_dir = self._rig(tmp_path, monkeypatch, self._conflicting_fixture())
+
+        def fake_marker(*_a: object, **_k: object) -> None:
+            raise MetaError("could not write the marker")
+
+        monkeypatch.setattr(svc, "write_merged_marker", fake_marker)
+
+        with pytest.raises(MergeServiceError, match="could not write the marker"):
+            build_merged_lands(
+                data_files=[data_dir],
+                load_order=["Morrowind.esm", "ModHeights.esp", "ModColors.esp"],
+                converter="tes3conv",
+            )
+        assert (data_dir / "Merged Lands.esp").is_file()  # the plugin itself was written
+
+    def test_reporting_reflects_borrowed_and_slope_limited_outcomes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The borrowed/slope-adjusted/slope-pinned report lines, when finish() says so.
+
+        finish()'s own decisions about what to borrow and adjust are pinned
+        directly against real terrain (test_land_slope.py,
+        add_reference_neighbours' own tests); this pins that
+        build_merged_lands reports whatever it decided, faithfully, rather
+        than re-deriving the same terrain math a second time here.
+        """
+        import wraithguard.land.service as svc
+
+        data_dir = self._rig(tmp_path, monkeypatch, self._conflicting_fixture())
+        real_finish = svc.finish
+
+        def fake_finish(outcome: MergeOutcome, reference: object, **kwargs: object) -> MergeOutcome:
+            real_finish(outcome, reference, **kwargs)
+            outcome.borrowed = 2
+            outcome.slopes.adjusted = 3
+            outcome.slopes.pinned = 1
+            return outcome
+
+        monkeypatch.setattr(svc, "finish", fake_finish)
+
+        result = build_merged_lands(
+            data_files=[data_dir],
+            load_order=["Morrowind.esm", "ModHeights.esp", "ModColors.esp"],
+            converter="tes3conv",
+        )
+        assert any("brought in 2 untouched cell(s)" in line for line in result.lines)
+        assert any("slope limiter moved 3 vertex/vertices" in line for line in result.lines)
+        assert any("1 adjustment(s) refused" in line for line in result.lines)
+
+    def test_a_seam_tear_that_survives_repair_aborts_the_write(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A border seam repair could not close must stop the merge, not ship a visible tear.
+
+        find_tears itself is pinned directly (test_land_seams.py); this pins
+        that build_merged_lands refuses to write when finish() reports one.
+        """
+        import wraithguard.land.service as svc
+        from wraithguard.land.seams import Tear
+
+        data_dir = self._rig(tmp_path, monkeypatch, self._conflicting_fixture())
+        real_finish = svc.finish
+
+        def fake_finish(outcome: MergeOutcome, reference: object, **kwargs: object) -> MergeOutcome:
+            real_finish(outcome, reference, **kwargs)
+            outcome.seams.tears = [Tear(left=(0, 0), right=(1, 0), vertices=3, worst=500)]
+            return outcome
+
+        monkeypatch.setattr(svc, "finish", fake_finish)
+
+        with pytest.raises(MergeServiceError, match="1 cell border\\(s\\) still disagree"):
+            build_merged_lands(
+                data_files=[data_dir],
+                load_order=["Morrowind.esm", "ModHeights.esp", "ModColors.esp"],
+                converter="tes3conv",
+            )
+        assert not (data_dir / "Merged Lands.esp").exists()

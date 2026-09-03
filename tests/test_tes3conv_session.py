@@ -18,6 +18,7 @@ works on pre-seeded JSON, as the sibling files do.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -128,6 +129,55 @@ class TestJsonForRealConversion:
         second = session._json_for(esp)
         assert second == first  # same path -- rewritten in place, not renamed
         assert Path(second).stat().st_mtime >= first_mtime
+
+
+class TestJsonForMockedConversion:
+    """The same two branches as above, without needing a real tes3conv binary.
+
+    subprocess.run's return handling is what's under test for these two
+    branches (a successful conversion, and the staleness message logged
+    before re-converting) -- not tes3conv's own JSON output, which the
+    class doesn't inspect at all. A fake exe path is enough.
+    """
+
+    def test_a_successful_conversion_caches_and_returns_the_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def fake_run(argv: list[str], **_kw: object) -> types.SimpleNamespace:
+            Path(argv[2]).write_text("[]", encoding="utf-8")  # tes3conv writes the output itself
+            return types.SimpleNamespace(returncode=0)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        esp = tmp_path / "a.esp"
+        esp.write_bytes(b"x")
+        session = core.Tes3ConvSession(exe="fake-tes3conv", dump_dir=str(tmp_path), keep=True)
+
+        jp = session._json_for(esp)
+
+        assert jp == str(tmp_path / "a.json")
+        assert session._json_for(esp) == jp  # served from the in-memory cache next time
+
+    def test_a_stale_cached_json_is_reconverted(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import os
+
+        def fake_run(argv: list[str], **_kw: object) -> types.SimpleNamespace:
+            Path(argv[2]).write_text("[]", encoding="utf-8")
+            return types.SimpleNamespace(returncode=0)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        esp = tmp_path / "a.esp"
+        esp.write_bytes(b"x")
+        cached = tmp_path / "a.json"
+        cached.write_text("[]", encoding="utf-8")
+        now = cached.stat().st_mtime
+        os.utime(esp, (now + 100, now + 100))  # plugin newer than the cached JSON
+
+        session = core.Tes3ConvSession(exe="fake-tes3conv", dump_dir=str(tmp_path), keep=True)
+        jp = session._json_for(esp)
+
+        assert jp == str(cached)
 
 
 class TestRecordsWrapper:
@@ -317,6 +367,22 @@ class TestLuaScriptExtraction:
         lua_keys = [k for k in keys if k[0] == "LuaScript"]
         assert sorted(k[1] for k in lua_keys) == ["scripts/one.lua", "scripts/two.lua"]
 
+    def test_a_script_entry_with_no_derivable_path_is_skipped(self, tmp_path: Path) -> None:
+        """A malformed script entry (no path key, or an empty one) yields no key at all."""
+        records = [
+            {
+                "type": "LuaScriptsCfg",
+                "scripts": [
+                    {"script_path": ""},  # empty -- nothing to key on
+                    {"unrelated": "field"},  # no path-shaped key at all
+                    42,  # not a dict, not a string
+                ],
+            },
+        ]
+        session, path = _seeded_session(tmp_path, records)
+        keys = session.record_keys(path)
+        assert [k for k in keys if k[0] == "LuaScript"] == []
+
 
 class TestExteriorCellRegexFallback:
     """A defensive branch: an ('x, y')-shaped id whose grid can't be re-derived.
@@ -347,6 +413,47 @@ class TestExteriorCellRegexFallback:
         _keys, cells, _land = session._build_sidecars(path)
         assert ("ext", 7, 8) in cells
 
+    def test_a_cell_with_no_grid_and_no_coordinate_shaped_id_is_just_not_placed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No DATA grid, and an id the regex can't parse either: the cell gets a key, no place."""
+        cell_record = {"type": "Cell", "data": {"flags": 0}, "name": ""}
+        session, path = _seeded_session(tmp_path, [cell_record])
+
+        real_key = core._tes3conv_record_key
+
+        def fake_key(rec: Any, interior_cells: Any = None) -> Any:
+            if rec.get("type") == "Cell":
+                return ("Cell", "not-a-coordinate")
+            return real_key(rec, interior_cells)
+
+        monkeypatch.setattr(core, "_tes3conv_record_key", fake_key)
+        keys, cells, _land = session._build_sidecars(path)
+        assert ("Cell", "not-a-coordinate", False) in keys
+        assert cells == []
+
+
+class TestBuildSidecarsWriteFailure:
+    def test_a_sidecar_write_failure_is_tolerated_per_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """One sidecar failing to write (e.g. disk full) must not lose the others or raise."""
+        records = [{"type": "Npc", "id": "bob"}]
+        session, path = _seeded_session(tmp_path, records)
+        real_open = Path.open
+
+        def flaky_open(self: Path, *args: object, **kwargs: object) -> object:
+            if self.suffix == ".json" and self.name.endswith(".keys.json"):
+                raise OSError("disk full")
+            return real_open(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", flaky_open)
+
+        keys, _cells, _land = session._build_sidecars(path)
+
+        assert keys == [("Npc", "bob", False)]
+        assert not (tmp_path / "Plugin.keys.json").exists()
+
 
 class TestLandscapeRecordsSidecarCacheHit:
     """A second call must read the .land.json sidecar, not re-parse the source."""
@@ -365,6 +472,46 @@ class TestLandscapeRecordsSidecarCacheHit:
         monkeypatch.setattr(session, "_build_sidecars", _boom)
         second = session.landscape_records(path)
         assert second == first
+
+    def test_a_wrong_version_land_sidecar_is_rebuilt(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        records = [{"type": "Landscape", "grid": [1, 2]}]
+        session, path = _seeded_session(tmp_path, records)
+        land_side = tmp_path / "Plugin.land.json"
+        land_side.write_text(
+            json.dumps({"v": session._SIDECAR_VER - 1, "d": [{"type": "stale"}]}),
+            encoding="utf-8",
+        )
+
+        result = session.landscape_records(path)
+
+        assert [r["type"] for r in result] == ["Landscape"]  # rebuilt, not the stale cache
+
+    def test_a_land_sidecar_whose_payload_is_not_a_list_is_rebuilt(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        records = [{"type": "Landscape", "grid": [1, 2]}]
+        session, path = _seeded_session(tmp_path, records)
+        land_side = tmp_path / "Plugin.land.json"
+        land_side.write_text(
+            json.dumps({"v": session._SIDECAR_VER, "d": "not-a-list"}), encoding="utf-8"
+        )
+
+        result = session.landscape_records(path)
+
+        assert [r["type"] for r in result] == ["Landscape"]
+
+    def test_a_corrupt_land_sidecar_is_rebuilt(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        records = [{"type": "Landscape", "grid": [1, 2]}]
+        session, path = _seeded_session(tmp_path, records)
+        (tmp_path / "Plugin.land.json").write_text("{not json", encoding="utf-8")
+
+        result = session.landscape_records(path)
+
+        assert [r["type"] for r in result] == ["Landscape"]
 
 
 class TestDumpedDirAndCleanup:

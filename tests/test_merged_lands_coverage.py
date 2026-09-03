@@ -224,3 +224,226 @@ class TestTheReverseDirection:
         module = _generator()
         empty = [name for name, (_role, why) in module.MODULES.items() if not why.strip()]
         assert not empty, empty
+
+
+class TestScan:
+    """The Rust scanner, against small synthetic files -- not the real port."""
+
+    def test_a_free_function_has_no_context(self, tmp_path: Path) -> None:
+        (tmp_path / "main.rs").write_text("fn top_level() {}\n", encoding="utf-8")
+        module = _generator()
+
+        functions = module.scan(tmp_path)
+
+        assert len(functions) == 1
+        fn = functions[0]
+        assert fn.file == "main.rs"
+        assert fn.line == 1
+        assert fn.context == ""
+        assert fn.name == "top_level"
+        assert fn.key == "main.rs::::top_level"
+        assert fn.label == "`top_level`"
+
+    def test_a_method_is_scoped_to_its_impl(self, tmp_path: Path) -> None:
+        (tmp_path / "land.rs").write_text(
+            "impl Landmass {\n    pub fn new() -> Self {}\n}\n", encoding="utf-8"
+        )
+        module = _generator()
+
+        functions = module.scan(tmp_path)
+
+        assert len(functions) == 1
+        assert functions[0].context == "Landmass"
+        assert functions[0].label == "`Landmass::new`"
+
+    def test_a_trait_method_is_scoped_to_the_trait(self, tmp_path: Path) -> None:
+        (tmp_path / "io.rs").write_text(
+            "trait Reader {\n    fn read(&self) -> u8;\n}\n", encoding="utf-8"
+        )
+        module = _generator()
+
+        functions = module.scan(tmp_path)
+
+        assert functions[0].context == "trait Reader"
+
+    def test_context_resets_between_files(self, tmp_path: Path) -> None:
+        """An impl block in one file must not leak context into the next."""
+        (tmp_path / "a.rs").write_text("impl Foo {\n    fn one() {}\n}\n", encoding="utf-8")
+        (tmp_path / "b.rs").write_text("fn two() {}\n", encoding="utf-8")
+        module = _generator()
+
+        functions = module.scan(tmp_path)
+
+        by_name = {f.name: f for f in functions}
+        assert by_name["two"].context == ""
+
+    def test_files_are_scanned_in_sorted_order(self, tmp_path: Path) -> None:
+        (tmp_path / "b.rs").write_text("fn second() {}\n", encoding="utf-8")
+        (tmp_path / "a.rs").write_text("fn first() {}\n", encoding="utf-8")
+        module = _generator()
+
+        functions = module.scan(tmp_path)
+
+        assert [f.file for f in functions] == ["a.rs", "b.rs"]
+
+    def test_no_rust_files_is_a_hard_stop(self, tmp_path: Path) -> None:
+        module = _generator()
+        with pytest.raises(SystemExit, match=r"no \.rs files"):
+            module.scan(tmp_path)
+
+    def test_a_nested_directory_is_included(self, tmp_path: Path) -> None:
+        nested = tmp_path / "land"
+        nested.mkdir()
+        (nested / "cells.rs").write_text("fn merge_cells() {}\n", encoding="utf-8")
+        module = _generator()
+
+        functions = module.scan(tmp_path)
+
+        assert functions[0].file == "land/cells.rs"
+
+    def test_a_malformed_impl_line_is_not_treated_as_a_context_change(self, tmp_path: Path) -> None:
+        """Starts with 'impl' but the regex needs a name after it; must not crash or match."""
+        (tmp_path / "weird.rs").write_text("impl\nfn after() {}\n", encoding="utf-8")
+        module = _generator()
+
+        functions = module.scan(tmp_path)
+
+        assert functions[0].context == ""
+
+
+class TestCheck:
+    """check() against a small synthetic COVERAGE map, not the real 191 entries."""
+
+    def _fn(self, module, file: str = "main.rs", context: str = "", name: str = "foo"):
+        return module.Function(file=file, line=1, context=context, name=name)
+
+    def test_an_uncovered_function_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        module = _generator()
+        monkeypatch.setattr(module, "COVERAGE", {})
+        fn = self._fn(module)
+
+        problems = module.check([fn])
+
+        assert any("UNCOVERED" in p and fn.key in p for p in problems)
+
+    def test_a_bad_status_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        module = _generator()
+        fn = self._fn(module)
+        monkeypatch.setattr(module, "COVERAGE", {fn.key: ("not-a-real-status", "somewhere")})
+
+        problems = module.check([fn])
+
+        assert any("BAD STATUS" in p for p in problems)
+
+    def test_a_stale_entry_with_no_matching_function_is_reported(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        module = _generator()
+        fn = self._fn(module)
+        monkeypatch.setattr(
+            module,
+            "COVERAGE",
+            {fn.key: ("ported", "here"), "ghost.rs::::gone": ("ported", "here")},
+        )
+
+        problems = module.check([fn])
+
+        assert any("STALE ENTRY" in p and "ghost.rs" in p for p in problems)
+
+    def test_a_fully_covered_list_has_no_problems(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        module = _generator()
+        fn = self._fn(module)
+        monkeypatch.setattr(module, "COVERAGE", {fn.key: ("ported", "here")})
+
+        assert module.check([fn]) == []
+
+
+class TestRender:
+    def test_a_covered_function_becomes_a_table_row(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        module = _generator()
+        fn = module.Function(file="land/cells.rs", line=3, context="", name="merge_cells")
+        monkeypatch.setattr(module, "COVERAGE", {fn.key: ("ported", "wraithguard/land/cells.py")})
+
+        text = module.render([fn])
+
+        assert "## `land/` — 1 functions" in text
+        assert "`merge_cells`" in text
+        assert "wraithguard/land/cells.py" in text
+
+    def test_a_pipe_in_the_location_is_escaped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        module = _generator()
+        fn = module.Function(file="merge/weight.rs", line=1, context="", name="classify")
+        monkeypatch.setattr(
+            module, "COVERAGE", {fn.key: ("ported", "weighting: |lhs|/(|lhs|+|rhs|)")}
+        )
+
+        text = module.render([fn])
+
+        assert r"\|lhs\|" in text
+
+    def test_a_group_with_nothing_scanned_still_gets_a_zero_heading(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        module = _generator()
+        fn = module.Function(file="main.rs", line=1, context="", name="entry")
+        monkeypatch.setattr(module, "COVERAGE", {fn.key: ("ported", "cli.py")})
+
+        text = module.render([fn])
+
+        assert "## `land/` — 0 functions" in text
+
+
+class TestMain:
+    def test_check_mode_writes_nothing_and_succeeds(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        module = _generator()
+        (tmp_path / "main.rs").write_text("fn entry() {}\n", encoding="utf-8")
+        monkeypatch.setattr(module, "COVERAGE", {"main.rs::::entry": ("ported", "cli.py")})
+        monkeypatch.setattr(sys, "argv", ["gen", "--src", str(tmp_path), "--check"])
+
+        rc = module.main()
+
+        assert rc == 0
+        assert "1 function(s), all accounted for" in capsys.readouterr().out
+
+    def test_problems_are_printed_and_the_run_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        module = _generator()
+        (tmp_path / "main.rs").write_text("fn entry() {}\n", encoding="utf-8")
+        monkeypatch.setattr(module, "COVERAGE", {})
+        monkeypatch.setattr(sys, "argv", ["gen", "--src", str(tmp_path), "--check"])
+
+        rc = module.main()
+
+        assert rc == 1
+        assert "UNCOVERED" in capsys.readouterr().err
+
+    def test_out_writes_the_rendered_table(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        module = _generator()
+        (tmp_path / "main.rs").write_text("fn entry() {}\n", encoding="utf-8")
+        monkeypatch.setattr(module, "COVERAGE", {"main.rs::::entry": ("ported", "cli.py")})
+        out_path = tmp_path / "out.md"
+        monkeypatch.setattr(sys, "argv", ["gen", "--src", str(tmp_path), "--out", str(out_path)])
+
+        rc = module.main()
+
+        assert rc == 0
+        assert out_path.is_file()
+        assert "entry" in out_path.read_text(encoding="utf-8")
+        assert f"wrote {out_path}" in capsys.readouterr().out
+
+    def test_no_out_and_no_check_still_writes_nothing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        module = _generator()
+        (tmp_path / "main.rs").write_text("fn entry() {}\n", encoding="utf-8")
+        monkeypatch.setattr(module, "COVERAGE", {"main.rs::::entry": ("ported", "cli.py")})
+        monkeypatch.setattr(sys, "argv", ["gen", "--src", str(tmp_path)])
+
+        rc = module.main()
+
+        assert rc == 0

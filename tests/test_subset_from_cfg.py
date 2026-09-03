@@ -17,6 +17,8 @@ from wraithguard.configurator import curated_covers, is_base_data_path, orphan_c
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import pytest
+
 
 class TestCuratedCovers:
     def test_a_plain_list_plugin_is_covered(self) -> None:
@@ -185,6 +187,28 @@ class TestPullCfgOrphans:
         assert out["subset"] == []
         assert out["data_inserts"] == []
         assert out["raw_toml_data_inserts"] == [{"value": "C:/Mods/Declared"}]
+
+    def test_no_orphans_at_all_prints_a_clean_bill(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Every content= plugin is already curated or declared -- nothing left to pull."""
+        args = types.SimpleNamespace(subset_from_cfg=True, sort_data_paths=False)
+        core._pull_cfg_orphans(
+            args,
+            [],
+            [],
+            [],
+            {},
+            {},
+            ["Morrowind.esm", "Curated.esp"],
+            ['data="C:/Games/Morrowind/Data Files"'],
+            {"curated.esp"},
+            set(),
+            set(),
+            frozenset(),
+        )
+
+        assert "No unmanaged plugins found" in capsys.readouterr().out
 
 
 class TestComputePlanIntegration:

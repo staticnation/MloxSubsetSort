@@ -14,6 +14,8 @@ import subprocess
 import types
 from typing import TYPE_CHECKING
 
+import pytest
+
 from wraithguard.land import service
 from wraithguard.land.native import KEYS_VERSION
 from wraithguard.land.service import _records_natively, _records_via
@@ -131,6 +133,44 @@ def test_json_that_is_not_a_record_list_is_reported(tmp_path: Path, monkeypatch)
     assert "not a record list" in failure
 
 
+def test_a_plugin_with_no_terrain_returns_nothing(tmp_path: Path) -> None:
+    """A plugin the pre-scan finds no landscape in is skipped, not an error."""
+    plugin = tmp_path / "NoLand.esp"
+    plugin.write_bytes(b"TES3" + struct.pack("<III", 0, 0, 0))  # header only, no LAND
+    records, failure = _records_via(None, plugin, tmp_path)
+    assert records == []
+    assert failure == ""
+
+
+def test_a_converter_that_cannot_be_run_is_reported(tmp_path: Path, monkeypatch) -> None:
+    """An OSError launching the converter is a clean failure, not a traceback."""
+
+    def cannot_run(*_args: object, **_kwargs: object):
+        raise OSError("no such executable")
+
+    monkeypatch.setattr(service.subprocess, "run", cannot_run)
+    plugin = _plugin_with_landscape(tmp_path / "P.esp")
+    records, failure = _records_via("tes3conv", plugin, tmp_path)
+    assert records == []
+    assert "could not run tes3conv" in failure
+
+
+def test_json_that_will_not_parse_is_reported(tmp_path: Path, monkeypatch) -> None:
+    """A converter that writes malformed JSON is a clean failure, not a crash."""
+
+    def run_and_write_garbage(argv, *_args: object, **_kwargs: object) -> types.SimpleNamespace:
+        from pathlib import Path as _Path
+
+        _Path(argv[2]).write_text("{not valid json", encoding="utf-8")
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(service.subprocess, "run", run_and_write_garbage)
+    plugin = _plugin_with_landscape(tmp_path / "P.esp")
+    records, failure = _records_via("tes3conv", plugin, tmp_path)
+    assert records == []
+    assert "will not parse" in failure
+
+
 def test_records_natively_reports_an_unreadable_plugin(tmp_path: Path) -> None:
     """The native fallback reports why a plugin could not be read."""
     directory = tmp_path / "b.esp"
@@ -150,22 +190,180 @@ def _plugin_with_height(path: Path, first_delta: int) -> Path:
     return path
 
 
-def test_a_native_merge_reads_and_merges_without_a_converter(tmp_path: Path) -> None:
-    """The read/merge/seam pipeline runs with the built-in reader (converter=None).
+def test_a_single_mod_edit_needs_no_merge(tmp_path: Path) -> None:
+    """One mod editing a cell is delivered as-is, so the merge writes nothing.
 
-    A master and a mod edit the same cell; the reconstructed heights match, so
-    the merge has nothing net to write and takes the "nothing to merge" exit --
-    which still walks the whole reading and merging orchestration first.
+    This walks the whole read/merge/clean orchestration and takes the
+    "nothing to merge" exit, which is the common single-editor case.
     """
     from wraithguard.land.service import build_merged_lands
 
     _plugin_with_height(tmp_path / "Master.esm", 0)
-    _plugin_with_height(tmp_path / "Mod.esp", 0)  # same terrain -> nothing net to write
+    _plugin_with_height(tmp_path / "Mod.esp", 20)  # one editor -> cleaning drops it
     output = tmp_path / "Merged Lands.esp"
     lines: list[str] = []
     build_merged_lands(
         [tmp_path], ["Master.esm", "Mod.esp"], None, output=output, report=lines.append
     )
-    assert any("reading masters" in line for line in lines)
-    assert any("merging" in line for line in lines)
-    assert not output.exists()  # nothing net changed, so no plugin was written
+    assert any("nothing to merge" in line for line in lines)
+    assert not output.exists()
+
+
+def test_two_mods_contesting_a_cell_are_merged_and_written(tmp_path: Path) -> None:
+    """Two mods editing the same cell produce a real merge, written natively.
+
+    A contested cell differs from every single mod's version, so it survives
+    cleaning and drives the whole write path -- encode, write, and marker.
+    """
+    from wraithguard.land.service import build_merged_lands
+
+    _plugin_with_height(tmp_path / "Master.esm", 0)
+    _plugin_with_height(tmp_path / "ModA.esp", 20)
+    _plugin_with_height(tmp_path / "ModB.esp", 60)  # a different edit -> contested
+    output = tmp_path / "Merged Lands.esp"
+    result = build_merged_lands(
+        [tmp_path], ["Master.esm", "ModA.esp", "ModB.esp"], None, output=output, include_cells=True
+    )
+    assert output.is_file()
+    assert result.output == output
+    assert (tmp_path / "Merged Lands.mergedlands.toml").is_file()  # the "ignore me" marker
+
+
+def test_a_master_not_in_any_data_folder_is_fatal(tmp_path: Path) -> None:
+    """A master the search cannot find aborts the merge with a clear message."""
+    from wraithguard.land.service import MergeServiceError, build_merged_lands
+
+    _plugin_with_height(tmp_path / "Mod.esp", 20)
+    with pytest.raises(MergeServiceError, match="not in any of"):
+        build_merged_lands([tmp_path], ["Ghost.esm", "Mod.esp"], None, output=tmp_path / "o.esp")
+
+
+def test_a_master_with_a_broken_sidecar_is_reported(tmp_path: Path) -> None:
+    """A master whose .mergedlands.toml will not parse stops the merge."""
+    from wraithguard.land.service import MergeServiceError, build_merged_lands
+
+    _plugin_with_height(tmp_path / "Master.esm", 0)
+    (tmp_path / "Master.mergedlands.toml").write_text("this = = not toml", encoding="utf-8")
+    _plugin_with_height(tmp_path / "Mod.esp", 20)
+    with pytest.raises(MergeServiceError):
+        build_merged_lands([tmp_path], ["Master.esm", "Mod.esp"], None, output=tmp_path / "o.esp")
+
+
+def test_a_mod_with_a_broken_sidecar_is_reported(tmp_path: Path) -> None:
+    """A mod whose .mergedlands.toml will not parse stops the merge."""
+    from wraithguard.land.service import MergeServiceError, build_merged_lands
+
+    _plugin_with_height(tmp_path / "Master.esm", 0)
+    _plugin_with_height(tmp_path / "Mod.esp", 20)
+    (tmp_path / "Mod.mergedlands.toml").write_text("this = = not toml", encoding="utf-8")
+    with pytest.raises(MergeServiceError):
+        build_merged_lands([tmp_path], ["Master.esm", "Mod.esp"], None, output=tmp_path / "o.esp")
+
+
+def test_a_mod_that_is_not_installed_is_noted_not_fatal(tmp_path: Path) -> None:
+    """A load-order entry with no file on disk is reported, verbosely, and skipped."""
+    from wraithguard.land.service import build_merged_lands
+
+    _plugin_with_height(tmp_path / "Master.esm", 0)
+    _plugin_with_height(tmp_path / "Mod.esp", 20)
+    lines: list[str] = []
+    build_merged_lands(
+        [tmp_path],
+        ["Master.esm", "Mod.esp", "Gone.esp"],  # Gone.esp is not on disk
+        None,
+        output=tmp_path / "o.esp",
+        report=lines.append,
+        verbose=True,
+    )
+    assert any("could not be read" in line for line in lines)
+    assert any("Gone.esp" in line and "not found" in line for line in lines)
+
+
+def test_a_master_tes3conv_refuses_is_read_natively(tmp_path: Path, monkeypatch) -> None:
+    """When the converter fails a master, the native reader rescues it."""
+    from wraithguard.land import service
+    from wraithguard.land.service import build_merged_lands
+
+    _plugin_with_height(tmp_path / "Master.esm", 0)
+    _plugin_with_height(tmp_path / "ModA.esp", 20)
+    _plugin_with_height(tmp_path / "ModB.esp", 60)
+    # A converter that always fails forces the native fallback on every read,
+    # and also refuses the final merged JSON, so the write raises after the
+    # reads were rescued -- covering both the rescue and the write-refusal.
+    from wraithguard.land.service import MergeServiceError
+
+    monkeypatch.setattr(service.subprocess, "run", _run(returncode=1, stderr="nope"))
+    lines: list[str] = []
+    with pytest.raises(MergeServiceError, match="refused the merged JSON"):
+        build_merged_lands(
+            [tmp_path],
+            ["Master.esm", "ModA.esp", "ModB.esp"],
+            "tes3conv",
+            output=tmp_path / "Merged Lands.esp",
+            report=lines.append,
+        )
+    assert any("read directly" in line for line in lines)  # rescued by the native reader
+
+
+def test_a_mod_with_no_terrain_is_silently_skipped_and_progress_is_reported(
+    tmp_path: Path,
+) -> None:
+    """Fifty terrain-free mods contribute nothing and trip the every-50 progress line.
+
+    A mod the pre-scan finds no LAND in reads as records=[] with no failure, so
+    it is neither merged nor reported as unreadable -- and with fifty of them the
+    read loop crosses the ``index % 50`` progress checkpoint.
+    """
+    from wraithguard.land.service import build_merged_lands
+
+    _plugin_with_height(tmp_path / "Master.esm", 0)
+    load_order = ["Master.esm"]
+    for i in range(50):
+        name = f"Empty{i:02d}.esp"
+        (tmp_path / name).write_bytes(b"TES3" + struct.pack("<III", 0, 0, 0))  # header only
+        load_order.append(name)
+    lines: list[str] = []
+    build_merged_lands(
+        [tmp_path], load_order, None, output=tmp_path / "o.esp", report=lines.append
+    )
+    assert any("50/50" in line for line in lines)  # the progress checkpoint fired
+    assert any("nothing to merge" in line for line in lines)  # no mod had terrain
+
+
+def test_unreadable_plugins_are_summarised_tersely_without_verbose(tmp_path: Path) -> None:
+    """Without verbose, a missing mod is summarised on one line, not itemised."""
+    from wraithguard.land.service import build_merged_lands
+
+    _plugin_with_height(tmp_path / "Master.esm", 0)
+    _plugin_with_height(tmp_path / "Mod.esp", 20)
+    lines: list[str] = []
+    build_merged_lands(
+        [tmp_path],
+        ["Master.esm", "Mod.esp", "Gone.esp"],  # Gone.esp is not on disk
+        None,
+        output=tmp_path / "o.esp",
+        report=lines.append,
+    )
+    assert any("could not be read" in line and "Gone.esp" in line for line in lines)
+
+
+def test_a_previous_merge_output_is_skipped_on_a_re_merge(tmp_path: Path) -> None:
+    """Re-merging a load order that still lists a prior Merged Lands.esp skips it."""
+    from wraithguard.land.service import build_merged_lands
+
+    _plugin_with_height(tmp_path / "Master.esm", 0)
+    _plugin_with_height(tmp_path / "ModA.esp", 20)
+    _plugin_with_height(tmp_path / "ModB.esp", 60)
+    merged = tmp_path / "Merged Lands.esp"
+    build_merged_lands([tmp_path], ["Master.esm", "ModA.esp", "ModB.esp"], None, output=merged)
+    assert merged.is_file()  # and its .mergedlands.toml marker now exists
+
+    lines: list[str] = []
+    build_merged_lands(
+        [tmp_path],
+        ["Master.esm", "ModA.esp", "ModB.esp", "Merged Lands.esp"],
+        None,
+        output=tmp_path / "Merged Lands 2.esp",
+        report=lines.append,
+    )
+    assert any("skipped Merged Lands.esp" in line for line in lines)

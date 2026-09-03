@@ -43,6 +43,27 @@ def _plan(tmp_path: Path, *extra: str) -> tuple[dict, object]:
     return core.compute_plan(args), args
 
 
+class TestWriteCfgNoExistingAnchorLines:
+    def test_new_lines_are_appended_when_no_content_lines_existed_at_all(
+        self, tmp_path: Path
+    ) -> None:
+        """A segment with no positions (an anchor kind absent from the file) still lands."""
+        cfg = tmp_path / "openmw.cfg"
+        cfg.write_text("some=setting\n", encoding="utf-8")
+
+        core.write_cfg(
+            cfg,
+            ["some=setting"],
+            [((), ["content=New.esp"])],
+            dry_run=False,
+            no_backup=True,
+        )
+
+        text = cfg.read_text(encoding="utf-8")
+        assert "some=setting" in text
+        assert "content=New.esp" in text
+
+
 class TestWriteCfgFlag:
     def test_without_write_cfg_the_file_is_left_untouched(self, tmp_path: Path, capsys) -> None:
         plan, args = _plan(tmp_path)
@@ -82,6 +103,24 @@ class TestEmitToml:
         assert result["wrote_toml"] is True
         assert out.exists()
         assert "Mine.esp" in out.read_text(encoding="utf-8")
+
+    def test_a_broken_preview_does_not_block_the_export(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        """The preview is read-only advice; its own failure must never stop the real write."""
+
+        def _boom(*_a, **_k):
+            raise RuntimeError("simulated: a genuinely broken preview")
+
+        monkeypatch.setattr(core, "preview_configurator_result", _boom)
+        out = tmp_path / "customizations.toml"
+        plan, args = _plan(tmp_path, "--emit-toml", str(out))
+
+        result = core.write_plan(args, plan)
+
+        assert result["wrote_toml"] is True
+        assert out.exists()
+        assert "WARNING: configurator preview failed" in capsys.readouterr().out
 
     def test_emit_toml_with_dry_run_does_not_write_the_file(self, tmp_path: Path) -> None:
         out = tmp_path / "customizations.toml"
@@ -151,6 +190,66 @@ class TestManualReordering:
         core.write_plan(args, plan, final_order=reversed_order)
 
         assert "manually adjusted" in capsys.readouterr().out
+
+
+class TestOptedOutRemovals:
+    def test_disabling_an_already_present_master_and_data_path_emits_removals(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        """Both plugins_needing_removal and data_paths_needing_removal, in one real plan."""
+        plan, args = _plan(tmp_path)
+        data_dir = tmp_path / "Data Files"
+
+        core.write_plan(
+            args,
+            plan,
+            disabled_plugins=["Morrowind.esm"],
+            disabled_data=[f'data="{data_dir}"'],
+        )
+
+        out = capsys.readouterr().out
+        assert "removeContent: Morrowind.esm" in out
+        assert "removeData:" in out and str(data_dir) in out
+
+
+class TestManualDataReordering:
+    def test_a_different_data_order_is_reported_as_manually_adjusted(
+        self, tmp_path: Path, capsys
+    ) -> None:
+        data_dir = tmp_path / "Data Files"
+        data_dir.mkdir()
+        write_plugin(data_dir / "Morrowind.esm")
+        mod_dir = tmp_path / "mods" / "MyMod"
+        mod_dir.mkdir(parents=True)
+        cfg, rules = _cfg_and_rules(tmp_path, data_dir, ["Morrowind.esm"])
+        toml = tmp_path / "customizations.toml"
+        toml.write_text(
+            "[[Customizations]]\n\n"
+            "[[Customizations.insert]]\n"
+            f'insert = "{mod_dir.as_posix()}"\n'
+            'after = "Morrowind.esm"\n',
+            encoding="utf-8",
+        )
+        args = core.build_arg_parser().parse_args(
+            [
+                "--cfg",
+                str(cfg),
+                "--rules",
+                str(rules),
+                "--subset",
+                "Morrowind.esm",
+                "--customizations",
+                str(toml),
+                "--sort-data-paths",
+            ]
+        )
+        plan = core.compute_plan(args)
+        assert plan["data_result"] is not None
+        reversed_data_order = list(reversed([line for line, _, _ in plan["data_result"]]))
+
+        core.write_plan(args, plan, data_order=reversed_data_order)
+
+        assert "data= order being exported (manually adjusted)" in capsys.readouterr().out
 
 
 class TestSummaryCounts:

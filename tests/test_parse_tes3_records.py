@@ -43,6 +43,11 @@ def _info(response_id: str) -> bytes:
     return rec("INFO", sub("INAM", zstr(response_id)))
 
 
+def _bare_cell(name: str) -> bytes:
+    """A CELL record with only a NAME -- no DATA subrecord at all."""
+    return rec("CELL", sub("NAME", zstr(name)))
+
+
 class TestParseTes3Records:
     def test_a_simple_record_yields_its_type_id_and_not_deleted(self, tmp_path: Path) -> None:
         path = write_plugin(tmp_path / "Mine.esp", extra=static_record("torch_01"))
@@ -70,6 +75,21 @@ class TestParseTes3Records:
         path = write_plugin(tmp_path / "Mine.esp", extra=interior_cell("Balmora, Guild", fog=0.5))
 
         assert list(core.parse_tes3_records(path)) == [("CELL", "Interior: Balmora, Guild", False)]
+
+    def test_a_cell_with_no_data_subrecord_falls_back_to_treating_it_as_interior(
+        self, tmp_path: Path
+    ) -> None:
+        """A CELL with no DATA at all (no flags to read) defaults to the interior phrasing."""
+        path = write_plugin(tmp_path / "Mine.esp", extra=_bare_cell("Orphaned Cell"))
+
+        assert list(core.parse_tes3_records(path)) == [("CELL", "Interior: Orphaned Cell", False)]
+
+    def test_an_unexpected_nested_tes3_record_is_skipped_not_yielded(self, tmp_path: Path) -> None:
+        """_TES3_SKIP_TYPES exists for exactly this: a stray TES3-tagged record mid-body."""
+        stray = rec("TES3", b"unexpected")
+        path = write_plugin(tmp_path / "Mine.esp", extra=stray + static_record("torch_01"))
+
+        assert list(core.parse_tes3_records(path)) == [("STAT", "torch_01", False)]
 
     def test_a_script_is_keyed_on_its_header_name_not_a_name_subrecord(
         self, tmp_path: Path
@@ -108,6 +128,20 @@ class TestParseTes3Records:
         self, tmp_path: Path
     ) -> None:
         path = write_plugin(tmp_path / "Mine.omwaddon", extra=_lual("\\Scripts\\FOO.LUA"))
+
+        assert list(core.parse_tes3_records(path)) == [("LuaScript", "scripts/foo.lua", False)]
+
+    def test_a_non_luas_subrecord_inside_lual_is_skipped(self, tmp_path: Path) -> None:
+        """LUAL can carry other subrecord tags; only LUAS entries are script paths."""
+        body = sub("XTRA", b"\x00\x00") + sub("LUAS", zstr("Scripts/Foo.lua"))
+        path = write_plugin(tmp_path / "Mine.omwaddon", extra=rec("LUAL", body))
+
+        assert list(core.parse_tes3_records(path)) == [("LuaScript", "scripts/foo.lua", False)]
+
+    def test_an_empty_luas_path_yields_nothing_for_that_entry(self, tmp_path: Path) -> None:
+        """A blank/NUL-only LUAS subrecord has no path worth yielding."""
+        body = sub("LUAS", zstr("")) + sub("LUAS", zstr("Scripts/Foo.lua"))
+        path = write_plugin(tmp_path / "Mine.omwaddon", extra=rec("LUAL", body))
 
         assert list(core.parse_tes3_records(path)) == [("LuaScript", "scripts/foo.lua", False)]
 

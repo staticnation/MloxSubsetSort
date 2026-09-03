@@ -85,6 +85,73 @@ class TestNegativeControls:
         )
         assert findings == []
 
+    def test_a_non_literal_marker_argument_is_silently_unverifiable(self, tmp_path: Path) -> None:
+        """_() called with a variable, not a string literal: nothing to check, not an error."""
+        findings = _run_on(tmp_path, 'msg = "Loaded %(count)d"\n_(msg) % {"count": 3}\n')
+        assert findings == []
+
+    def test_ngettext_with_a_non_literal_form_is_silently_unverifiable(
+        self, tmp_path: Path
+    ) -> None:
+        findings = _run_on(
+            tmp_path, 'one = "%(count)d file"\nngettext(one, "%(count)d files", n) % {"count": n}\n'
+        )
+        assert findings == []
+
+    def test_a_dict_with_a_computed_key_is_unverifiable(self, tmp_path: Path) -> None:
+        """A key literal isn't the only way a dict resists static checking -- so can the key itself."""
+        findings = _run_on(tmp_path, 'k = "count"\n_("Loaded %(count)d files") % {k: 3}\n')
+        assert any("cannot verify" in f for f in findings)
+
+    def test_a_file_outside_the_project_root_still_reports_by_its_own_path(
+        self, tmp_path: Path
+    ) -> None:
+        """relative_to() failing (an unrelated root) falls back to the file's own path, as_posix()."""
+        target = tmp_path / "sample.py"
+        target.write_text('_("Loaded %s files")\n', encoding="utf-8")
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+
+        findings = check_placeholders.check_file(target, elsewhere)
+
+        assert any(target.as_posix() in f for f in findings)
+
+    def test_a_syntax_error_is_reported_not_raised(self, tmp_path: Path) -> None:
+        findings = _run_on(tmp_path, "def broken(:\n")
+        assert len(findings) == 1
+        assert "could not parse" in findings[0]
+
+
+class TestMainAndSourceDiscovery:
+    def test_a_nonexistent_target_is_silently_skipped(self, tmp_path: Path, capsys) -> None:
+        good = tmp_path / "sample.py"
+        good.write_text('_("clean")\n', encoding="utf-8")
+
+        rc = check_placeholders.main([str(tmp_path / "does-not-exist"), str(good)])
+
+        assert rc == 0
+        assert "1 file(s)" in capsys.readouterr().out
+
+    def test_no_sources_found_at_all_is_an_error(self, tmp_path: Path, capsys) -> None:
+        empty = tmp_path / "empty"
+        empty.mkdir()
+
+        rc = check_placeholders.main([str(empty)])
+
+        assert rc == 1
+        assert "no Python sources found" in capsys.readouterr().err
+
+    def test_a_finding_makes_main_fail_and_print_it(self, tmp_path: Path, capsys) -> None:
+        bad = tmp_path / "bad.py"
+        bad.write_text('_("Loaded %s files")\n', encoding="utf-8")
+
+        rc = check_placeholders.main([str(bad)])
+
+        out = capsys.readouterr().out
+        assert rc == 1
+        assert "positional '%s'" in out
+        assert "placeholders ok" not in out
+
 
 class TestUserFacingStringsAreMarked:
     """Every user-facing literal in the GUI reaches a translator.

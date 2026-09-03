@@ -92,8 +92,8 @@ def main(argv: list[str] | None = None) -> int:
         except BsaError:
             unreadable += 1
             continue
-        if data is None:
-            unreadable += 1
+        if data is None:  # pragma: no cover -- names come from the archive's own
+            unreadable += 1  # index, so every one resolves; None is a defensive guard
             continue
         checked += 1
         expected = MAGIC.get(Path(name).suffix.lower())

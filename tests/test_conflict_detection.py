@@ -196,6 +196,36 @@ class TestScanTouchViaSession:
         assert len(conflicts) == 1
         assert conflicts[0]["id"] == "cuirass"
 
+    def test_the_same_plugin_defining_a_record_twice_counts_once_via_the_session(
+        self, data_dir: Path, tmp_path: Path
+    ) -> None:
+        """Mirrors TestScanTouchBuiltin's version of this, for the session-backed branch.
+
+        record_keys() is itself already deduped, first-wins, when built fresh
+        from tes3conv JSON -- so this has to seed the .keys.json sidecar
+        directly with a duplicate to exercise _scan_touch's own defensive
+        ``seen_here`` guard, in case a hand-edited or stale cache ever hands
+        one back.
+        """
+        (data_dir / "A.esp").write_bytes(b"\x00")
+        dump_dir = tmp_path / "dump"
+        dump_dir.mkdir()
+        session = core.Tes3ConvSession(exe="unused", dump_dir=str(dump_dir), keep=True)
+        (dump_dir / "A.keys.json").write_text(
+            json.dumps(
+                {
+                    "v": session._SIDECAR_VER,
+                    "d": [["Armor", "cuirass", False], ["Armor", "cuirass", False]],
+                }
+            ),
+            encoding="utf-8",
+        )
+        index = PluginFileIndex([str(data_dir)])
+
+        _conflicts, stats = core.detect_conflicts(["A.esp"], index, session=session)
+
+        assert stats["records"] == 1
+
     def test_an_omwscripts_plugin_skips_the_session_even_when_one_is_given(
         self, data_dir: Path, tmp_path: Path
     ) -> None:

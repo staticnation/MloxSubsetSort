@@ -34,7 +34,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 from gen_tes3_schema import (
     _declared_bytes,
     _description,
+    _quote,
+    emit,
     member_size,
+    parse_csv,
     parse_layout,
     parse_type,
 )
@@ -344,3 +347,219 @@ class TestGenerator:
             expected: The count, or 0 when it is not a plain one.
         """
         assert _declared_bytes(text) == expected
+
+    def test_an_unparseable_type_comes_back_unchanged_with_no_extents(self) -> None:
+        """The table is prose written by people; a type regex miss must not raise."""
+        assert parse_type("3uint16 weird") == ("3uint16 weird", ())
+
+    def test_a_blank_line_inside_the_info_cell_is_skipped(self) -> None:
+        members, _variants = parse_layout("Desc\nuint16 - Level\n\nint32 - Grid X")
+        assert [m[2] for m in members] == ["Level", "Grid X"]
+
+    def test_a_matching_line_with_an_unknown_undimensioned_type_is_skipped(self) -> None:
+        """zstring/string are variable-width and deliberately outside _WIDTHS."""
+        members, _variants = parse_layout("Desc\nzstring - Name\nuint16 - Level")
+        assert [m[2] for m in members] == ["Level"]
+
+    def test_quote_escapes_backslashes_and_quotes(self) -> None:
+        assert _quote('He said "hi"\\now') == '"He said \\"hi\\"\\\\now"'
+
+
+def _csv_text(rows: list[list[str]]) -> str:
+    import csv
+    import io
+
+    buf = io.StringIO()
+    # lineterminator="\n": write_text() below does its own platform newline
+    # translation (\n -> \r\n on Windows); csv's own default "\r\n" would
+    # double up into "\r\r\n" there and desynchronize the row count.
+    csv.writer(buf, lineterminator="\n").writerows(rows)
+    return buf.getvalue()
+
+
+class TestParseCsv:
+    """The CSV parser, against small synthetic exports shaped like UESP's."""
+
+    def test_a_full_table_round_trips_into_one_field(self, tmp_path: Path) -> None:
+        rows = [
+            ["Morrowind Mod:Mod File Format/GLOB"],
+            ["The UESPWiki - Your source for..."],
+            ["Global variables"],
+            ["C", "Field", "Type/Size", "Info"],
+            ["1", "NAME", "zstring", "The variable's ID"],
+            ["1", "FLTV", "float32 (4 bytes)", "float32 - Value"],
+        ]
+        path = tmp_path / "export.csv"
+        path.write_text(_csv_text(rows), encoding="utf-8")
+
+        sections = parse_csv(path)
+
+        assert sections["GLOB"]["description"] == "Global variables"
+        fields = sections["GLOB"]["fields"]
+        assert [f["name"] for f in fields] == ["NAME", "FLTV"]
+        assert fields[1]["members"][0][2] == "Value"
+
+    def test_a_note_row_with_no_name_is_skipped_not_treated_as_the_end(
+        self, tmp_path: Path
+    ) -> None:
+        rows = [
+            ["Morrowind Mod:Mod File Format/AIDT"],
+            ["AI data"],
+            ["C", "Field", "Type/Size", "Info"],
+            ["", "", "", "AI Packages - the following fields can appear in any order"],
+            ["1", "NAME", "zstring", "The variable's ID"],
+        ]
+        path = tmp_path / "export.csv"
+        path.write_text(_csv_text(rows), encoding="utf-8")
+
+        sections = parse_csv(path)
+
+        assert [f["name"] for f in sections["AIDT"]["fields"]] == ["NAME"]
+
+    def test_a_second_table_with_non_tag_names_is_skipped(self, tmp_path: Path) -> None:
+        """A row whose 'name' isn't a short upper-case tag is a different table entirely."""
+        rows = [
+            ["Morrowind Mod:Mod File Format/MGEF"],
+            ["Magic effects"],
+            ["C", "Field", "Type/Size", "Info"],
+            ["1", "NAME", "zstring", "The variable's ID"],
+            ["9", "Jump", "int32", "Not a subrecord row"],
+        ]
+        path = tmp_path / "export.csv"
+        path.write_text(_csv_text(rows), encoding="utf-8")
+
+        sections = parse_csv(path)
+
+        assert [f["name"] for f in sections["MGEF"]["fields"]] == ["NAME"]
+
+    def test_a_declared_array_size_is_reported_as_a_repeat(self, tmp_path: Path) -> None:
+        """LAND's VNML: one element's layout, times a repeat inferred from the declared size."""
+        rows = [
+            ["Morrowind Mod:Mod File Format/LAND"],
+            ["Landscape data"],
+            ["C", "Field", "Type/Size", "Info"],
+            [
+                "1",
+                "VNML",
+                "struct (12 bytes)",
+                "Normals\nint8 - X\nint8 - Y\nint8 - Z",
+            ],
+        ]
+        path = tmp_path / "export.csv"
+        path.write_text(_csv_text(rows), encoding="utf-8")
+
+        sections = parse_csv(path)
+
+        assert sections["LAND"]["fields"][0]["repeat"] == 4
+
+    def test_a_description_row_shortly_after_the_uespwiki_boilerplate_is_used(
+        self, tmp_path: Path
+    ) -> None:
+        rows = [
+            ["Morrowind Mod:Mod File Format/GLOB"],
+            ["The UESPWiki - Your source for..."],
+            ["Global variables"],
+            ["C", "Field", "Type/Size", "Info"],
+        ]
+        path = tmp_path / "export.csv"
+        path.write_text(_csv_text(rows), encoding="utf-8")
+
+        sections = parse_csv(path)
+
+        assert sections["GLOB"]["description"] == "Global variables"
+
+    def test_a_csv_with_no_sections_at_all_is_an_error(self, tmp_path: Path) -> None:
+        path = tmp_path / "export.csv"
+        path.write_text(_csv_text([["nothing", "useful", "here"]]), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="no sections found"):
+            parse_csv(path)
+
+    def test_no_usable_description_within_three_rows_leaves_it_blank(self, tmp_path: Path) -> None:
+        """Only the next 3 rows are checked; nothing there means an empty description."""
+        rows = [
+            ["Morrowind Mod:Mod File Format/GLOB"],
+            [""],
+            ["The UESPWiki - Your source for..."],
+            [""],
+            ["C", "Field", "Type/Size", "Info"],
+        ]
+        path = tmp_path / "export.csv"
+        path.write_text(_csv_text(rows), encoding="utf-8")
+
+        sections = parse_csv(path)
+
+        assert sections["GLOB"]["description"] == ""
+
+
+class TestEmit:
+    def test_a_field_with_members_repeat_and_variants_renders_all_three(self) -> None:
+        sections = {
+            "GLOB": {
+                "description": "Global variables",
+                "fields": [
+                    {
+                        "name": "FLTV",
+                        "cardinality": "1",
+                        "type": "float32",
+                        "size": "4 bytes",
+                        "description": "Value",
+                        "members": [("float32", (), "Value")],
+                        "variants": ["12-byte version"],
+                        "repeat": 2,
+                    },
+                    {
+                        "name": "NAME",
+                        "cardinality": "1",
+                        "type": "zstring",
+                        "size": "",
+                        "description": "ID",
+                        "members": [],
+                        "variants": [],
+                        "repeat": 1,
+                    },
+                ],
+            },
+            "EMPTY": {"description": "Nothing parsed", "fields": []},
+        }
+
+        source = emit(sections)
+
+        assert "GLOB" in source
+        assert "EMPTY" not in source  # sections with no fields are dropped
+        assert "Member(" in source
+        assert "repeat=2" in source
+        assert "variants=" in source
+
+
+class TestMain:
+    def test_wrong_argument_count_prints_usage_and_exits_2(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        import gen_tes3_schema
+
+        assert gen_tes3_schema.main(["prog"]) == 2
+        assert gen_tes3_schema.__doc__ in capsys.readouterr().out
+
+    def test_a_real_run_writes_the_module_and_reports_counts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        import gen_tes3_schema
+
+        rows = [
+            ["Morrowind Mod:Mod File Format/GLOB"],
+            ["Global variables"],
+            ["C", "Field", "Type/Size", "Info"],
+            ["1", "FLTV", "float32 (4 bytes)", "float32 - Value"],
+        ]
+        csv_path = tmp_path / "export.csv"
+        csv_path.write_text(_csv_text(rows), encoding="utf-8")
+        out_path = tmp_path / "schema_out.py"
+        monkeypatch.setattr(gen_tes3_schema, "OUT", out_path)
+
+        rc = gen_tes3_schema.main(["prog", str(csv_path)])
+
+        assert rc == 0
+        assert out_path.is_file()
+        assert "GLOB" in out_path.read_text(encoding="utf-8")
+        assert "wrote 1 records, 1 subrecords" in capsys.readouterr().out

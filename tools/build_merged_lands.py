@@ -60,7 +60,7 @@ from wraithguard.land.emit import (
 )
 from wraithguard.land.landmass import build_reference
 from wraithguard.land.merge import ConflictStrategy, merge_layer
-from wraithguard.land.meta import MetaError, load_all
+from wraithguard.land.meta import MetaError, load_meta
 from wraithguard.land.pipeline import finish, merge_landmass
 from wraithguard.land.textures import compact_textures
 from wraithguard.tes3fields.landscape import LAND_SIZE, WNAM_SIZE
@@ -354,7 +354,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(unreadable)} plugin(s) could not be read: {', '.join(unreadable[:5])}")
 
     try:
-        metas = load_all(data_files, [p.name for p in mods]) if data_files else {}
+        metas = (
+            {p.name: load_meta(data_files / p.name) for p in mods} if data_files else {}
+        )
     except MetaError as exc:
         print(f"a .mergedlands.toml could not be trusted: {exc}", file=sys.stderr)
         return 2
@@ -506,11 +508,9 @@ def main(argv: list[str] | None = None) -> int:
     # one LTEX record per surviving texture.
     texture_records: list[dict[str, Any]] = []
     if pending_textures:
-        mapping, kept = compact_textures(known, used_indices)
-        unresolved = 0
+        mapping, kept, unresolved = compact_textures(known, used_indices)
         for record, rows in pending_textures:
             compacted = [[mapping.get(value, value) for value in row] for row in rows]
-            unresolved += sum(1 for row in rows for value in row if value not in mapping)
             try:
                 attach_texture_indices(record, compacted)
             except EmitError as exc:
@@ -522,7 +522,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         if unresolved:
             print(
-                f"  {unresolved} painted index/indices resolve to no LTEX record and were\n"
+                f"  {len(unresolved)} painted index/indices resolve to no LTEX record and were\n"
                 "  left as they are. That is a missing master, not a merge fault."
             )
         # LTEX records must precede the LAND records that index them.
@@ -551,27 +551,39 @@ def main(argv: list[str] | None = None) -> int:
     document = build_plugin(records, masters)
 
     out = args.out or ((data_files or Path.cwd()) / DEFAULT_NAME)
-    with tempfile.TemporaryDirectory() as scratch:
-        as_json = Path(scratch) / "merged.json"
-        as_json.write_text(json.dumps(document), encoding="utf-8")
-        assert tool is not None  # noqa: S101 -- checked above when not a dry run
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if tool is None:
+        # No tes3conv: encode in process with the native writer, exactly as
+        # wraithguard.land.service._write does. Byte-compatible, verified by
+        # having tes3conv read the native output back identically.
+        from wraithguard.esp import EspError, plugin_from_json, write_plugin
+
         try:
-            result = subprocess.run(  # noqa: S603 -- fixed argv, no shell
-                [tool, str(as_json), str(out), "--overwrite"],
-                capture_output=True,
-                text=True,
-                timeout=600,
-                check=False,
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
-            print(f"tes3conv could not be run: {exc}", file=sys.stderr)
+            out.write_bytes(write_plugin(plugin_from_json(document)))
+        except (OSError, EspError, ValueError) as exc:
+            print(f"could not encode the merged plugin natively: {exc}", file=sys.stderr)
             return 2
-        if result.returncode != 0:
-            print(
-                f"tes3conv refused the JSON: {(result.stderr or result.stdout).strip()[:300]}",
-                file=sys.stderr,
-            )
-            return 1
+    else:
+        with tempfile.TemporaryDirectory() as scratch:
+            as_json = Path(scratch) / "merged.json"
+            as_json.write_text(json.dumps(document), encoding="utf-8")
+            try:
+                result = subprocess.run(  # noqa: S603 -- fixed argv, no shell
+                    [tool, str(as_json), str(out), "--overwrite"],
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                    check=False,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                print(f"tes3conv could not be run: {exc}", file=sys.stderr)
+                return 2
+            if result.returncode != 0:
+                print(
+                    f"tes3conv refused the JSON: {(result.stderr or result.stdout).strip()[:300]}",
+                    file=sys.stderr,
+                )
+                return 1
 
     print(f"\nwrote {out} ({out.stat().st_size} bytes, {len(document)} records)")
     if args.add_debug_vertex_colors:

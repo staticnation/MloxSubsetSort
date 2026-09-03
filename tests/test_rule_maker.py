@@ -65,6 +65,11 @@ class TestValidation:
         with pytest.raises(ValueError, match="at least two"):
             core.append_user_rule(rules_file, "order", ["Only.esp"])
 
+    def test_names_that_are_all_blank_are_reported_before_the_count_check(self, core, rules_file):
+        """Blank-after-stripping names never reach the validator as real entries."""
+        with pytest.raises(ValueError, match="no plugin names given"):
+            core.append_user_rule(rules_file, "nearend", ["   ", ""])
+
     @pytest.mark.parametrize("bad", ["no_extension", "brackets[x].esp", "semi;colon.esp"])
     def test_malformed_names_are_rejected(self, core, rules_file, bad):
         with pytest.raises(ValueError):

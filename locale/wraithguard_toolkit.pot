@@ -13,7 +13,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Wraithguard Toolkit 3.1.8\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-02 13:15\n"
+"POT-Creation-Date: 2026-09-03 09:16\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -39,11 +39,11 @@ msgstr ""
 msgid "WARNING: anchor '%(anchor)s' not found among existing data= paths for '%(value)s' -- appending at end instead."
 msgstr ""
 
-#: wraithguard/configurator/emit.py:617
+#: wraithguard/configurator/emit.py:619
 msgid "WARNING: anchor '%(anchor)s' in the emitted TOML matches %(count)d openmw.cfg lines -- momw-configurator errors on ambiguous matches. Colliding lines: %(lines)s%(more)s"
 msgstr ""
 
-#: wraithguard/configurator/emit.py:633
+#: wraithguard/configurator/emit.py:635
 msgid "WARNING: remove entry '%(entry)s' matches %(count)d openmw.cfg lines -- momw-configurator removes ALL of them, silently. Colliding lines: %(lines)s%(more)s"
 msgstr ""
 
@@ -847,7 +847,7 @@ msgstr ""
 
 #: wraithguard/gui/journalview.py:705
 #: wraithguard/gui/journalview.py:783
-#: wraithguard/viz/heightdelta.py:293
+#: wraithguard/viz/heightdelta.py:295
 #: wraithguard/viz/pathgrid.py:288
 #: wraithguard/viz/terrain3d.py:758
 msgid "(unknown)"
@@ -1537,17 +1537,17 @@ msgstr ""
 msgid "Loaded %(count)d plugin refs from %(file)s"
 msgstr ""
 
-#: wraithguard/sort/engine.py:160
+#: wraithguard/sort/engine.py:163
 msgid "%(count)d mlox ordering rule not applied -- your openmw.cfg already orders these the other way, so your (curated) cfg order is kept:"
 msgid_plural "%(count)d mlox ordering rules not applied -- your openmw.cfg already orders these the other way, so your (curated) cfg order is kept:"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard/sort/engine.py:171
+#: wraithguard/sort/engine.py:174
 msgid "    - mlox wanted '%(first)s' before '%(second)s', but your load order already has '%(second)s' before '%(first)s'"
 msgstr ""
 
-#: wraithguard/sort/engine.py:505
+#: wraithguard/sort/engine.py:513
 msgid "WARNING: %(count)d plugin could not be placed due to an unresolved cycle and was appended at the end: %(names)s"
 msgid_plural "WARNING: %(count)d plugins could not be placed due to an unresolved cycle and were appended at the end: %(names)s"
 msgstr[0] ""
@@ -1564,7 +1564,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: wraithguard/viz/conflictmap.py:313
-#: wraithguard/viz/heightdelta.py:293
+#: wraithguard/viz/heightdelta.py:295
 #: wraithguard/viz/pathgrid.py:288
 #: wraithguard/viz/terrain3d.py:758
 msgid "Cell"
@@ -1688,73 +1688,73 @@ msgstr ""
 msgid "Generated %(when)s"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:280
+#: wraithguard/viz/heightdelta.py:282
 #: wraithguard/viz/pathgrid.py:319
 #: wraithguard/viz/terrain3d.py:609
 msgid "Base: %(plugin)s"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:283
+#: wraithguard/viz/heightdelta.py:285
 #: wraithguard/viz/pathgrid.py:322
 #: wraithguard/viz/terrain3d.py:612
 msgid "Winner: %(plugin)s"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:294
+#: wraithguard/viz/heightdelta.py:296
 #: wraithguard/viz/pathgrid.py:289
 msgid "Winner"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:295
+#: wraithguard/viz/heightdelta.py:297
 #: wraithguard/viz/pathgrid.py:332
 msgid "Step"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:301
+#: wraithguard/viz/heightdelta.py:303
 msgid "Height difference"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:308
+#: wraithguard/viz/heightdelta.py:310
 msgid "higher than the previous step"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:309
+#: wraithguard/viz/heightdelta.py:311
 msgid "lower than the previous step"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:311
+#: wraithguard/viz/heightdelta.py:313
 msgid "North is up. Unchanged vertices are left blank on a diff step, and color saturates at that step's largest movement, so shades are comparable within a page but not between pages. The Base step has nothing before it to diff against, so it shows that plugin's own absolute elevation on a separate low-to-high scale instead."
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:331
+#: wraithguard/viz/heightdelta.py:333
 msgid "Base version"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:332
+#: wraithguard/viz/heightdelta.py:334
 msgid "vertex (%(col)s, %(row)s): %(delta)s units"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:333
+#: wraithguard/viz/heightdelta.py:335
 msgid "vertex (%(col)s, %(row)s): %(height)s units"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:334
+#: wraithguard/viz/heightdelta.py:336
 msgid "Absolute elevation, %(lo)s to %(hi)s units. Nothing loaded before it to compare against."
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:338
+#: wraithguard/viz/heightdelta.py:340
 msgid "%(changed)s of %(total)s vertices differ from the previous step. Largest movement %(peak)s units (%(up)s raised, %(down)s lowered)."
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:342
+#: wraithguard/viz/heightdelta.py:344
 msgid "The terrain is identical at this step. It differs from the previous step in some other field -- textures, colors or the world map -- not in height."
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:354
+#: wraithguard/viz/heightdelta.py:356
 msgid "Terrain difference"
 msgstr ""
 
-#: wraithguard/viz/heightdelta.py:355
+#: wraithguard/viz/heightdelta.py:357
 msgid "Absolute heights, decoded and subtracted. Comparing the raw fields is misleading: heights are stored as cumulative deltas, so moving one vertex changes every byte after it."
 msgstr ""
 

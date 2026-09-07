@@ -99,6 +99,7 @@ class TestMain:
         self, capsys, monkeypatch
     ) -> None:
         """When Pillow itself cannot decode a block, that is recorded, not ignored."""
+        pytest.importorskip("PIL")
         from PIL import Image as PilImage
 
         def refuse(*_a: object, **_k: object) -> object:

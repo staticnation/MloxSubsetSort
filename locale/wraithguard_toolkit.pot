@@ -13,7 +13,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Wraithguard Toolkit 3.1.8\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-03 09:16\n"
+"POT-Creation-Date: 2026-09-07 06:53\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1972,262 +1972,258 @@ msgstr ""
 msgid "The same 65x65 height grid the text view lists, as a shape you can turn."
 msgstr ""
 
-#: wraithguard_toolkit.py:828
+#: wraithguard_toolkit.py:827
 msgid "couldn't stage '%(name)s': %(error)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:2896
+#: wraithguard_toolkit.py:2895
 msgid "could not read the mesh: %(reason)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:2905
+#: wraithguard_toolkit.py:2904
 msgid "loses collision"
 msgstr ""
 
-#: wraithguard_toolkit.py:2907
+#: wraithguard_toolkit.py:2906
 msgid "loses animation"
 msgstr ""
 
-#: wraithguard_toolkit.py:2910
+#: wraithguard_toolkit.py:2909
 msgid "needs %(count)d texture the other does not ship"
 msgid_plural "needs %(count)d textures the other does not ship"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:2919
+#: wraithguard_toolkit.py:2918
 msgid "%(percent)d%% of the triangles"
 msgstr ""
 
-#: wraithguard_toolkit.py:2947
+#: wraithguard_toolkit.py:2946
 msgid "Mesh contents (read just now):"
 msgstr ""
 
-#: wraithguard_toolkit.py:2954
+#: wraithguard_toolkit.py:2953
 msgid "  %(n)d. %(dir)s - could not read: %(why)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:2960
+#: wraithguard_toolkit.py:2959
 msgid "%(count)d shape"
 msgid_plural "%(count)d shapes"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:2962
+#: wraithguard_toolkit.py:2961
 msgid "%(count)d triangle"
 msgid_plural "%(count)d triangles"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:2964
+#: wraithguard_toolkit.py:2963
 msgid "%(count)d texture"
 msgid_plural "%(count)d textures"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:2970
+#: wraithguard_toolkit.py:2969
 msgid "collision"
 msgstr ""
 
-#: wraithguard_toolkit.py:2972
+#: wraithguard_toolkit.py:2971
 msgid "no collision"
 msgstr ""
 
-#: wraithguard_toolkit.py:2974
+#: wraithguard_toolkit.py:2973
 msgid "animated"
 msgstr ""
 
-#: wraithguard_toolkit.py:2977
+#: wraithguard_toolkit.py:2976
 msgid "PARTIAL: %(read)d of %(declared)d blocks"
 msgstr ""
 
-#: wraithguard_toolkit.py:3002
+#: wraithguard_toolkit.py:3001
 msgid "  Against provider %(n)d, the winner %(note)s."
 msgstr ""
 
-#: wraithguard_toolkit.py:3007
+#: wraithguard_toolkit.py:3006
 msgid "  Textures referenced: %(list)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:3061
+#: wraithguard_toolkit.py:3060
 msgid "  %(count)d mesh conflict changes what the asset does; those lines are marked below."
 msgid_plural "  %(count)d mesh conflicts change what the asset does; those lines are marked below."
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:3489
+#: wraithguard_toolkit.py:3491
 msgid "Backup written: %(path)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:3529
+#: wraithguard_toolkit.py:3531
 msgid "\n--- DRY RUN: no files written ---"
 msgstr ""
 
-#: wraithguard_toolkit.py:3544
+#: wraithguard_toolkit.py:3546
 msgid "Wrote updated: %(path)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:3671
+#: wraithguard_toolkit.py:3673
 msgid "Scanned '%(path)s': %(folders)d mod folder(s), %(plugins)d plugin(s)."
 msgstr ""
 
-#: wraithguard_toolkit.py:3679
+#: wraithguard_toolkit.py:3681
 msgid "Wrote subset file: %(path)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:3785
+#: wraithguard_toolkit.py:3787
 msgid "'%(entry)s' from %(source)s is declared as groundcover but is not a plugin filename -- skipping."
 msgstr ""
 
-#: wraithguard_toolkit.py:3826
+#: wraithguard_toolkit.py:3828
 msgid "'%(entry)s' from %(source)s doesn't look like a plugin filename or a data folder path (no recognized extension, no slash) -- skipping."
 msgstr ""
 
-#: wraithguard_toolkit.py:4633
+#: wraithguard_toolkit.py:4635
 msgid "  %(file)s: %(plugins)d plugin(s), %(paths)d data path(s)"
 msgstr ""
 
-#: wraithguard_toolkit.py:4644
-#: wraithguard_toolkit.py:4701
+#: wraithguard_toolkit.py:4646
+#: wraithguard_toolkit.py:4703
 msgid "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(paths)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:4663
+#: wraithguard_toolkit.py:4665
 msgid "  in-memory scan: %(plugins)d plugin(s), %(paths)d data path(s)"
 msgstr ""
 
-#: wraithguard_toolkit.py:4670
+#: wraithguard_toolkit.py:4672
 msgid "  NOTE: data path insertion found but not sorted (pass --sort-data-paths to include it): %(count)d path"
 msgid_plural "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(count)d paths"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:4690
+#: wraithguard_toolkit.py:4692
 msgid "  %(file)s: %(plugins)d content plugin(s), %(paths)d data path(s)"
 msgstr ""
 
-#: wraithguard_toolkit.py:4781
+#: wraithguard_toolkit.py:4783
 msgid "  Loaded %(count)d plugin entry from %(file)s"
 msgid_plural "  Loaded %(count)d plugin entries from %(file)s"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:4793
+#: wraithguard_toolkit.py:4795
 msgid "  WARNING: could not read plugin-order.yml (%(error)s) -- skipping yml checks."
 msgstr ""
 
-#: wraithguard_toolkit.py:4806
+#: wraithguard_toolkit.py:4808
 msgid "  '%(list)s': %(count)d curated plugin on this list"
 msgid_plural "  '%(list)s': %(count)d curated plugins on this list"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:4815
+#: wraithguard_toolkit.py:4817
 msgid "  WARNING: no plugins found for list '%(list)s' in the yml -- check the list name spelling. Curated-set checks skipped."
 msgstr ""
 
-#: wraithguard_toolkit.py:4830
+#: wraithguard_toolkit.py:4832
 msgid "  Excluded %(count)d curated plugin from the sort: %(names)s"
 msgid_plural "  Excluded %(count)d curated plugins from the sort: %(names)s"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:4885
+#: wraithguard_toolkit.py:4887
 msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:4890
+#: wraithguard_toolkit.py:4892
 msgid "  Not in cfg yet, will be inserted: %(names)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:4935
+#: wraithguard_toolkit.py:4937
 msgid "  Read header masters for %(have)d of %(total)d custom plugin(s)."
 msgstr ""
 
-#: wraithguard_toolkit.py:4996
+#: wraithguard_toolkit.py:4998
 msgid "\n  No [Conflict]/[Requires]/[Note] warnings triggered."
 msgstr ""
 
-#: wraithguard_toolkit.py:5051
+#: wraithguard_toolkit.py:5053
 msgid "\n  No plugin-order.yml warnings."
 msgstr ""
 
-#: wraithguard_toolkit.py:5094
+#: wraithguard_toolkit.py:5096
 msgid "  (plugin files not reachable from the data folders; can't read headers)"
 msgstr ""
 
-#: wraithguard_toolkit.py:5111
+#: wraithguard_toolkit.py:5113
 msgid "  All masters present and correctly ordered."
 msgstr ""
 
-#: wraithguard_toolkit.py:5116
+#: wraithguard_toolkit.py:5118
 msgid "master check failed: %(error)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:5163
+#: wraithguard_toolkit.py:5165
 msgid "\n[STALE] '%(artifact)s' is older than %(count)d active plugin (e.g. %(examples)s%(more)s) -- re-run momw-configurator so it gets rebuilt against the current load order."
 msgid_plural "\n[STALE] '%(artifact)s' is older than %(count)d active plugins (e.g. %(examples)s%(more)s) -- re-run momw-configurator so it gets rebuilt against the current load order."
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:5210
-#: wraithguard_toolkit.py:5308
+#: wraithguard_toolkit.py:5212
+#: wraithguard_toolkit.py:5309
 msgid "  (excluded %(count)d plugin by --exclude)"
 msgid_plural "  (excluded %(count)d plugins by --exclude)"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:5231
+#: wraithguard_toolkit.py:5233
 msgid "  Keeping tes3conv JSON dump in: %(path)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:5236
+#: wraithguard_toolkit.py:5238
 #: wraithguard_toolkit_gui.py:3804
 msgid "  Engine: %(engine)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:5239
+#: wraithguard_toolkit.py:5241
 msgid "native esp reader (field-level)"
 msgstr ""
 
-#: wraithguard_toolkit.py:5258
+#: wraithguard_toolkit.py:5260
 msgid "\n  Wrote conflict report: %(path)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:5260
+#: wraithguard_toolkit.py:5262
 msgid "could not write conflict CSV: %(error)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:5268
+#: wraithguard_toolkit.py:5270
 msgid "  Scanned %(scanned)d plugin(s): %(exterior)d exterior + %(interior)d interior cell(s) touched."
 msgstr ""
 
-#: wraithguard_toolkit.py:5279
+#: wraithguard_toolkit.py:5281
 msgid "  Wrote cell map: %(path)s  (open it in a browser)"
 msgstr ""
 
-#: wraithguard_toolkit.py:5282
+#: wraithguard_toolkit.py:5284
 msgid "could not write cell map: %(error)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:5319
+#: wraithguard_toolkit.py:5320
 #: wraithguard_toolkit_gui.py:5243
 msgid "  Scanned %(scanned)d plugin(s); %(cells)d interior cell(s), %(grids)d interior pathgrid(s)."
 msgstr ""
 
-#: wraithguard_toolkit.py:5332
+#: wraithguard_toolkit.py:5333
 msgid "\n  No lint findings."
 msgstr ""
 
-#: wraithguard_toolkit.py:5361
+#: wraithguard_toolkit.py:5362
 msgid "\n  Wrote resource report: %(path)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:5363
+#: wraithguard_toolkit.py:5364
 msgid "could not write resource CSV: %(error)s"
-msgstr ""
-
-#: wraithguard_toolkit.py:5385
-msgid "  Pass --sort-data-paths to enable:"
 msgstr ""
 
 #: wraithguard_toolkit.py:5405

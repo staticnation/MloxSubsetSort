@@ -178,7 +178,7 @@ class TestTomlFallbacks:
         """
         import types
 
-        import tomllib as _real_toml
+        _real_toml = pytest.importorskip("tomllib")
 
         monkeypatch.setitem(sys.modules, "tomllib", None)
         monkeypatch.setitem(sys.modules, "tomli", types.SimpleNamespace(loads=_real_toml.loads))

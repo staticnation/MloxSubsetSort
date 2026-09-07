@@ -68,6 +68,30 @@ other block and all the framing preserved byte-for-byte.
   read-only, since the inspector's block indices belong to one tree). The
   read-only viewer and the standalone exported page are unchanged.
 
+### Fixed
+
+- **`tools/build_merged_lands.py` runs again.** The standalone landscape-merge
+  CLI had drifted out of step with the `wraithguard.land` refactors and could no
+  longer even be imported: it pulled a `load_all` that had become the per-plugin
+  `load_meta`, unpacked `compact_textures` as a two-tuple after it grew a third
+  return value, and asserted a `tes3conv` its own "built-in writer instead"
+  message said was optional. It now reads each plugin's sidecar with `load_meta`,
+  takes the full texture result, and, when no converter is on PATH, encodes the
+  merged plugin in process with the same native writer `wraithguard.land.service`
+  uses -- so both `--dry-run` and a real write work with or without `tes3conv`.
+
+### Internal
+
+- **The developer `tools/` scripts are now under test.** Every gate checker and
+  code generator that had no coverage -- `check_undefined`, `check_bsa`,
+  `check_bc7`, `check_images`, `check_textures`, `check_against_tes3`,
+  `check_placeholders`, `diff_roundtrip_json`, `make_pot`, the `gen_*`
+  generators, `gen_merged_lands_table`, `build_merged_lands`, and both
+  `check_nif_layouts` variants -- gained a direct test suite, most at full line
+  and branch coverage. The generators run against small hand-built fake
+  crates/CSVs with the real committed modules saved and restored byte-for-byte,
+  so the suite never rewrites a generated file or its line endings.
+
 
 ## 3.1.7
 

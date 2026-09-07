@@ -102,7 +102,8 @@ WraithguardToolkit/
 │   ├── tracing.py                Crash-survival trace logs (main + sort).
 │   └── versions.py               Version regex + mlox's canonical form.
 ├── tools/                        Developer scripts (not shipped): the gate
-│                                 checkers, the code generators, make_pot.py.
+│                                 checkers, the code generators, make_pot.py
+│                                 -- all under the test suite.
 ├── tests/                        pytest suite: the hermetic set plus a Tk smoke
 │                                 set that runs under xvfb in CI.
 ├── testdata/                     Copies of a real setup, used by the tests.

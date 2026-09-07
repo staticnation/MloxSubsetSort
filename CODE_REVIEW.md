@@ -27,6 +27,7 @@
 > | §44 (two icon systems, a case-sensitive filesystem, and a Linux build that finally ships) | **3,648** (3,646 passed, 2 skipped: `test_differential` deliberate baseline skip, `test_viz_pages` symlinks not permitted; coverage 86.77%, floor 77%) |
 > | §45 (dialogue rendered readable, xEdit conflict colours, a macOS app build, and an `abspath`/`resolve` audit) | **4,519** (4,514 passed, 5 skipped; coverage 93.44%, floor raised 77% -> 90%; the four `test_service_merge` POSIX-converter skips were then made cross-platform) |
 > | §46 (3.1.6: a cfg orphan-pull subset source, and the `clean_` alias reconciliation) | **4,428** (4,412 passed, 16 skipped on the hermetic basis with no `tes3conv` on PATH, so the converter-gated tests skip; coverage 93.52% with one present, floor 90%; +22 tests in `test_subset_from_cfg.py`) |
+> | §47 (the `tools/` gap closed: every gate checker and generator tested, and a broken merge CLI repaired) | **~7,240** (coverage 99.9% of the measured source; the long-standing `tools/` coverage gap from §4/§44 is closed) |
 >
 > The same applies to tooling versions, file layouts, message counts and line
 > counts. For the current state of anything, check the code, `CHANGELOG.md`, or
@@ -4329,3 +4330,43 @@ Each considered and rejected on evidence:
 The coverage story (79% overall, the GUI's smoke-test-only verification, the
 `tools/` gap and the untranslated `.mo`) is unchanged from §4 of the retired
 document and recorded across §8.5, §22 and §44 above; it is not repeated here.
+
+
+## §47 The `tools/` gap closed, and a merge CLI that no longer ran
+
+The one coverage gap named in every audit since §4 was `tools/` -- the developer
+scripts (gate checkers, code generators, `make_pot`) that are not shipped and
+were never measured. This session tested them directly, most to full line and
+branch coverage: `check_undefined`, `check_bsa`, `check_bc7`, `check_images`,
+`check_textures`, `check_against_tes3`, `check_placeholders`,
+`diff_roundtrip_json`, `make_pot`, the five `gen_*` generators,
+`gen_merged_lands_table`, and both `check_nif_layouts` variants.
+
+**Testing the generators without rewriting them.** Each `gen_*` script writes a
+committed module (`wraithguard/esp/enums.py`, `patch/field_types.py`, and so on).
+The tests drive `main()` against a small hand-built fake crate or CSV, then
+restore the real file. The restore is done with `read_bytes`/`write_bytes`, not
+`read_text`/`write_text`: the first draft used text mode, which on this Linux
+host silently reflowed the CRLF-committed files to LF and left the working tree
+dirty after every run. Byte-exact save/restore keeps the tree clean whatever the
+line endings.
+
+**A tool that could not be imported.** `tools/build_merged_lands.py` -- the
+standalone landscape-merge CLI -- had rotted against the `wraithguard.land`
+refactors and raised `ImportError` at load: it imported a `load_all` that had
+become the per-plugin `load_meta`. Past that, `compact_textures` was unpacked as
+a two-tuple after it had grown a third return value, and the write path asserted
+a `tes3conv` executable even though the code's own message promised a built-in
+writer when none was present. All three are the same class of defect -- a caller
+left behind by a change to its callee, invisible because nothing ran it. Fixed
+by matching the current APIs and wiring in the native writer
+`wraithguard.land.service` already uses; the CLI now runs a dry run and a real
+write with or without a converter, and is covered to ~90% (the remainder is
+deep terrain-conditioning branches the land package tests already exercise).
+
+**Two portability guards the CI matrix needed.** A `check_bc7` oracle test
+imported Pillow without a guard, and four pre-existing `tomllib` fallback tests
+imported `tomllib` unconditionally; both fail on a runner that lacks the module
+(no Pillow; Python 3.10, where `tomllib` is 3.11+). `pytest.importorskip` turns
+each into a clean skip rather than an error, so the suite is green across the
+whole version/dependency matrix, not just where those happen to be installed.

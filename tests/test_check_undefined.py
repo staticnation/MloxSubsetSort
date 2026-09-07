@@ -106,12 +106,7 @@ def test_varargs_and_kwargs_parameters_bind(tmp_path: Path) -> None:
 
 def test_a_class_defined_inside_a_function_binds(tmp_path: Path) -> None:
     """A class nested in a function is bound in that scope."""
-    src = (
-        "def make():\n"
-        "    class Inner:\n"
-        "        value = 1\n\n"
-        "    return Inner\n"
-    )
+    src = "def make():\n" "    class Inner:\n" "        value = 1\n\n" "    return Inner\n"
     assert undefined_names(_write(tmp_path, src)) == []
 
 

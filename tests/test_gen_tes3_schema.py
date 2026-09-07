@@ -45,7 +45,12 @@ _ROWS = [
     ["1", "VNML", "struct (12675 bytes)", "Normals\nint8 - X\nint8 - Y\nint8 - Z"],
     # blank line, a stray prose line (no dash), and a dash line whose left side
     # is not a type -- each of the parser's "skip this line" branches.
-    ["1", "VHGT", "struct (5 bytes)", "Height data\n\nfloat32 - Offset\nint8 - Data\njust words\nnote - prose"],
+    [
+        "1",
+        "VHGT",
+        "struct (5 bytes)",
+        "Height data\n\nfloat32 - Offset\nint8 - Data\njust words\nnote - prose",
+    ],
     ["1", "NPDT", "struct (12 or 52 bytes)", "NPC data\n12-byte version\n52-byte version"],
     ["Morrowind Mod:Mod File Format/EMPTY"],
     ["C", "Field", "Type/Size", "Info"],

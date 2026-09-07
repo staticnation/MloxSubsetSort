@@ -251,7 +251,9 @@ class TestCheckAgainstCensus:
         assert "wrote 1 per-file result" in capsys.readouterr().out
 
     def test_a_short_read_that_still_over_reports_is_short(self, tmp_path: Path, capsys) -> None:
-        (tmp_path / "a.nif").write_bytes(_nif(("NiNode", _ninode_body()), ("SomeNewBlockType", b"")))
+        (tmp_path / "a.nif").write_bytes(
+            _nif(("NiNode", _ninode_body()), ("SomeNewBlockType", b""))
+        )
         census = tmp_path / "census.txt"
         census.write_text("a.nif = {'NiNode': 0}\n", encoding="utf-8")
         assert check_against_census(tmp_path, census) == 0
@@ -354,7 +356,9 @@ class TestVerify:
 
         from wraithguard.nif.scan import ScanResult
 
-        (tmp_path / "a.nif").write_bytes(_nif(("NiNode", _ninode_body()), ("NiNode", _ninode_body())))
+        (tmp_path / "a.nif").write_bytes(
+            _nif(("NiNode", _ninode_body()), ("NiNode", _ninode_body()))
+        )
         fake = ScanResult(type_names=["NiNode", "NiTriShape"], declared=2, header_ok=True)
         monkeypatch.setattr(cnl, "scan_block_types", lambda _data: fake)
         assert verify(tmp_path, None, None, 0) == 1
@@ -385,14 +389,18 @@ class TestVerify:
         from wraithguard.nif.scan import ScanResult
 
         (tmp_path / "a.nif").write_bytes(_nif(("NiNode", _ninode_body())))
-        fake = ScanResult(type_names=["NiNode", "SomeUnimplementedType"], declared=2, header_ok=True)
+        fake = ScanResult(
+            type_names=["NiNode", "SomeUnimplementedType"], declared=2, header_ok=True
+        )
         monkeypatch.setattr(cnl, "scan_block_types", lambda _data: fake)
         assert verify(tmp_path, None, None, 0) == 0
         out = capsys.readouterr().out
         assert "stopped on an unimplemented type" in out
         assert "SomeUnimplementedType" in out
 
-    def test_a_non_reconciling_scan_is_unverifiable(self, tmp_path: Path, monkeypatch, capsys) -> None:
+    def test_a_non_reconciling_scan_is_unverifiable(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
         import check_nif_layouts_collect as cnl
 
         from wraithguard.nif.scan import ScanResult
@@ -454,7 +462,9 @@ class TestVerify:
 
         from wraithguard.nif.scan import ScanResult
 
-        (tmp_path / "a.nif").write_bytes(_nif(("NiNode", _ninode_body()), ("NiNode", _ninode_body())))
+        (tmp_path / "a.nif").write_bytes(
+            _nif(("NiNode", _ninode_body()), ("NiNode", _ninode_body()))
+        )
         fake = ScanResult(type_names=["NiNode", "NiTriShape"], declared=2, header_ok=True)
         monkeypatch.setattr(cnl, "scan_block_types", lambda _data: fake)
         collect_dir = tmp_path / "samples"

@@ -128,7 +128,9 @@ class TestParsingHelpers:
         path.write_text("x = 1\n", encoding="utf-8")
         assert isinstance(am.safe_parse(path), ast.Module)
 
-    def test_safe_parse_warns_and_returns_none_on_a_syntax_error(self, tmp_path: Path, capsys) -> None:
+    def test_safe_parse_warns_and_returns_none_on_a_syntax_error(
+        self, tmp_path: Path, capsys
+    ) -> None:
         path = tmp_path / "bad.py"
         path.write_text("def (:\n", encoding="utf-8")
         assert am.safe_parse(path) is None

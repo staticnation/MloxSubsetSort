@@ -87,7 +87,9 @@ class TestWalk:
 
 class TestHarvest:
     def test_it_reads_the_dumps_and_gathers_field_values(self, tmp_path: Path) -> None:
-        _write_dumps(tmp_path, [{"weapon_type": "ShortBladeOneHand"}, {"weapon_type": "MarksmanBow"}])
+        _write_dumps(
+            tmp_path, [{"weapon_type": "ShortBladeOneHand"}, {"weapon_type": "MarksmanBow"}]
+        )
         seen = _harvest(tmp_path)
         assert seen["weapon_type"] == {"ShortBladeOneHand", "MarksmanBow"}
 

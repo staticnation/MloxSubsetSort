@@ -188,12 +188,13 @@ class TestMain:
             gen_opcodes.OUT.write_bytes(original)
         assert "no functions parsed from the custom table" in capsys.readouterr().err
 
-    def test_a_full_run_merges_custom_and_applies_corrections(
-        self, tmp_path: Path, capsys
-    ) -> None:
+    def test_a_full_run_merges_custom_and_applies_corrections(self, tmp_path: Path, capsys) -> None:
         # Include a 0x3C33 block that disagrees with CORRECTIONS so the
         # correction note fires, and a custom table that adds an opcode.
-        funcs = _FUNCTIONS_DAT + 'Function = XFileWriteFloat\n    Opcode = 0x3C33\n    Param1 = 0x8, "v"\nEnd\n'
+        funcs = (
+            _FUNCTIONS_DAT
+            + 'Function = XFileWriteFloat\n    Opcode = 0x3C33\n    Param1 = 0x8, "v"\nEnd\n'
+        )
         src = _write(tmp_path, "Functions.dat", funcs)
         custom = _write(tmp_path, "custom.dat", _CUSTOM_DAT)
         original = self._protect_out()

@@ -191,7 +191,9 @@ class TestCheckCorpus:
         assert check_corpus(tmp_path, PilImage) == 0  # skipped, not failed
         assert "the oracle skipped" in capsys.readouterr().out
 
-    def test_a_file_we_cannot_decode_is_a_failure(self, tmp_path: Path, capsys, monkeypatch) -> None:
+    def test_a_file_we_cannot_decode_is_a_failure(
+        self, tmp_path: Path, capsys, monkeypatch
+    ) -> None:
         self._write_tga(tmp_path / "a.tga")
         monkeypatch.setattr(
             check_images,
@@ -201,7 +203,9 @@ class TestCheckCorpus:
         assert check_corpus(tmp_path, PilImage) >= 1
         assert "could not decode it" in capsys.readouterr().out
 
-    def test_a_mismatch_against_the_oracle_is_counted(self, tmp_path: Path, capsys, monkeypatch) -> None:
+    def test_a_mismatch_against_the_oracle_is_counted(
+        self, tmp_path: Path, capsys, monkeypatch
+    ) -> None:
         self._write_tga(tmp_path / "a.tga")
         monkeypatch.setattr(check_images, "read_image", lambda _data: _FakeImage((0, 0, 0, 0)))
         assert check_corpus(tmp_path, PilImage) >= 1

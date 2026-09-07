@@ -354,9 +354,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(unreadable)} plugin(s) could not be read: {', '.join(unreadable[:5])}")
 
     try:
-        metas = (
-            {p.name: load_meta(data_files / p.name) for p in mods} if data_files else {}
-        )
+        metas = {p.name: load_meta(data_files / p.name) for p in mods} if data_files else {}
     except MetaError as exc:
         print(f"a .mergedlands.toml could not be trusted: {exc}", file=sys.stderr)
         return 2

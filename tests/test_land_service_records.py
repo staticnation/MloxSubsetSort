@@ -323,9 +323,7 @@ def test_a_mod_with_no_terrain_is_silently_skipped_and_progress_is_reported(
         (tmp_path / name).write_bytes(b"TES3" + struct.pack("<III", 0, 0, 0))  # header only
         load_order.append(name)
     lines: list[str] = []
-    build_merged_lands(
-        [tmp_path], load_order, None, output=tmp_path / "o.esp", report=lines.append
-    )
+    build_merged_lands([tmp_path], load_order, None, output=tmp_path / "o.esp", report=lines.append)
     assert any("50/50" in line for line in lines)  # the progress checkpoint fired
     assert any("nothing to merge" in line for line in lines)  # no mod had terrain
 

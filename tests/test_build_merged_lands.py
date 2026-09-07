@@ -92,9 +92,7 @@ def _grid(moves: dict[int, int], side: int = LAND_SIZE, components: int = 1) -> 
 
 
 def _heights(plugin: str, first: int, *, new_land: bool = False) -> LandscapeDiff:
-    return LandscapeDiff(
-        coords=(0, 0), plugin=plugin, new_land=new_land, heights=_grid({0: first})
-    )
+    return LandscapeDiff(coords=(0, 0), plugin=plugin, new_land=new_land, heights=_grid({0: first}))
 
 
 class TestRowHelpers:
@@ -254,7 +252,9 @@ class TestMainWrite:
         assert "wrote" in report
         assert "Place it LAST" in report
 
-    def test_the_tes3conv_path_runs_the_converter(self, tmp_path: Path, capsys, monkeypatch) -> None:
+    def test_the_tes3conv_path_runs_the_converter(
+        self, tmp_path: Path, capsys, monkeypatch
+    ) -> None:
         """With a converter configured, the JSON is handed to it and the output kept."""
         import tools.build_merged_lands as bml
 
@@ -273,7 +273,9 @@ class TestMainWrite:
         assert out.read_bytes() == b"ESP"
         assert "wrote" in capsys.readouterr().out
 
-    def test_a_converter_nonzero_exit_is_reported(self, tmp_path: Path, capsys, monkeypatch) -> None:
+    def test_a_converter_nonzero_exit_is_reported(
+        self, tmp_path: Path, capsys, monkeypatch
+    ) -> None:
         import tools.build_merged_lands as bml
 
         monkeypatch.setattr(bml, "find_tes3conv", lambda _arg: "tes3conv")
@@ -284,11 +286,15 @@ class TestMainWrite:
         monkeypatch.setattr(bml.subprocess, "run", fake_run)
         dump = _dump(tmp_path / "json", {"Morrowind": 0.0, "ModA": 20.0, "ModB": 60.0})
         _masters(dump)
-        rc = main(["--json-dir", str(dump), "--out", str(tmp_path / "o.esp"), "--data-files", str(dump)])
+        rc = main(
+            ["--json-dir", str(dump), "--out", str(tmp_path / "o.esp"), "--data-files", str(dump)]
+        )
         assert rc == 1
         assert "tes3conv refused" in capsys.readouterr().err
 
-    def test_a_converter_that_cannot_be_run_is_reported(self, tmp_path: Path, capsys, monkeypatch) -> None:
+    def test_a_converter_that_cannot_be_run_is_reported(
+        self, tmp_path: Path, capsys, monkeypatch
+    ) -> None:
         import tools.build_merged_lands as bml
 
         monkeypatch.setattr(bml, "find_tes3conv", lambda _arg: "tes3conv")
@@ -299,7 +305,9 @@ class TestMainWrite:
         monkeypatch.setattr(bml.subprocess, "run", fake_run)
         dump = _dump(tmp_path / "json", {"Morrowind": 0.0, "ModA": 20.0, "ModB": 60.0})
         _masters(dump)
-        rc = main(["--json-dir", str(dump), "--out", str(tmp_path / "o.esp"), "--data-files", str(dump)])
+        rc = main(
+            ["--json-dir", str(dump), "--out", str(tmp_path / "o.esp"), "--data-files", str(dump)]
+        )
         assert rc == 2
         assert "could not be run" in capsys.readouterr().err
 
@@ -318,7 +326,9 @@ class TestMainWrite:
             raise EspError("cannot encode this")
 
         monkeypatch.setattr(esp, "plugin_from_json", boom)
-        rc = main(["--json-dir", str(dump), "--out", str(tmp_path / "o.esp"), "--data-files", str(dump)])
+        rc = main(
+            ["--json-dir", str(dump), "--out", str(tmp_path / "o.esp"), "--data-files", str(dump)]
+        )
         assert rc == 2
         assert "could not encode the merged plugin natively" in capsys.readouterr().err
 
@@ -350,8 +360,12 @@ class TestMainReporting:
         dump = _dump(tmp_path / "json", {"Morrowind": 0.0, "ModA": 20.0, "ModB": 60.0})
         rc = main(
             [
-                "--json-dir", str(dump), "--dry-run",
-                "--no-seam-repair", "--no-clean", "--no-slope-limit",
+                "--json-dir",
+                str(dump),
+                "--dry-run",
+                "--no-seam-repair",
+                "--no-clean",
+                "--no-slope-limit",
             ]
         )
         out = capsys.readouterr().out
@@ -404,7 +418,9 @@ class TestMainReporting:
         assert rc == 0
         assert "land the masters never had" in out
 
-    def test_debug_vertex_colors_warns_after_a_write(self, tmp_path: Path, capsys, monkeypatch) -> None:
+    def test_debug_vertex_colors_warns_after_a_write(
+        self, tmp_path: Path, capsys, monkeypatch
+    ) -> None:
         import tools.build_merged_lands as bml
 
         monkeypatch.setattr(bml, "find_tes3conv", lambda _arg: None)
@@ -413,8 +429,13 @@ class TestMainReporting:
         out = tmp_path / "Merged Lands.esp"
         rc = main(
             [
-                "--json-dir", str(dump), "--out", str(out),
-                "--data-files", str(dump), "--add-debug-vertex-colors",
+                "--json-dir",
+                str(dump),
+                "--out",
+                str(out),
+                "--data-files",
+                str(dump),
+                "--add-debug-vertex-colors",
             ]
         )
         assert rc == 0

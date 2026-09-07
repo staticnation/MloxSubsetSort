@@ -104,7 +104,10 @@ class TestIdentAndInt:
 
 class TestReadEnums:
     def test_it_reads_repr_enums_with_defaults(self) -> None:
-        enums = {name: (rep, default, variants) for name, rep, default, variants in _read_enums(_FAKE_ENUMS)}
+        enums = {
+            name: (rep, default, variants)
+            for name, rep, default, variants in _read_enums(_FAKE_ENUMS)
+        }
         assert enums["WeaponType"][0] == "u16"
         assert enums["WeaponType"][1] == "ShortBladeOneHand"  # the #[default]
         assert ("Curse", -1) in enums["SpellType"][2]

@@ -57,6 +57,68 @@ DARK = {
 _COLOR_CAPABLE_TTK_THEMES = ("clam", "alt", "default", "classic")
 
 
+def _shade(hex_color: str, factor: float) -> str:
+    """Lighten (``factor`` > 1) or darken (< 1) an ``#rrggbb`` colour.
+
+    Used to derive hover/pressed variants of the accent from the one accent
+    value the palette carries, so the accent-button states track whatever the
+    active theme sets rather than needing three hand-picked colours per theme.
+
+    Args:
+        hex_color: An ``#rrggbb`` string; anything else is returned unchanged.
+        factor: Multiplier applied to each channel, clamped to ``0..255``.
+
+    Returns:
+        The adjusted ``#rrggbb`` colour.
+    """
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return hex_color
+    try:
+        r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return hex_color
+    r, g, b = (max(0, min(255, round(c * factor))) for c in (r, g, b))
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _contrast_fg(bg_hex: str) -> str:
+    """Black or white text, whichever WCAG says reads better on ``bg_hex``.
+
+    Uses the gamma-corrected sRGB *relative* luminance (not a quick weighted
+    average) and the standard 0.179 crossover, so the choice matches an actual
+    contrast-ratio comparison of black vs white against the fill. That flips
+    dark text onto surprisingly saturated fills where a naive average would keep
+    white: the default blue accent (#3794ff) scores ~5.5:1 with dark text but
+    only ~3.1:1 with white, so it -- like the lighter green/aqua theme accents
+    -- gets dark text, and every accent button reads as dark-on-colour. Only a
+    genuinely dark fill drops to white.
+
+    Args:
+        bg_hex: The fill colour as ``#rrggbb``.
+
+    Returns:
+        ``"#1b1b1b"`` when dark text wins, ``"#ffffff"`` when white text wins.
+    """
+    h = bg_hex.lstrip("#")
+    if len(h) != 6:
+        return "#ffffff"
+    try:
+        r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return "#ffffff"
+
+    def _lin(c: int) -> float:
+        """Linearise one 0-255 sRGB channel to its 0-1 light value."""
+        s = c / 255
+        return s / 12.92 if s <= 0.03928 else ((s + 0.055) / 1.055) ** 2.4
+
+    luminance = 0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b)
+    # Crossover where contrast(white) == contrast(black): relative luminance
+    # 0.179. Above it dark text has the higher ratio, below it white does.
+    return "#1b1b1b" if luminance > 0.179 else "#ffffff"
+
+
 def _select_color_capable_theme(style: ttk.Style) -> str:
     """Switch ``style`` to a theme that respects our color options.
 
@@ -117,19 +179,31 @@ def apply_dark_theme(root: tk.Tk) -> ttk.Style:
         "TLabelframe", background=DARK["bg"], foreground=DARK["fg"], bordercolor=DARK["border"]
     )
     style.configure("TLabelframe.Label", background=DARK["bg"], foreground=DARK["fg"])
-    style.configure("TCheckbutton", background=DARK["bg"], foreground=DARK["fg"])
+    style.configure(
+        "TCheckbutton",
+        background=DARK["bg"],
+        foreground=DARK["fg"],
+        focuscolor=DARK["bg"],  # drop the dotted focus ring for a cleaner look
+        padding=(2, 3),  # roomier, easier-to-hit rows
+    )
     style.map(
         "TCheckbutton",
         background=[("active", DARK["bg"])],
-        foreground=[("disabled", DARK["fg_dim"])],
+        foreground=[("active", DARK["accent"]), ("disabled", DARK["fg_dim"])],
     )
     # radiobuttons need the same treatment or the focused/active one renders
     # with a white background on Windows' default theme
-    style.configure("TRadiobutton", background=DARK["bg"], foreground=DARK["fg"])
+    style.configure(
+        "TRadiobutton",
+        background=DARK["bg"],
+        foreground=DARK["fg"],
+        focuscolor=DARK["bg"],
+        padding=(2, 3),
+    )
     style.map(
         "TRadiobutton",
         background=[("active", DARK["bg"]), ("focus", DARK["bg"]), ("selected", DARK["bg"])],
-        foreground=[("disabled", DARK["fg_dim"])],
+        foreground=[("active", DARK["accent"]), ("disabled", DARK["fg_dim"])],
     )
     style.configure(
         "TEntry",
@@ -137,8 +211,17 @@ def apply_dark_theme(root: tk.Tk) -> ttk.Style:
         foreground=DARK["fg"],
         insertcolor=DARK["fg"],
         bordercolor=DARK["border"],
+        padding=(6, 4),  # roomier text field
     )
-    style.map("TEntry", fieldbackground=[("readonly", DARK["field_bg"])])
+    style.map(
+        "TEntry",
+        fieldbackground=[("readonly", DARK["field_bg"])],
+        # the field border picks up the accent while focused -- the modern
+        # "active field" cue, instead of a static grey outline
+        bordercolor=[("focus", DARK["accent"])],
+        lightcolor=[("focus", DARK["accent"])],
+        darkcolor=[("focus", DARK["accent"])],
+    )
     # the closed combobox field. Note: this does NOT reach the dropdown list
     # itself -- that's a separate plain tk::Listbox the combobox pops up, and
     # ttk::Style can't touch it; it's themed below via the option database.
@@ -157,7 +240,8 @@ def apply_dark_theme(root: tk.Tk) -> ttk.Style:
         fieldbackground=[("readonly", DARK["field_bg"]), ("disabled", DARK["bg2"])],
         foreground=[("readonly", DARK["fg"]), ("disabled", DARK["fg_dim"])],
         background=[("active", DARK["btn_bg_active"]), ("readonly", DARK["btn_bg"])],
-        arrowcolor=[("disabled", DARK["fg_dim"])],
+        arrowcolor=[("disabled", DARK["fg_dim"]), ("active", DARK["accent"])],
+        bordercolor=[("focus", DARK["accent"])],  # accent outline while focused
     )
     # the dropdown list's background/foreground/selection -- ttk::combobox's
     # popdown is a raw Listbox, so this has to go through Tk's option
@@ -173,7 +257,8 @@ def apply_dark_theme(root: tk.Tk) -> ttk.Style:
         fieldbackground=DARK["field_bg"],
         foreground=DARK["fg"],
         bordercolor=DARK["border"],
-        rowheight=22,
+        rowheight=26,  # roomier rows -- easier to scan and click than the ttk default
+        borderwidth=0,
     )
     style.map(
         "Conf.Treeview",
@@ -181,21 +266,29 @@ def apply_dark_theme(root: tk.Tk) -> ttk.Style:
         foreground=[("selected", DARK["fg"])],
     )
     style.configure(
-        "Conf.Treeview.Heading", background=DARK["btn_bg"], foreground=DARK["fg"], relief="flat"
+        "Conf.Treeview.Heading",
+        background=DARK["btn_bg"],
+        foreground=DARK["fg"],
+        relief="flat",
+        padding=(8, 5),  # breathing room around column titles
+        borderwidth=0,
     )
     style.map("Conf.Treeview.Heading", background=[("active", DARK["btn_bg_active"])])
     style.configure("TNotebook", background=DARK["bg"], borderwidth=0, bordercolor=DARK["border"])
     style.configure(
         "TNotebook.Tab",
         background=DARK["btn_bg"],
-        foreground=DARK["fg"],
-        padding=(12, 4),
+        foreground=DARK["fg_dim"],
+        padding=(14, 6),  # roomier hit target
         borderwidth=0,
     )
     style.map(
         "TNotebook.Tab",
-        background=[("selected", DARK["select"]), ("active", DARK["btn_bg_active"])],
-        foreground=[("selected", DARK["fg"])],
+        # The selected tab reads as the active page: it takes the content
+        # background and an accent label, so it "lifts" out of the strip rather
+        # than sitting in a heavy filled block.
+        background=[("selected", DARK["bg"]), ("active", DARK["btn_bg_active"])],
+        foreground=[("selected", DARK["accent"]), ("active", DARK["fg"])],
     )
     style.configure(
         "TButton",
@@ -203,20 +296,82 @@ def apply_dark_theme(root: tk.Tk) -> ttk.Style:
         foreground=DARK["fg"],
         bordercolor=DARK["border"],
         focuscolor=DARK["bg"],
+        relief="flat",  # flat, borderless chip instead of the beveled clam default
+        borderwidth=1,
+        padding=(10, 5),  # consistent, roomier button padding app-wide
     )
     style.map(
         "TButton",
         background=[("active", DARK["btn_bg_active"]), ("disabled", DARK["bg2"])],
         foreground=[("disabled", DARK["fg_dim"])],
     )
+    # Accent.TButton -- the primary actions (1. Sort / 2. Export). An accent
+    # fill with hover/pressed shades derived from the one accent colour, so it
+    # tracks the active theme. Apply via `.configure(style="Accent.TButton")`.
+    accent = DARK["accent"]
+    accent_pressed = _shade(accent, 0.85)
+    accent_active = _shade(accent, 1.12)
+    style.configure(
+        "Accent.TButton",
+        background=accent,
+        foreground=_contrast_fg(accent),
+        bordercolor=accent,
+        focuscolor=accent,
+        relief="flat",  # a solid accent chip, no bevel
+        borderwidth=0,
+        padding=(12, 5),
+    )
+    style.map(
+        "Accent.TButton",
+        background=[
+            ("pressed", accent_pressed),
+            ("active", accent_active),
+            ("disabled", DARK["bg2"]),
+        ],
+        foreground=[
+            ("disabled", DARK["fg_dim"]),
+            ("pressed", _contrast_fg(accent_pressed)),
+            ("active", _contrast_fg(accent_active)),
+        ],
+    )
     style.configure(
         "TScrollbar",
         background=DARK["btn_bg"],
         troughcolor=DARK["bg2"],
-        bordercolor=DARK["border"],
+        bordercolor=DARK["bg2"],  # no hard outline -- the thumb floats on the trough
         arrowcolor=DARK["fg"],
+        relief="flat",
+        borderwidth=0,
+        gripcount=0,  # drop clam's grip dots for a clean flat bar
     )
-    style.map("TScrollbar", background=[("active", DARK["btn_bg_active"])])
+    style.map(
+        "TScrollbar",
+        background=[("active", DARK["btn_bg_active"]), ("!active", DARK["btn_bg"])],
+    )
+    # Drop the up/down (and left/right) arrow buttons: a modern thumb-only
+    # scrollbar. Wrapped because the element names are clam-specific -- on any
+    # theme that lacks them we simply keep the default arrowed layout.
+    for _orient, _side in (("Vertical", "ns"), ("Horizontal", "ew")):
+        try:
+            style.layout(
+                f"{_orient}.TScrollbar",
+                [
+                    (
+                        f"{_orient}.Scrollbar.trough",
+                        {
+                            "sticky": _side,
+                            "children": [
+                                (
+                                    f"{_orient}.Scrollbar.thumb",
+                                    {"expand": "1", "sticky": "nswe"},
+                                )
+                            ],
+                        },
+                    )
+                ],
+            )
+        except tk.TclError:
+            pass  # theme without these elements -- keep its own arrowed layout
     apply_titlebar_theme(root)
     # Right-align labels/entries/buttons app-wide when the active language reads
     # right-to-left. A no-op otherwise, so this is unconditional; it runs after
@@ -1512,7 +1667,15 @@ def _restyle_plain_live(w: tk.Misc) -> bool:
     elif isinstance(w, tk.Listbox):
         style_plain_widget(w)
     elif isinstance(w, tk.Canvas):
-        if getattr(w, "_is_paned_grip", False):
+        if getattr(w, "_is_toggle_switch", False) or getattr(w, "_is_radio_button", False):
+            # our canvas widgets (pill ToggleSwitch, ring RadioButton) own their
+            # palette-aware repaint, so just ask them to redo it rather than poke
+            # their canvas items directly
+            try:
+                w.refresh_theme()
+            except tk.TclError:
+                pass  # vanished mid-switch; cosmetic, never fatal
+        elif getattr(w, "_is_paned_grip", False):
             # the pane-divider grips: repaint the canvas and its drawn lines
             _configure_each(w, {"bg": DARK["btn_bg"], "highlightbackground": DARK["border"]})
             try:

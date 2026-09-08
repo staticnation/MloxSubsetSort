@@ -142,6 +142,17 @@ class TestReadSubsetInputsGuards:
         with pytest.raises(SystemExit, match="No subset plugins or data paths found"):
             core._read_subset_inputs(args)
 
+    def test_allow_empty_sort_bypasses_the_nothing_to_do_guard(self, tmp_path: Path) -> None:
+        """The GUI's opt-out: an empty run returns an empty subset, not SystemExit,
+        so the current load order can still be handed back for editing."""
+        args = _args(tmp_path)  # no subset, no data paths
+        args.allow_empty_sort = True
+
+        subset, data_inserts, *_rest = core._read_subset_inputs(args)
+
+        assert subset == []
+        assert data_inserts == []
+
 
 class TestReadSubsetInputsDataPathNotes:
     def test_a_subset_file_data_path_without_sort_flag_is_noted_not_included(

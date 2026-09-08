@@ -259,3 +259,87 @@ class TestSummaryCounts:
         core.write_plan(args, plan)
 
         assert "Plugins sorted:        1" in capsys.readouterr().out
+
+
+class TestSubsetFromCfgCapturesOrphanData:
+    """The point of --subset-from-cfg: unmanaged cfg data= paths land in the
+    emitted TOML so a momw-configurator rebuild re-creates them, while paths the
+    curated list manages are left out (the list re-adds those itself)."""
+
+    @staticmethod
+    def _setup(tmp_path: Path, *extra: str) -> tuple[dict, object, Path]:
+        data_dir = tmp_path / "Data Files"
+        data_dir.mkdir()
+        write_plugin(data_dir / "Morrowind.esm")
+        write_plugin(data_dir / "Loose.esp", masters=("Morrowind.esm",), sizes=(0,))
+        cfg = tmp_path / "openmw.cfg"
+        cfg.write_text(
+            f'data="{data_dir}"\n'
+            "data=C:/Mods/CuratedMod\n"
+            "data=C:/Mods/OrphanMod\n"
+            "content=Morrowind.esm\n"
+            "content=Loose.esp\n",
+            encoding="utf-8",
+        )
+        rules = tmp_path / "mlox_base.txt"
+        rules.write_text("", encoding="utf-8")
+        yml = tmp_path / "data-path-order.yml"
+        yml.write_text(
+            '- for_mod: "CuratedMod"\n  on_lists:\n    - "total-overhaul"\n',
+            encoding="utf-8",
+        )
+        out = tmp_path / "customizations.toml"
+        args = core.build_arg_parser().parse_args(
+            [
+                "--cfg",
+                str(cfg),
+                "--rules",
+                str(rules),
+                "--subset-from-cfg",
+                "--data-path-order-yml",
+                str(yml),
+                "--list-name",
+                "total-overhaul",
+                "--emit-toml",
+                str(out),
+                *extra,
+            ]
+        )
+        return core.compute_plan(args), args, out
+
+    @staticmethod
+    def _insert_values(toml: str) -> list[str]:
+        """The values on `insert = ...` lines (not `after`/`before` anchors)."""
+        out = []
+        for line in toml.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("insert = "):
+                out.append(stripped.split("=", 1)[1].strip().strip("'\""))
+        return out
+
+    def test_the_orphan_data_path_is_captured_but_the_curated_one_is_not(
+        self, tmp_path: Path
+    ) -> None:
+        plan, args, out = self._setup(tmp_path)
+        assert plan["orphan_data_paths"] == ["C:/Mods/OrphanMod"]
+
+        core.write_plan(args, plan)
+
+        toml = out.read_text(encoding="utf-8")
+        inserts = self._insert_values(toml)
+        # the orphan is inserted; the curated path is only an anchor, never inserted
+        # (the list re-adds it on rebuild -- duplicating it would be wrong)
+        assert "C:/Mods/OrphanMod" in inserts
+        assert "C:/Mods/CuratedMod" not in inserts
+        # the orphan plugin is captured too (content orphans already worked)
+        assert "Loose.esp" in inserts
+
+    def test_capture_also_works_with_sort_data_paths(self, tmp_path: Path) -> None:
+        # The sorted path routes through data_result; the orphan must still land.
+        plan, args, out = self._setup(tmp_path, "--sort-data-paths")
+
+        core.write_plan(args, plan)
+
+        inserts = self._insert_values(out.read_text(encoding="utf-8"))
+        assert "C:/Mods/OrphanMod" in inserts
+        assert "C:/Mods/CuratedMod" not in inserts

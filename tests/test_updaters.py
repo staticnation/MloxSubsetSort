@@ -17,6 +17,7 @@ import pytest
 from wraithguard.net import (
     ALLOWED_URL_SCHEMES,
     fetch_url_bytes,
+    update_data_path_order_yml,
     update_plugin_order_yml,
     update_rule_files,
 )
@@ -226,3 +227,68 @@ class TestPluginOrderUpdater:
         leaked = set(temp_dir.glob("*.yml")) - before
 
         assert not leaked, f"leaked temp files: {leaked}"
+
+
+class TestDataPathOrderUpdater:
+    def _valid_yml(self, entries: int = 60) -> bytes:
+        rows = [
+            f'- for_mod: "Mod{i}"\n  extra_dirs:\n    - "Data Files"\n'
+            f'  on_lists:\n    - "total-overhaul"\n'
+            for i in range(entries)
+        ]
+        return "".join(rows).encode()
+
+    def test_valid_download_replaces_and_backs_up(self, tmp_path, http_server):
+        base, routes = http_server
+        routes["/dpo.yml"] = self._valid_yml()
+        target = tmp_path / "data-path-order.yml"
+        target.write_bytes(b'- for_mod: "Old"\n  extra_dirs:\n    - "x"\n  on_lists:\n    - "y"\n')
+
+        report = update_data_path_order_yml(target, urls=[f"{base}/dpo.yml"])
+
+        assert target.read_bytes() == routes["/dpo.yml"]
+        assert any("updated" in line for line in report)
+        assert list(tmp_path.glob("data-path-order.yml.bak-*"))
+
+    def test_a_plugin_order_file_by_mistake_is_rejected(self, tmp_path, http_server):
+        """Handed plugin-order.yml (file_name, no extra_dirs) it must refuse."""
+        base, routes = http_server
+        routes["/wrong.yml"] = b'- for_mod: "M"\n  file_name: "P.esp"\n  on_lists:\n    - "l"\n'
+        target = tmp_path / "data-path-order.yml"
+        target.write_bytes(b"original")
+
+        report = update_data_path_order_yml(target, urls=[f"{base}/wrong.yml"])
+
+        assert target.read_bytes() == b"original"
+        assert any("doesn't look like data-path-order.yml" in line for line in report)
+
+    def test_undersized_file_is_refused(self, tmp_path, http_server):
+        base, routes = http_server
+        routes["/dpo.yml"] = self._valid_yml(entries=3)
+        target = tmp_path / "data-path-order.yml"
+        target.write_bytes(b"original")
+
+        report = update_data_path_order_yml(target, urls=[f"{base}/dpo.yml"])
+
+        assert target.read_bytes() == b"original"
+        assert any("refusing" in line for line in report)
+
+    def test_identical_content_is_a_no_op(self, tmp_path, http_server):
+        base, routes = http_server
+        routes["/dpo.yml"] = self._valid_yml()
+        target = tmp_path / "data-path-order.yml"
+        target.write_bytes(routes["/dpo.yml"])
+
+        report = update_data_path_order_yml(target, urls=[f"{base}/dpo.yml"])
+
+        assert any("already up to date" in line for line in report)
+        assert not list(tmp_path.glob("*.bak-*"))
+
+    def test_all_sources_failing_reports_failure(self, tmp_path, http_server):
+        base, _routes = http_server
+        target = tmp_path / "data-path-order.yml"
+
+        report = update_data_path_order_yml(target, urls=[f"{base}/missing.yml"])
+
+        assert report and report[0].startswith("FAILED")
+        assert not target.exists()

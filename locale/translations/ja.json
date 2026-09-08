@@ -3,6 +3,7 @@
   "\n  Already in cfg, will be repositioned within it: %(names)s": "\n  すでに cfg にあります。cfg 内で再配置されます: %(names)s",
   "\n  DRY RUN: would write %(path)s\n%(toml)s": "\n  ドライラン: %(path)s に書き込む予定\n%(toml)s",
   "\n  No [Conflict]/[Requires]/[Note] warnings triggered.": "\n  [Conflict]/[Requires]/[Note] の警告は発生しませんでした。",
+  "\n  No data-path-order.yml warnings.": "\n  data-path-order.yml の警告はありません。",
   "\n  No lint findings.": "\n  Lint の指摘はありません。",
   "\n  No lint findings. Clean bill of health.": "\n  Lint の指摘はありません。問題なしです。",
   "\n  No plugin-order.yml warnings.": "\n  plugin-order.yml の警告はありません。",
@@ -15,6 +16,9 @@
   "    - mlox wanted '%(first)s' before '%(second)s', but your load order already has '%(second)s' before '%(first)s'": "    - mlox は「%(first)s」を「%(second)s」の前に置きたがりましたが、あなたのロード順ではすでに「%(second)s」が「%(first)s」の前にあります",
   "  %(count)d mesh conflict changes what the asset does; those lines are marked below.": [
     "  メッシュ競合 %(count)d 件がアセットの動作を変えます。それらの行は下で印が付いています。"
+  ],
+  "  %(count)d orphan data= path found in openmw.cfg": [
+    "  openmw.cfg に孤立した data= パス %(count)d 件が見つかりました"
   ],
   "  %(count)d orphan plugin pulled from openmw.cfg": [
     "  openmw.cfg から孤立プラグイン %(count)d 件を取り込みました"
@@ -56,6 +60,7 @@
     "  注記: データパスの挿入が見つかりましたが、並べ替えられていません (含めるには --sort-data-paths を指定): %(count)d 件のパス"
   ],
   "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(paths)s": "  注記: データパスの挿入が見つかりましたが、並べ替えられていません (含めるには --sort-data-paths を指定): %(paths)s",
+  "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations.": "  未管理の data= パスは見つかりませんでした -- cfg 内のすべての data= パスは '%(list)s' の data= 順序またはカスタマイズにあります。",
   "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations.": "  未管理のプラグインは見つかりませんでした -- cfg 内のすべての content= プラグインはリストまたは設定にあります。",
   "  Not in cfg yet, will be inserted: %(names)s": "  まだ cfg にありません。挿入されます: %(names)s",
   "  Pass --sort-data-paths to enable:": "  有効にするには --sort-data-paths を指定:",
@@ -80,6 +85,7 @@
   "  Wrote corrected customizations: %(path)s": "  修正した customizations を書き込みました: %(path)s",
   "  cleaned: %(before)d -> %(after)d bytes (backup: %(backup)s)": "  クリーン化: %(before)d -> %(after)d バイト (バックアップ: %(backup)s)",
   "  customizations.toml written: %(answer)s": "  customizations.toml を書き込みました: %(answer)s",
+  "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too.": "  data= パスは分類されていません -- data-path-order.yml とリスト名を設定すると、未管理 (孤立) の data= パスも表示されます。",
   "  in-memory scan: %(plugins)d plugin(s), %(paths)d data path(s)": "  メモリ内スキャン: プラグイン %(plugins)d 件、データパス %(paths)d 件",
   "  no changes -- already clean": "  変更なし -- すでにクリーン",
   "  openmw.cfg left untouched (pass --write-cfg to patch it directly)": "  openmw.cfg は変更されていません (直接パッチするには --write-cfg を指定)",
@@ -207,9 +213,9 @@
   "All cells (worst first)": "すべてのセル (悪い順)",
   "All files": "すべてのファイル",
   "Already added": "すでに追加済み",
+  "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data-path-order.yml and list name are set (that yml is how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order.": "openmw.cfg に既にあり、どこにも管理されていないもの (キュレーションされたリスト plugin-order.yml にも、あなたの customizations.toml にも) も取り込み、次回の momw-configurator の再構築後も残るようにします。content= プラグインは並べ替えられます。並べ替えで再配置されるまでは、現在の cfg の順序が開始順序になります。基本マスター (Morrowind/Tribunal/Bloodmoon) は決して変更されません。単独 (サブセットファイル不要) でも、併用でも動作します。\n\ndata= パスも、data-path-order.yml とリスト名が設定されている場合に取り込まれます (その yml が、リストが管理するパスとあなたが追加したパスを区別する手段です)。未管理の data= パスはここで強調表示され、エクスポート時にキュレーションされたパスにアンカーされた insert として customizations.toml に書き込まれます -- 既に cfg の data= 順序にあるため、その場で並べ替えられることはありません。",
   "Also happens": "次でも発生",
   "Also sets": "次も設定",
-  "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml. Their current cfg order is kept as the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are left exactly as openmw.cfg has them: they are already in the cfg's own data= order, and there is no reliable way to tell a path the list manages from one you added, so pulling them would reorder the whole VFS.": "openmw.cfg に「すでに」あって、何も管理していない content= プラグイン -- キュレートリスト (plugin-order.yml) でもあなたの customizations.toml でもないもの -- も並べ替えます。それらの現在の cfg 順序は、並べ替えが移動させるまで開始点として保持されます。ベースマスター (Morrowind/Tribunal/Bloodmoon) は決して触れられません。単独 (サブセットファイル不要) でも、それと一緒でも機能します。\n\ndata= パスは openmw.cfg にあるとおりそのまま残されます: それらはすでに cfg 自身の data= 順序にあり、リスト管理のパスとあなたが追加したパスを確実に区別する方法がないため、それらを取り込むと VFS 全体が並べ替えられてしまいます。",
   "Append or replace?": "追加しますか、置き換えますか?",
   "Append rule": "ルールを追加",
   "Auto = later plugin wins for entries it changed Â· Overwrite = this plugin wins collisions Â· Ignore = keep the earlier edit Â· Resolve = blend conflicting numbers Â· Curvature = structure-weighted blend (ours).": "Auto = 変更したエントリでは後のプラグインが勝ち · Overwrite = 衝突でこのプラグインが勝ち · Ignore = 前の編集を保持 · Resolve = 競合する数値をブレンド · Curvature = 構造で重み付けしたブレンド (当ツール独自)。",
@@ -428,6 +434,7 @@
   "Log syntax highlighting: %(name)s": "ログの構文強調: %(name)s",
   "Loses": "失う",
   "MOMW needs-cleaning": "MOMW クリーニングが必要",
+  "MOMW's data-path-order.yml (the per-list order in which each mod's data directories should be added). Used to build a mod's expected data paths -- its folder is fuzzy-matched by name, then its extra_dirs appended in order. PyYAML used if installed, else a built-in parser.": "MOMW の data-path-order.yml (各 MOD のデータディレクトリを追加すべきリストごとの順序)。MOD の想定データパスの構築に使用されます -- フォルダーは名前であいまいにマッチされ、その後 extra_dirs が順に追加されます。インストールされていれば PyYAML を、なければ組み込みパーサーを使用します。",
   "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser.": "MOMW の plugin-order.yml (どのプラグインがどのキュレートリストに属するかの信頼できる情報源)。上でリスト名を指定すると、そのリストのキュレート済みプラグインは並べ替えから除外され (決して並べ替えられません)、あなた自身の追加だけが影響を受けます。また読み取り専用の警告が出されます: 冗長、孤立、needs-cleaning、ベース順序の拒否チェック。PyYAML がインストールされていれば使われ、なければ組み込みパーサーが使われます。",
   "Merge failed -- see log.": "マージに失敗しました -- ログを参照してください。",
   "Merge field...": "フィールドをマージ…",
@@ -539,7 +546,7 @@
   "Preview": "プレビュー",
   "Preview:": "プレビュー:",
   "Program documentation": "プログラムのドキュメント",
-  "Pull unmanaged (orphan) plugins from openmw.cfg": "openmw.cfg から未管理 (孤立) プラグインを取り込む",
+  "Pull unmanaged (orphan) plugins & data paths from openmw.cfg": "openmw.cfg から未管理 (孤立) のプラグインとデータパスを取り込む",
   "Quest / stage / call": "クエスト / 段階 / 呼び出し",
   "Quest state": "クエストの状態",
   "Queue just this field from a plugin you pick -- the rest of the record keeps the load-order winner. For when one mod fixed the script and another retextured the mesh.": "選択したプラグインからこのフィールドだけをキューに追加します -- レコードの残りはロード順の勝者を保持します。ある Mod がスクリプトを修正し、別の Mod がメッシュを再テクスチャした場合向けです。",

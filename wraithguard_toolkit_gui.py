@@ -256,6 +256,8 @@ from wraithguard.gui.widgets import (  # noqa: E402
     DragReorderListbox,
     PathField,
     QueueWriter,
+    RadioButton,
+    ToggleSwitch,
     add_tooltip,
     attach_typeahead,
     group_separator,
@@ -266,6 +268,7 @@ from wraithguard.net import (  # noqa: E402
     PLUGIN_ORDER_URLS,
     RULES_URL_TEMPLATE,
     rule_file_ages,
+    update_data_path_order_yml,
     update_plugin_order_yml,
     update_rule_files,
 )
@@ -862,9 +865,11 @@ class PluginOrderPanel(ReorderPanel):
 class DataPathOrderPanel(ReorderPanel):
     """Same idea as PluginOrderPanel but for data= folder paths.
 
-    Only populated when a Sort was run with 'Sort data= paths too' checked -- otherwise
-    stays empty, since there's nothing computed to show or override (see
-    App._sort_finished).
+    Populated when a Sort was run with 'Sort data= paths too' checked (the
+    computed, managed order). On an *empty* sort it instead shows the cfg's
+    existing data= lines so they can still be edited/removed, mirroring the
+    plugin panel's base-order fallback; on a normal plugin-only sort with
+    data-path sorting off it stays empty (see App._sort_finished).
     """
 
     def __init__(self, parent: tk.Misc) -> None:
@@ -919,6 +924,8 @@ def _action_button(
     tip: str,
     state: str = "normal",
     pad: tuple[int, int] = (0, 6),
+    style: str = "",
+    width: int = 0,
 ) -> ttk.Button:
     """Pack one left-aligned action button with its tooltip.
 
@@ -934,14 +941,32 @@ def _action_button(
         state: ``"normal"`` or ``"disabled"``; the scans start disabled until a
             Sort has produced a plugin list for them to read.
         pad: Horizontal padding, used to group related buttons visually.
+        style: A ttk style name (e.g. ``"Accent.TButton"`` for a primary
+            action); empty leaves the default button style.
+        width: Fixed button width in text units, or ``0`` to size to the label.
+            Used to give the leading button of each row an equal width so the
+            group divider that follows lines up between the two rows.
 
     Returns:
         The button, so the caller can keep a handle for enabling it later.
     """
     button = ttk.Button(bar, text=text, command=cmd, state=state)
+    if style:
+        button.configure(style=style)
+    if width:
+        button.configure(width=width)
     button.pack(side="left", padx=pad)
     add_tooltip(button, tip)
     return button
+
+
+# The two action rows each open with a pair of buttons, then a group divider:
+# row 1 is "1. Sort" / "2. Export", row 2 is "Merge Lands" / "Merge Settings".
+# Giving each column the same width on both rows (wide enough for the longer
+# row-2 labels) makes that first divider line up vertically between the rows.
+_LEAD_COL1_WIDTH = 12  # fits "Merge Lands"
+_LEAD_COL2_WIDTH = 15  # fits "Merge Settings"
+_LEAD_PAD = (0, 6)  # identical on all four so the divider lands at the same x
 
 
 class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixin, PluginViewMixin):
@@ -1160,6 +1185,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             "emit_toml": self.emit_toml_var.get(),
             "list_name": self.list_name_var.get(),
             "plugin_order_yml": self.plugin_order_yml_var.get(),
+            "data_path_order_yml": self.data_path_order_yml_var.get(),
             "tes3conv": self._tes3conv_override or "",
             "merged_lands_out": self._merged_lands_out or "",
             "exclude": self.exclude_var.get(),
@@ -1196,6 +1222,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             "emit_toml": self.emit_toml_var,
             "list_name": self.list_name_var,
             "plugin_order_yml": self.plugin_order_yml_var,
+            "data_path_order_yml": self.data_path_order_yml_var,
             "exclude": self.exclude_var,
             "groundcover": self.groundcover_var,
             "plugin_order_url": self.plugin_order_url_var,
@@ -1517,16 +1544,16 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         self.rules_url_var = tk.StringVar()  # blank = built-in template
 
         self._build_input_fields(top, start_row)  # rows 0-2
-        self._build_output_fields(top, start_row + 3)  # rows 3-6
+        self._build_output_fields(top, start_row + 3)  # rows 3-7
         self.rules_panel = RuleFilesPanel(
             top,
-            start_row + 7,
+            start_row + 8,
             on_new_rule=self.on_rule_maker,
             on_sources=self.on_sources,
             get_rules_url=lambda: self.rules_url_var.get().strip(),
         )
-        self._build_options_panel(top, start_row + 8)
-        self._build_action_bar(top, start_row + 9)
+        self._build_options_panel(top, start_row + 9)
+        self._build_action_bar(top, start_row + 10)
 
     def _build_dnd_note(self, top: tk.Misc) -> int:
         """Explain the missing drag-and-drop when it is not available.
@@ -1623,12 +1650,13 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
 
         Args:
             top: The container frame.
-            start_row: The first row this panel occupies. It uses four
+            start_row: The first row this panel occupies. It uses five
                 consecutive rows from there.
         """
         self.emit_toml_var = tk.StringVar()
         self.list_name_var = tk.StringVar()
         self.plugin_order_yml_var = tk.StringVar()
+        self.data_path_order_yml_var = tk.StringVar()
         self.write_toml_inplace_var = tk.BooleanVar(value=False)
 
         self.emit_toml_field = PathField(
@@ -1689,7 +1717,29 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             ),
         )
 
-        inplace_chk = ttk.Checkbutton(
+        PathField(
+            top,
+            "data-path-order.yml (optional):",
+            start_row + 3,
+            self.data_path_order_yml_var,
+            filetypes=(("YAML files", "*.yml *.yaml"), ("All files", "*.*")),
+            tooltip=_(
+                "MOMW's data-path-order.yml (the per-list order in which each mod's data "
+                "directories should be added). Used to build a mod's expected data paths -- "
+                "its folder is fuzzy-matched by name, then its extra_dirs appended in order. "
+                "PyYAML used if installed, else a built-in parser."
+            ),
+            extra_button=(
+                "Update...",
+                self.on_update_data_path_order_yml,
+                "Download the current data-path-order.yml from MOMW over this file. "
+                "The download is fully validated (must parse as data-path-order data) "
+                "before anything is written, and the old file is kept as a timestamped "
+                ".bak. Set $MLOX_DATA_PATH_ORDER_URL to use a mirror.",
+            ),
+        )
+
+        inplace_chk = ToggleSwitch(
             top,
             text=_(
                 "Write directly back to customizations.toml (overwrite in place; "
@@ -1698,7 +1748,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             variable=self.write_toml_inplace_var,
             command=self._on_toggle_inplace,
         )
-        inplace_chk.grid(row=start_row + 3, column=0, columnspan=3, sticky="w", pady=(0, 4))
+        inplace_chk.grid(row=start_row + 4, column=0, columnspan=3, sticky="w", pady=(0, 4))
         add_tooltip(
             inplace_chk,
             _(
@@ -1752,7 +1802,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         #: gets unusable quickly. Unchecking it means nothing is ever deleted.
         self.cleanup_html_var = tk.BooleanVar(value=True)
 
-        dry_chk = ttk.Checkbutton(
+        dry_chk = ToggleSwitch(
             opts, text=_("Dry run (preview only, don't write files)"), variable=self.dry_run_var
         )
         dry_chk.grid(row=0, column=0, sticky="w", padx=8, pady=4)
@@ -1764,7 +1814,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             ),
         )
 
-        write_cfg_chk = ttk.Checkbutton(
+        write_cfg_chk = ToggleSwitch(
             opts, text=_("Write openmw.cfg directly"), variable=self.write_cfg_var
         )
         write_cfg_chk.grid(row=0, column=1, sticky="w", padx=8, pady=4)
@@ -1776,7 +1826,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             ),
         )
 
-        sort_data_chk = ttk.Checkbutton(
+        sort_data_chk = ToggleSwitch(
             opts, text=_("Sort data= paths too"), variable=self.sort_data_paths_var
         )
         sort_data_chk.grid(row=0, column=2, sticky="w", padx=8, pady=4)
@@ -1791,7 +1841,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             ),
         )
 
-        no_backup_chk = ttk.Checkbutton(
+        no_backup_chk = ToggleSwitch(
             opts, text=_("Skip .bak backup of openmw.cfg"), variable=self.no_backup_var
         )
         no_backup_chk.grid(row=1, column=0, sticky="w", padx=8, pady=4)
@@ -1803,7 +1853,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             ),
         )
 
-        no_warn_chk = ttk.Checkbutton(
+        no_warn_chk = ToggleSwitch(
             opts,
             text=_("Skip mlox Conflict/Requires/Note warnings"),
             variable=self.no_predicate_warnings_var,
@@ -1818,7 +1868,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             ),
         )
 
-        create_doc_chk = ttk.Checkbutton(
+        create_doc_chk = ToggleSwitch(
             opts,
             text=_("Create subset text document (on Scan)"),
             variable=self.create_subset_doc_var,
@@ -1834,24 +1884,26 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             ),
         )
 
-        subset_from_cfg_chk = ttk.Checkbutton(
+        subset_from_cfg_chk = ToggleSwitch(
             opts,
-            text=_("Pull unmanaged (orphan) plugins from openmw.cfg"),
+            text=_("Pull unmanaged (orphan) plugins & data paths from openmw.cfg"),
             variable=self.subset_from_cfg_var,
         )
         subset_from_cfg_chk.grid(row=5, column=0, columnspan=3, sticky="w", padx=8, pady=4)
         add_tooltip(
             subset_from_cfg_chk,
             _(
-                "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages "
-                "-- neither the curated list (plugin-order.yml) nor your customizations.toml. "
-                "Their current cfg order is kept as the starting order until the sort "
-                "repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never "
-                "touched. Works on its own (no subset file needed) or alongside one.\n\n"
-                "data= paths are left exactly as openmw.cfg has them: they are already in "
-                "the cfg's own data= order, and there is no reliable way to tell a path the "
-                "list manages from one you added, so pulling them would reorder the whole "
-                "VFS."
+                "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither "
+                "the curated list (plugin-order.yml) nor your customizations.toml -- so it "
+                "survives the next momw-configurator rebuild. content= plugins are sorted in; "
+                "their current cfg order is the starting order until the sort repositions "
+                "them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works "
+                "on its own (no subset file needed) or alongside one.\n\n"
+                "data= paths are captured too when a data-path-order.yml and list name are "
+                "set (that yml is how a path the list manages is told from one you added). "
+                "Unmanaged data= paths are highlighted here and, on Export, written into the "
+                "customizations.toml as inserts anchored to the curated paths -- they are "
+                "never reordered in place, since they already sit in the cfg's data= order."
             ),
         )
 
@@ -1891,14 +1943,14 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         add_tooltip(gc_lbl, gc_tip)
         add_tooltip(gc_entry, gc_tip)
 
-        keep_json_chk = ttk.Checkbutton(
+        keep_json_chk = ToggleSwitch(
             opts,
             text=_("Keep tes3conv JSON dump"),
             variable=self.keep_json_var,
             command=self._on_keep_json_toggle,
         )
         keep_json_chk.grid(row=3, column=1, sticky="w", padx=8, pady=4)
-        cleanup_chk = ttk.Checkbutton(
+        cleanup_chk = ToggleSwitch(
             opts,
             text=_("Tidy old HTML views"),
             variable=self.cleanup_html_var,
@@ -1928,7 +1980,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
                 "too); unchecked = delete it when you close the app."
             ),
         )
-        ml_verbose_chk = ttk.Checkbutton(
+        ml_verbose_chk = ToggleSwitch(
             opts,
             text=_("Verbose Merged Lands log"),
             variable=self.merged_lands_verbose_var,
@@ -1983,7 +2035,9 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             self.on_sort,
             "Run mlox and populate the plugin/data order panels on the left. Never writes "
             "any files -- this is always safe to run.",
-            pad=(0, 12),
+            pad=_LEAD_PAD,
+            style="Accent.TButton",
+            width=_LEAD_COL1_WIDTH,
         )
         self.export_button = _action_button(
             row1,
@@ -1995,7 +2049,9 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             "already in your cfg get a removeContent/removeData. Respects 'Dry run'. "
             "Disabled until a Sort succeeds.",
             state="disabled",
-            pad=(0, 18),
+            pad=_LEAD_PAD,
+            style="Accent.TButton",
+            width=_LEAD_COL2_WIDTH,
         )
         # Run (Sort/Export) | Analyse (the read-only scans).
         group_separator(row1)
@@ -2068,6 +2124,8 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             "deleting the merged plugin restores your previous behaviour exactly. Load it "
             "LAST. Needs tes3conv.",
             state="disabled",
+            pad=_LEAD_PAD,
+            width=_LEAD_COL1_WIDTH,
         )
         self.merge_settings_button = _action_button(
             row2,
@@ -2080,6 +2138,8 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             "conflict makes it necessary. This is NOT the record patch maker in the "
             "conflict diff (which writes a patch plugin); it only writes this one settings "
             "file and never touches the plugin itself.",
+            pad=_LEAD_PAD,
+            width=_LEAD_COL2_WIDTH,
         )
         # Build (writes a plugin / settings file) | Checks (read-only) | Tools
         # (external tes3cmd, and backup management).
@@ -2522,7 +2582,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         ):
             errors.append(
                 "Provide a customizations.toml, a subset file, run Scan, or check "
-                "'Pull unmanaged (orphan) plugins from openmw.cfg'."
+                "'Pull unmanaged (orphan) plugins & data paths from openmw.cfg'."
             )
 
         write_inplace = self.write_toml_inplace_var.get()
@@ -2558,6 +2618,14 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
                 if self.plugin_order_yml_var.get().strip()
                 else None
             ),
+            data_path_order_yml=(
+                Path(self.data_path_order_yml_var.get().strip())
+                if self.data_path_order_yml_var.get().strip()
+                else None
+            ),
+            # An empty sort must not abort: the GUI wants the current load order
+            # returned so it can be edited (rows removed) and Exported.
+            allow_empty_sort=True,
             subset_lines=combined_subset_lines,
             groundcover=[
                 name.strip() for name in self.groundcover_var.get().split(",") if name.strip()
@@ -2936,14 +3004,24 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         prev_disabled_p = self.order_panel.get_disabled()
         prev_disabled_d = self.data_order_panel.get_disabled()
         final_order = (plan or {}).get("final_order") or []
+        # An empty sort (nothing in the subset) still returns the current load
+        # order so it can be edited here -- e.g. to remove entries and Export --
+        # rather than leaving a blank panel with nothing to act on.
+        panel_order = final_order or (plan or {}).get("base_order_names") or []
         self.order_panel.load(
-            final_order, (plan or {}).get("subset") or [], disabled_items=prev_disabled_p
+            panel_order, (plan or {}).get("subset") or [], disabled_items=prev_disabled_p
         )
         # plugins with a missing / mis-ordered master render bright red
         self.order_panel.set_errors((plan or {}).get("master_problem_plugins") or [])
 
         data_result = (plan or {}).get("data_result") or []
         data_lines = [line for line, _, _ in data_result]
+        # On an empty sort (no plugins to place) the run manages no data= paths
+        # either, so fall back to the cfg's existing data= lines -- exactly as the
+        # plugin panel falls back to the base order -- so they can be edited
+        # (removed) here too. Nothing is highlighted: none of them are ours.
+        if not data_lines and not final_order:
+            data_lines = list((plan or {}).get("data_order") or [])
         # Highlight every data= path that's OURS -- both genuinely new inserts
         # AND ones that are already in openmw.cfg because a prior
         # momw-configurator run baked them in (e.g. SetBonus/SkillFramework
@@ -2954,23 +3032,40 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         user_norms = {
             normalize_data_path(d["value"]) for d in ((plan or {}).get("data_inserts") or [])
         }
+        # Orphan data= paths pulled from the cfg (Pull unmanaged (orphan)...) are
+        # ours to manage too, so highlight them alongside the declared inserts.
+        # They live in data_order, not data_result (never re-inserted), so the
+        # highlight is computed over data_lines below rather than data_result.
+        user_norms |= {
+            normalize_data_path(v) for v in ((plan or {}).get("orphan_data_paths") or [])
+        }
         user_norms.discard("")
+        new_norms = {
+            normalize_data_path(extract_data_path_value(line) or "")
+            for line, is_new, _ in data_result
+            if is_new
+        }
+        new_norms.discard("")
 
-        def _is_ours(line: str, is_new: bool) -> bool:
-            if is_new:
-                return True
+        def _is_ours(line: str) -> bool:
             p = normalize_data_path(extract_data_path_value(line) or "")
-            return bool(p) and p in user_norms
+            return bool(p) and (p in new_norms or p in user_norms)
 
-        highlight_lines = [line for line, is_new, _ in data_result if _is_ours(line, is_new)]
+        highlight_lines = [line for line in data_lines if _is_ours(line)]
         self.data_order_panel.load(data_lines, highlight_lines, disabled_items=prev_disabled_d)
 
-        self.export_button.configure(state="normal" if (final_order or data_lines) else "disabled")
-        self.conflicts_button.configure(state="normal" if final_order else "disabled")
-        self.cellmap_button.configure(state="normal" if final_order else "disabled")
-        self.mergedlands_button.configure(state="normal" if final_order else "disabled")
-        self.resource_button.configure(state="normal" if final_order else "disabled")
-        self.lint_button.configure(state="normal" if final_order else "disabled")
+        # If there's a load order or data= paths loaded (from a real sort OR an
+        # empty sort's fallback), every analysis action should be available --
+        # they all run over whatever the panels currently hold, so a fresh sort
+        # is not a precondition. This also matches _export_finished, which
+        # re-enables them whenever a plan exists.
+        have_data = bool(panel_order or data_lines)
+        self.export_button.configure(state="normal" if have_data else "disabled")
+        self.conflicts_button.configure(state="normal" if have_data else "disabled")
+        self.cellmap_button.configure(state="normal" if have_data else "disabled")
+        self.mergedlands_button.configure(state="normal" if have_data else "disabled")
+        self.resource_button.configure(state="normal" if have_data else "disabled")
+        self.lint_button.configure(state="normal" if have_data else "disabled")
 
     def on_export(self) -> None:
         """Run step 2: write the plan out, in a worker."""
@@ -4349,7 +4444,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             frame.columnconfigure(i, weight=1)
         self._rm_kind = tk.StringVar(value="Order")
         for i, (kind, blurb) in enumerate(RULE_KIND_HELP.items()):
-            ttk.Radiobutton(
+            RadioButton(
                 frame,
                 text=f"[{kind}]",
                 value=kind,
@@ -4492,7 +4587,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         ttk.Label(priority_row, text=_("highlight:")).pack(side="left")
         self._rm_priority = tk.IntVar(value=0)
         for level, meaning in authoring.PRIORITY_MEANING.items():
-            ttk.Radiobutton(
+            RadioButton(
                 priority_row,
                 text=(authoring.PRIORITY_MARKS[level] or _("none")),
                 value=level,
@@ -4875,6 +4970,15 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             self.plugin_order_yml_var,
             self.plugin_order_url_var,
             update_plugin_order_yml,
+        )
+
+    def on_update_data_path_order_yml(self) -> None:
+        """Download a fresh data-path-order.yml, with confirmation."""
+        self._update_order_yml_dialog(
+            "data-path-order.yml",
+            self.data_path_order_yml_var,
+            None,
+            update_data_path_order_yml,
         )
 
     # -- savegame dependency check -------------------------------------------

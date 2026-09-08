@@ -1,6 +1,74 @@
 # Changelog
 
 
+## 4.0.0
+
+Two themes carry this release: making a *customized* openmw.cfg durable across a
+momw-configurator rebuild, and modernizing the interface without pulling in a
+widget library. The first is why the major bump -- the tool now understands
+MOMW's `data-path-order.yml`, and can capture the loose `data=` folders a rebuild
+would otherwise discard into the customizations file that survives it.
+
+### Added
+
+- **`data-path-order.yml` support (`wraithguard.momw_datapaths`).** Parses
+  MOMW's per-list data-directory order (PyYAML when present, a dependency-free
+  line parser otherwise), and matches each entry's mod to a folder already in
+  `openmw.cfg` by a *compact* key -- lower-cased and stripped of spaces and
+  punctuation -- so a umo-unpacked directory (`TAOTheArktwendOverhaul`) lines up
+  with its `"TAO - The Arktwend Overhaul"` entry. From that it builds a mod's
+  intended data paths and reconciles the curated order against the cfg. The GUI
+  gains a `data-path-order.yml` field with its own `Update...` download button,
+  below the `plugin-order.yml` one.
+
+- **Orphan `data=` capture into `customizations.toml`.** `--subset-from-cfg`
+  (the "Pull unmanaged (orphan)..." option) now captures unmanaged `data=`
+  paths, not just `content=` plugins. A path the curated list does not manage,
+  you did not declare, and that is not the base game is written into the emitted
+  customizations as an insert anchored to the curated paths around it -- so the
+  next momw-configurator rebuild re-creates it instead of dropping it. It is
+  never reordered in place (it already sits in the cfg's `data=` order), and the
+  classification is gated on a `data-path-order.yml` + list name, since that yml
+  is the only reliable signal of which folders the list owns. The data panel
+  highlights the orphans it found.
+
+- **An editable empty sort.** Running Sort with nothing in the subset used to
+  leave the panels blank; it now hands back the cfg's current `content=` and
+  `data=` order so you can prune entries and Export the result. All analysis
+  actions enable whenever there is loaded data, not only after a full sort.
+
+- **Pill switches and ring radios, drawn ourselves.** A canvas `ToggleSwitch`
+  and `RadioButton` (no third-party library) bring the modern look under our own
+  code and palette: an accent pill with a sliding knob for the Options-panel
+  toggles, and an accent outline ring with a centre dot for the radio groups
+  (tes3cmd command, conflict-winner picker, rule maker). Both re-theme live on a
+  theme switch.
+
+### Changed
+
+- **A modernized, flatter interface.** Borderless flat buttons; primary
+  (Sort/Export) buttons are solid accent chips; entry and combobox fields take
+  an accent outline while focused; scrollbars lose their arrow buttons for a
+  clean thumb-only bar; checkboxes and radios get roomier hit targets. The two
+  action rows now share leading-button widths so their group dividers line up.
+
+- **Quieter `data-path-order.yml` reconciliation.** The per-mod "on the list but
+  no matching `data=` path" lines -- normal noise, since a curated list selects
+  mods you may not have installed and the yml lags upstream removals -- collapse
+  to a single count line; `-v` restores the full per-mod list.
+
+- **Localization.** The new interface and warning strings are translated across
+  all eleven languages, and the catalogues rebuilt.
+
+### Fixed
+
+- **Accent-button text no longer washes out.** The label colour is chosen by a
+  proper gamma-corrected relative-luminance contrast test (black vs white
+  against the fill) rather than a naive weighted average, so it reads as
+  dark-on-colour on the default blue and every lighter theme accent alike, and
+  only flips to white on a genuinely dark accent.
+
+
 ## 3.1.8
 
 Editing meshes, not just reading them. The NIF writer added in 3.1.7 had no

@@ -3,6 +3,7 @@
   "\n  Already in cfg, will be repositioned within it: %(names)s": "\n  이미 cfg에 있음, cfg 내에서 재배치됩니다: %(names)s",
   "\n  DRY RUN: would write %(path)s\n%(toml)s": "\n  드라이런: %(path)s에 쓸 예정\n%(toml)s",
   "\n  No [Conflict]/[Requires]/[Note] warnings triggered.": "\n  [Conflict]/[Requires]/[Note] 경고가 발생하지 않았습니다.",
+  "\n  No data-path-order.yml warnings.": "\n  data-path-order.yml 경고가 없습니다.",
   "\n  No lint findings.": "\n  Lint 지적 사항 없음.",
   "\n  No lint findings. Clean bill of health.": "\n  Lint 지적 사항 없음. 문제 없습니다.",
   "\n  No plugin-order.yml warnings.": "\n  plugin-order.yml 경고 없음.",
@@ -15,6 +16,9 @@
   "    - mlox wanted '%(first)s' before '%(second)s', but your load order already has '%(second)s' before '%(first)s'": "    - mlox는 「%(first)s」을(를) 「%(second)s」보다 앞에 두려 했지만, 당신의 로드 순서에서는 이미 「%(second)s」이(가) 「%(first)s」보다 앞에 있습니다",
   "  %(count)d mesh conflict changes what the asset does; those lines are marked below.": [
     "  메시 충돌 %(count)d개가 애셋의 동작을 바꿉니다. 그 줄들은 아래에 표시되어 있습니다."
+  ],
+  "  %(count)d orphan data= path found in openmw.cfg": [
+    "  openmw.cfg에서 고아 data= 경로 %(count)d개를 찾았습니다"
   ],
   "  %(count)d orphan plugin pulled from openmw.cfg": [
     "  openmw.cfg에서 고아 플러그인 %(count)d개를 가져왔습니다"
@@ -56,6 +60,7 @@
     "  참고: 데이터 경로 삽입을 찾았지만 정렬되지 않았습니다 (포함하려면 --sort-data-paths 전달): 경로 %(count)d개"
   ],
   "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(paths)s": "  참고: 데이터 경로 삽입을 찾았지만 정렬되지 않았습니다 (포함하려면 --sort-data-paths 전달): %(paths)s",
+  "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations.": "  미관리 data= 경로를 찾지 못했습니다 -- cfg의 모든 data= 경로가 '%(list)s'의 data= 순서 또는 사용자 지정에 있습니다.",
   "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations.": "  미관리 플러그인을 찾을 수 없습니다 -- cfg의 모든 content= 플러그인이 목록 또는 설정에 있습니다.",
   "  Not in cfg yet, will be inserted: %(names)s": "  아직 cfg에 없음, 삽입됩니다: %(names)s",
   "  Pass --sort-data-paths to enable:": "  활성화하려면 --sort-data-paths를 전달:",
@@ -80,6 +85,7 @@
   "  Wrote corrected customizations: %(path)s": "  수정된 customizations를 작성했습니다: %(path)s",
   "  cleaned: %(before)d -> %(after)d bytes (backup: %(backup)s)": "  정리됨: %(before)d -> %(after)d 바이트 (백업: %(backup)s)",
   "  customizations.toml written: %(answer)s": "  customizations.toml 작성됨: %(answer)s",
+  "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too.": "  data= 경로가 분류되지 않았습니다 -- data-path-order.yml과 목록 이름을 설정하면 미관리 (고아) data= 경로도 표시됩니다.",
   "  in-memory scan: %(plugins)d plugin(s), %(paths)d data path(s)": "  메모리 내 스캔: 플러그인 %(plugins)d개, 데이터 경로 %(paths)d개",
   "  no changes -- already clean": "  변경 없음 -- 이미 깨끗함",
   "  openmw.cfg left untouched (pass --write-cfg to patch it directly)": "  openmw.cfg는 변경되지 않았습니다 (직접 패치하려면 --write-cfg 전달)",
@@ -207,9 +213,9 @@
   "All cells (worst first)": "모든 셀 (나쁜 순)",
   "All files": "모든 파일",
   "Already added": "이미 추가됨",
+  "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data-path-order.yml and list name are set (that yml is how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order.": "openmw.cfg에 이미 있으면서 아무것도 관리하지 않는 것 (큐레이트된 목록 plugin-order.yml도, 사용자 customizations.toml도 아님)도 함께 담아 다음 momw-configurator 재빌드에도 남도록 합니다. content= 플러그인은 정렬되어 들어갑니다. 정렬이 재배치하기 전까지는 현재 cfg 순서가 시작 순서입니다. 기본 마스터 (Morrowind/Tribunal/Bloodmoon)는 절대 건드리지 않습니다. 단독으로 (하위 집합 파일 없이) 또는 함께 작동합니다.\n\ndata= 경로도 data-path-order.yml과 목록 이름이 설정되면 함께 담깁니다 (그 yml이 목록이 관리하는 경로와 사용자가 추가한 경로를 구분하는 방법입니다). 미관리 data= 경로는 여기에서 강조 표시되고, 내보낼 때 큐레이트된 경로에 고정된 insert로 customizations.toml에 기록됩니다 -- 이미 cfg의 data= 순서에 있으므로 제자리에서 재정렬되지 않습니다.",
   "Also happens": "다음에서도 발생",
   "Also sets": "다음도 설정",
-  "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml. Their current cfg order is kept as the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are left exactly as openmw.cfg has them: they are already in the cfg's own data= order, and there is no reliable way to tell a path the list manages from one you added, so pulling them would reorder the whole VFS.": "openmw.cfg에 「이미」 있고 아무것도 관리하지 않는 content= 플러그인 -- 큐레이트 목록 (plugin-order.yml)도 당신의 customizations.toml도 아닌 것 -- 도 정렬합니다. 그것들의 현재 cfg 순서는 정렬이 옮길 때까지 시작점으로 유지됩니다. 베이스 마스터 (Morrowind/Tribunal/Bloodmoon) 는 결코 건드리지 않습니다. 단독 (서브셋 파일 불필요) 으로도, 그것과 함께도 작동합니다.\n\ndata= 경로는 openmw.cfg에 있는 그대로 남겨집니다: 그것들은 이미 cfg 자체의 data= 순서에 있고, 목록 관리 경로와 당신이 추가한 경로를 확실히 구별할 방법이 없으므로, 그것들을 가져오면 전체 VFS가 재정렬됩니다.",
   "Append or replace?": "추가하시겠습니까, 대체하시겠습니까?",
   "Append rule": "규칙 추가",
   "Auto = later plugin wins for entries it changed Â· Overwrite = this plugin wins collisions Â· Ignore = keep the earlier edit Â· Resolve = blend conflicting numbers Â· Curvature = structure-weighted blend (ours).": "Auto = 변경한 항목에서 나중 플러그인이 승리 · Overwrite = 충돌에서 이 플러그인이 승리 · Ignore = 이전 편집 유지 · Resolve = 충돌하는 숫자를 블렌딩 · Curvature = 구조 가중 블렌딩 (당사 방식).",
@@ -428,6 +434,7 @@
   "Log syntax highlighting: %(name)s": "로그 구문 강조: %(name)s",
   "Loses": "손실",
   "MOMW needs-cleaning": "MOMW 정리 필요",
+  "MOMW's data-path-order.yml (the per-list order in which each mod's data directories should be added). Used to build a mod's expected data paths -- its folder is fuzzy-matched by name, then its extra_dirs appended in order. PyYAML used if installed, else a built-in parser.": "MOMW의 data-path-order.yml (각 모드의 데이터 디렉터리를 추가해야 하는 목록별 순서). 모드의 예상 데이터 경로를 구성하는 데 사용됩니다 -- 폴더는 이름으로 유사 일치되고, 그다음 extra_dirs가 순서대로 추가됩니다. 설치되어 있으면 PyYAML을, 없으면 내장 파서를 사용합니다.",
   "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser.": "MOMW의 plugin-order.yml (어느 플러그인이 어느 큐레이트 목록에 속하는지에 대한 신뢰할 수 있는 출처). 위에서 목록 이름을 지정하면 그 목록의 큐레이트된 플러그인은 정렬에서 제외되어 (결코 재정렬되지 않음) 당신 자신의 추가만 영향을 받고, 읽기 전용 경고가 발행됩니다: 중복, 고아, needs-cleaning, 베이스 순서 거부 검사. PyYAML이 설치되어 있으면 사용되고, 없으면 내장 파서가 사용됩니다.",
   "Merge failed -- see log.": "병합에 실패했습니다 -- 로그를 참조하세요.",
   "Merge field...": "필드 병합…",
@@ -539,7 +546,7 @@
   "Preview": "미리 보기",
   "Preview:": "미리 보기:",
   "Program documentation": "프로그램 문서",
-  "Pull unmanaged (orphan) plugins from openmw.cfg": "openmw.cfg에서 미관리 (고아) 플러그인 가져오기",
+  "Pull unmanaged (orphan) plugins & data paths from openmw.cfg": "openmw.cfg에서 미관리 (고아) 플러그인 및 데이터 경로 가져오기",
   "Quest / stage / call": "퀘스트 / 단계 / 호출",
   "Quest state": "퀘스트 상태",
   "Queue just this field from a plugin you pick -- the rest of the record keeps the load-order winner. For when one mod fixed the script and another retextured the mesh.": "선택한 플러그인에서 이 필드만 대기열에 추가합니다 -- 레코드의 나머지는 로드 순서의 승자를 유지합니다. 한 모드가 스크립트를 고치고 다른 모드가 메시를 재텍스처한 경우를 위한 것입니다.",

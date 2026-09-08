@@ -1506,6 +1506,9 @@ msgid "  Excluded %(count)d curated plugin from the sort: %(names)s"
 msgid_plural "  Excluded %(count)d curated plugins from the sort: %(names)s"
 msgstr[0] "  已从排序中排除精选插件 %(count)d 个: %(names)s"
 
+msgid "  No plugins to sort. The current openmw.cfg load order is shown above for editing -- remove entries and Export, or add plugins and Sort again."
+msgstr ""
+
 msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
 msgstr "\n  已在 cfg 中, 将在其中重新定位: %(names)s"
 
@@ -1520,6 +1523,9 @@ msgstr "\n  未触发 [Conflict]/[Requires]/[Note] 警告。"
 
 msgid "\n  No plugin-order.yml warnings."
 msgstr "\n  无 plugin-order.yml 警告。"
+
+msgid "\n  No data-path-order.yml warnings."
+msgstr "\n  没有 data-path-order.yml 警告。"
 
 msgid "  (plugin files not reachable from the data folders; can't read headers)"
 msgstr "  (插件文件无法从数据文件夹访问; 无法读取头部)"
@@ -1574,9 +1580,6 @@ msgstr "\n  已写入资源报告: %(path)s"
 msgid "could not write resource CSV: %(error)s"
 msgstr "无法写入资源 CSV: %(error)s"
 
-msgid "  Pass --sort-data-paths to enable:"
-msgstr "  传入 --sort-data-paths 以启用:"
-
 msgid "  <-- inserted"
 msgstr "  <-- 已插入"
 
@@ -1589,6 +1592,16 @@ msgstr[0] "  已从 openmw.cfg 拉取孤立插件 %(count)d 个"
 
 msgid "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations."
 msgstr "  未找到未管理的插件 -- cfg 中的每个 content= 插件都在列表或你的设置中。"
+
+msgid "  %(count)d orphan data= path found in openmw.cfg"
+msgid_plural "  %(count)d orphan data= paths found in openmw.cfg"
+msgstr[0] "  在 openmw.cfg 中找到 %(count)d 个孤立的 data= 路径"
+
+msgid "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations."
+msgstr "  未找到未管理的 data= 路径 -- cfg 中的每个 data= 路径都在 '%(list)s' 的 data= 顺序中或在你的自定义中。"
+
+msgid "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too."
+msgstr "  data= 路径未分类 -- 设置 data-path-order.yml 和列表名称，即可同时显示未管理 (孤立) 的 data= 路径。"
 
 msgid "groundcover declared by this run"
 msgstr "本次运行声明的 groundcover"
@@ -1747,6 +1760,9 @@ msgstr "列表名称 (可选):"
 msgid "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser."
 msgstr "MOMW 的 plugin-order.yml (关于哪些插件属于哪个精选列表的可信来源)。在上方指定列表名称后, 该列表的精选插件会被排除在排序之外 (永不重排), 以便只影响你自己的添加, 并发出只读警告: 冗余、孤立、needs-cleaning 以及基础顺序拒绝检查。若安装了 PyYAML 则使用它, 否则使用内置解析器。"
 
+msgid "MOMW's data-path-order.yml (the per-list order in which each mod's data directories should be added). Used to build a mod's expected data paths -- its folder is fuzzy-matched by name, then its extra_dirs appended in order. PyYAML used if installed, else a built-in parser."
+msgstr "MOMW 的 data-path-order.yml (每个列表中应添加各模组数据目录的顺序)。用于构建模组的预期数据路径 -- 先按名称对其文件夹进行模糊匹配，然后按顺序追加其 extra_dirs。如已安装则使用 PyYAML，否则使用内置解析器。"
+
 msgid "Write directly back to customizations.toml (overwrite in place; a .bak-<timestamp> copy is made first unless backups are disabled below)"
 msgstr "直接写回 customizations.toml (就地覆盖; 除非下方备份被禁用, 否则会先创建 .bak-<时间戳> 副本)"
 
@@ -1792,11 +1808,11 @@ msgstr "创建子集文本文档 (扫描时)"
 msgid "Controls what 'Scan...' does with its result. Checked: write the scanned list to a .txt subset file you choose, and load it (the file stays on disk for reuse). Unchecked: keep the scanned list in memory just for this session and feed it straight to the sort -- nothing is written to disk."
 msgstr "控制「扫描…」如何处理其结果。勾选: 将扫描出的列表写入你选择的子集 .txt 文件并加载它 (文件保留在磁盘上以便重用)。不勾选: 仅在本会话将扫描出的列表保留在内存中并直接传给排序 -- 不向磁盘写入任何内容。"
 
-msgid "Pull unmanaged (orphan) plugins from openmw.cfg"
-msgstr "从 openmw.cfg 拉取未管理 (孤立) 插件"
+msgid "Pull unmanaged (orphan) plugins & data paths from openmw.cfg"
+msgstr "从 openmw.cfg 拉取未管理 (孤立) 插件和数据路径"
 
-msgid "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml. Their current cfg order is kept as the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are left exactly as openmw.cfg has them: they are already in the cfg's own data= order, and there is no reliable way to tell a path the list manages from one you added, so pulling them would reorder the whole VFS."
-msgstr "还排序 openmw.cfg 中「已」存在且无任何东西管理的 content= 插件 -- 既不属于精选列表 (plugin-order.yml) 也不属于你的 customizations.toml。它们当前的 cfg 顺序被保留为起点, 直到排序将其移动。基础主文件 (Morrowind/Tribunal/Bloodmoon) 永远不会被触及。可单独 (无需子集文件) 或与之一起工作。\n\ndata= 路径保持它们在 openmw.cfg 中的原样: 它们已在 cfg 自己的 data= 顺序中, 且没有可靠方法区分列表管理的路径和你添加的路径, 因此拉取它们会重排整个 VFS。"
+msgid "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data-path-order.yml and list name are set (that yml is how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order."
+msgstr "同时收录 openmw.cfg 中已存在但无人管理的内容 -- 既不在精选列表 (plugin-order.yml) 中，也不在你的 customizations.toml 中 -- 使其在下次 momw-configurator 重建后依然保留。content= 插件会被排序纳入；在排序重新定位它们之前，其当前的 cfg 顺序即为起始顺序。基础主文件 (Morrowind/Tribunal/Bloodmoon) 绝不会被改动。可单独使用 (无需子集文件)，也可与其配合使用。\n\n当设置了 data-path-order.yml 和列表名称时，data= 路径也会被收录 (该 yml 用于区分由列表管理的路径与你自己添加的路径)。未管理的 data= 路径会在此处高亮显示，并在导出时作为锚定到精选路径的 insert 写入 customizations.toml -- 它们绝不会被原地重新排序，因为它们已经处于 cfg 的 data= 顺序中。"
 
 msgid "Exclude from conflict / cell scans:"
 msgstr "从冲突 / 单元格扫描中排除:"

@@ -475,3 +475,35 @@ class TestCellMapScan:
         )
 
         core.compute_plan(args)  # must not raise
+
+
+class TestAllowEmptySort:
+    """An empty sort returns the current order for editing (the GUI opt-out).
+
+    Clicking Sort with nothing to sort used to abort with "nothing to do", so the
+    order panel had nothing to load. With allow_empty_sort the run proceeds and
+    hands back the cfg's own order (final_order stays None), which the GUI loads
+    so the user can prune it and Export.
+    """
+
+    def test_empty_subset_with_the_flag_returns_the_base_order(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        data = tmp_path / "Data Files"
+        data.mkdir()
+        cfg, rules = _cfg_and_rules(tmp_path, data, ["Morrowind.esm", "Tribunal.esm", "MyMod.esp"])
+        args = _args(cfg, rules)
+        args.allow_empty_sort = True
+
+        plan = core.compute_plan(args)  # must not raise
+
+        assert plan["final_order"] is None
+        assert plan["base_order_names"] == ["Morrowind.esm", "Tribunal.esm", "MyMod.esp"]
+        assert "NOTHING TO SORT" in capsys.readouterr().out
+
+    def test_without_the_flag_an_empty_run_is_still_refused(self, tmp_path: Path) -> None:
+        data = tmp_path / "Data Files"
+        data.mkdir()
+        cfg, rules = _cfg_and_rules(tmp_path, data, ["Morrowind.esm"])
+        with pytest.raises(SystemExit, match="something to sort"):
+            core.compute_plan(_args(cfg, rules))

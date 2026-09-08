@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import wraithguard_toolkit as core
 from wraithguard.gui import app_base_dir, case_insensitive_filetypes, trace_first_fire
 from wraithguard.gui.theme import DARK, apply_titlebar_theme, style_plain_widget
-from wraithguard.gui.widgets import QueueWriter, add_tooltip, attach_typeahead
+from wraithguard.gui.widgets import QueueWriter, RadioButton, add_tooltip, attach_typeahead
 from wraithguard.i18n import gettext as _, ngettext
 from wraithguard.momw import needs_cleaning_set, parse_plugin_order_yml
 from wraithguard.plugins import PluginFileIndex
@@ -187,7 +187,7 @@ class Tes3cmdMixin:
         cf.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(0, 6))
         self._t3_cmd_var = tk.StringVar(value="sync")
         for i, (val, label) in enumerate(self.T3_COMMANDS):
-            ttk.Radiobutton(cf, text=label, value=val, variable=self._t3_cmd_var).grid(
+            RadioButton(cf, text=label, value=val, variable=self._t3_cmd_var).grid(
                 row=i, column=0, sticky="w", padx=8, pady=1
             )
         xf = ttk.Frame(cf)

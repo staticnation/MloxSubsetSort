@@ -121,10 +121,18 @@ class TestOrphanCfgEntries:
 class TestPullCfgOrphans:
     @staticmethod
     def _run(
-        *, subset_from_cfg: bool = True, sort_data_paths: bool = False, groundcover=frozenset()
+        *,
+        subset_from_cfg: bool = True,
+        sort_data_paths: bool = False,
+        groundcover=frozenset(),
+        data_path_order_yml=None,
+        list_name=None,
     ):
         args = types.SimpleNamespace(
-            subset_from_cfg=subset_from_cfg, sort_data_paths=sort_data_paths
+            subset_from_cfg=subset_from_cfg,
+            sort_data_paths=sort_data_paths,
+            data_path_order_yml=data_path_order_yml,
+            list_name=list_name,
         )
         subset: list[str] = []
         data_inserts: list[dict] = []
@@ -137,7 +145,7 @@ class TestPullCfgOrphans:
             "data=C:/Mods/Declared",
             "data=C:/Mods/Loose",
         ]
-        subset = core._pull_cfg_orphans(
+        subset, orphan_data = core._pull_cfg_orphans(
             args,
             subset,
             data_inserts,
@@ -153,6 +161,7 @@ class TestPullCfgOrphans:
         )
         return {
             "subset": subset,
+            "orphan_data": orphan_data,
             "data_inserts": data_inserts,
             "raw_toml_data_inserts": raw_toml_data_inserts,
             "original_content_values": original_content_values,
@@ -165,18 +174,40 @@ class TestPullCfgOrphans:
         assert out["subset_origins"]["loose1.esp"] == "openmw.cfg (orphan)"
         assert out["original_content_values"]["Loose1.esp"] == "Loose1.esp"
 
-    def test_orphan_data_is_never_pulled_even_with_sort_data_paths(self) -> None:
-        # A data= path already sits in the cfg's own data= order; pulling it back
-        # as an insert repositioned the whole VFS and marked every path touched.
-        # So orphan data is left alone -- neither recorded nor positioned --
-        # whether or not --sort-data-paths is set.
-        without = self._run(sort_data_paths=False)
-        assert without["data_inserts"] == []
-        assert without["raw_toml_data_inserts"] == [{"value": "C:/Mods/Declared"}]
+    def test_orphan_data_is_not_classified_without_a_yml(self) -> None:
+        # Without a data-path-order.yml + list name there's no signal for which
+        # data= paths a list manages, so none are surfaced (and none are ever
+        # re-inserted -- they already sit in the cfg's data= order).
+        for flag in (False, True):
+            out = self._run(sort_data_paths=flag)
+            assert out["orphan_data"] == []
+            assert out["data_inserts"] == []
+            assert out["raw_toml_data_inserts"] == [{"value": "C:/Mods/Declared"}]
 
-        with_flag = self._run(sort_data_paths=True)
-        assert with_flag["data_inserts"] == []
-        assert with_flag["raw_toml_data_inserts"] == [{"value": "C:/Mods/Declared"}]
+    def test_orphan_data_is_surfaced_with_a_yml(self, tmp_path: Path) -> None:
+        # The yml manages "Loose" (C:/Mods/Loose); "Declared" is a customization.
+        # Neither is an orphan, so nothing is surfaced.
+        yml = tmp_path / "data-path-order.yml"
+        yml.write_text(
+            '- for_mod: "Loose"\n  on_lists:\n    - "total-overhaul"\n',
+            encoding="utf-8",
+        )
+        out = self._run(data_path_order_yml=yml, list_name="total-overhaul")
+        assert out["orphan_data"] == []
+        # data= paths are surfaced, never re-inserted.
+        assert out["data_inserts"] == []
+
+    def test_an_unmanaged_data_path_is_an_orphan(self, tmp_path: Path) -> None:
+        # The yml manages nothing that matches the cfg, so the loose (undeclared,
+        # non-base) data= path is surfaced as an orphan.
+        yml = tmp_path / "data-path-order.yml"
+        yml.write_text(
+            '- for_mod: "Something Else Entirely"\n  on_lists:\n    - "total-overhaul"\n',
+            encoding="utf-8",
+        )
+        out = self._run(data_path_order_yml=yml, list_name="total-overhaul")
+        # "Declared" is a customization; "Loose" is the sole unmanaged orphan.
+        assert out["orphan_data"] == ["C:/Mods/Loose"]
 
     def test_a_groundcover_plugin_is_never_pulled_into_content(self) -> None:
         out = self._run(groundcover=frozenset({"loose2.esp"}))
@@ -185,6 +216,7 @@ class TestPullCfgOrphans:
     def test_the_flag_off_is_a_no_op(self) -> None:
         out = self._run(subset_from_cfg=False)
         assert out["subset"] == []
+        assert out["orphan_data"] == []
         assert out["data_inserts"] == []
         assert out["raw_toml_data_inserts"] == [{"value": "C:/Mods/Declared"}]
 
@@ -192,7 +224,12 @@ class TestPullCfgOrphans:
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Every content= plugin is already curated or declared -- nothing left to pull."""
-        args = types.SimpleNamespace(subset_from_cfg=True, sort_data_paths=False)
+        args = types.SimpleNamespace(
+            subset_from_cfg=True,
+            sort_data_paths=False,
+            data_path_order_yml=None,
+            list_name=None,
+        )
         core._pull_cfg_orphans(
             args,
             [],

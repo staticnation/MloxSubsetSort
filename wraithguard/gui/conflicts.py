@@ -38,6 +38,7 @@ from wraithguard.gui.theme import (
 )
 from wraithguard.gui.widgets import (
     QueueWriter,
+    RadioButton,
     add_tooltip,
     group_separator,
     make_scrollable_x,
@@ -2483,7 +2484,7 @@ class ConflictWindowsMixin:
         picked = tk.StringVar(value=plugins[-1])
         for name in plugins:
             label = f"{name}  ({_('currently wins')})" if name == plugins[-1] else name
-            ttk.Radiobutton(frame, text=label, value=name, variable=picked).pack(anchor="w")
+            RadioButton(frame, text=label, value=name, variable=picked).pack(anchor="w")
 
         answer: dict[str, str | None] = {"value": None}
 

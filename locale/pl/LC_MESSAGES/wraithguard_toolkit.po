@@ -1544,6 +1544,9 @@ msgstr[0] "  Wykluczono %(count)d wyselekcjonowaną wtyczkę z sortowania: %(nam
 msgstr[1] "  Wykluczono %(count)d wyselekcjonowane wtyczki z sortowania: %(names)s"
 msgstr[2] "  Wykluczono %(count)d wyselekcjonowanych wtyczek z sortowania: %(names)s"
 
+msgid "  No plugins to sort. The current openmw.cfg load order is shown above for editing -- remove entries and Export, or add plugins and Sort again."
+msgstr ""
+
 msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
 msgstr "\n  Już w cfg, zostanie w nim przesunięte: %(names)s"
 
@@ -1558,6 +1561,9 @@ msgstr "\n  Nie wywołano ostrzeżeń [Conflict]/[Requires]/[Note]."
 
 msgid "\n  No plugin-order.yml warnings."
 msgstr "\n  Brak ostrzeżeń plugin-order.yml."
+
+msgid "\n  No data-path-order.yml warnings."
+msgstr "\n  Brak ostrzeżeń data-path-order.yml."
 
 msgid "  (plugin files not reachable from the data folders; can't read headers)"
 msgstr "  (pliki wtyczek nieosiągalne z folderów danych; nie można odczytać nagłówków)"
@@ -1616,9 +1622,6 @@ msgstr "\n  Zapisano raport zasobów: %(path)s"
 msgid "could not write resource CSV: %(error)s"
 msgstr "nie można zapisać CSV zasobów: %(error)s"
 
-msgid "  Pass --sort-data-paths to enable:"
-msgstr "  Przekaż --sort-data-paths, aby włączyć:"
-
 msgid "  <-- inserted"
 msgstr "  <-- wstawiono"
 
@@ -1633,6 +1636,18 @@ msgstr[2] "  Pobrano %(count)d osieroconych wtyczek z openmw.cfg"
 
 msgid "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations."
 msgstr "  Nie znaleziono niezarządzanych wtyczek -- każda wtyczka content= w cfg jest na liście lub w twoich ustawieniach."
+
+msgid "  %(count)d orphan data= path found in openmw.cfg"
+msgid_plural "  %(count)d orphan data= paths found in openmw.cfg"
+msgstr[0] "  Znaleziono %(count)d osieroconą ścieżkę data= w openmw.cfg"
+msgstr[1] "  Znaleziono %(count)d osierocone ścieżki data= w openmw.cfg"
+msgstr[2] "  Znaleziono %(count)d osieroconych ścieżek data= w openmw.cfg"
+
+msgid "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations."
+msgstr "  Nie znaleziono niezarządzanych ścieżek data= -- każda ścieżka data= w cfg jest w kolejności data= listy '%(list)s' albo w Twoich dostosowaniach."
+
+msgid "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too."
+msgstr "  ścieżki data= niesklasyfikowane -- ustaw data-path-order.yml i nazwę listy, aby pokazać także niezarządzane (osierocone) ścieżki data=."
 
 msgid "groundcover declared by this run"
 msgstr "groundcover zadeklarowany przez ten przebieg"
@@ -1793,6 +1808,9 @@ msgstr "nazwa listy (opcjonalnie):"
 msgid "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser."
 msgstr "plugin-order.yml od MOMW (źródło prawdy o tym, które wtyczki należą do której listy wyselekcjonowanej). Z podaną nazwą listy powyżej wyselekcjonowane wtyczki tej listy są wykluczane z sortowania (nigdy nie zmieniają kolejności), aby dotykać tylko twoich własnych dodatków, i wydawane są ostrzeżenia tylko do odczytu: zbędny, osierocony, needs-cleaning i sprawdzenie odrzucenia kolejności bazowej. PyYAML jest używany, jeśli zainstalowany, inaczej wbudowany parser."
 
+msgid "MOMW's data-path-order.yml (the per-list order in which each mod's data directories should be added). Used to build a mod's expected data paths -- its folder is fuzzy-matched by name, then its extra_dirs appended in order. PyYAML used if installed, else a built-in parser."
+msgstr "data-path-order.yml z MOMW (kolejność, dla każdej listy, w jakiej należy dodawać katalogi danych każdego moda). Służy do zbudowania oczekiwanych ścieżek danych moda -- jego folder jest dopasowywany po nazwie w sposób przybliżony, a następnie jego extra_dirs są dołączane po kolei. Używany jest PyYAML, jeśli zainstalowany, w przeciwnym razie wbudowany parser."
+
 msgid "Write directly back to customizations.toml (overwrite in place; a .bak-<timestamp> copy is made first unless backups are disabled below)"
 msgstr "Zapisuj bezpośrednio z powrotem do customizations.toml (nadpisz w miejscu; najpierw tworzona jest kopia .bak-<znacznik czasu>, chyba że kopie są wyłączone poniżej)"
 
@@ -1838,11 +1856,11 @@ msgstr "Utwórz dokument tekstowy podzbioru (przy Skanowaniu)"
 msgid "Controls what 'Scan...' does with its result. Checked: write the scanned list to a .txt subset file you choose, and load it (the file stays on disk for reuse). Unchecked: keep the scanned list in memory just for this session and feed it straight to the sort -- nothing is written to disk."
 msgstr "Steruje tym, co „Skanuj…” robi ze swoim wynikiem. Zaznaczone: zapisz przeskanowaną listę do wybranego pliku podzbioru .txt i wczytaj ją (plik pozostaje na dysku do ponownego użycia). Odznaczone: trzymaj przeskanowaną listę w pamięci tylko dla tej sesji i przekaż ją prosto do sortowania -- nic nie jest zapisywane na dysk."
 
-msgid "Pull unmanaged (orphan) plugins from openmw.cfg"
-msgstr "Pobierz niezarządzane (osierocone) wtyczki z openmw.cfg"
+msgid "Pull unmanaged (orphan) plugins & data paths from openmw.cfg"
+msgstr "Pobierz niezarządzane (osierocone) wtyczki i ścieżki danych z openmw.cfg"
 
-msgid "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml. Their current cfg order is kept as the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are left exactly as openmw.cfg has them: they are already in the cfg's own data= order, and there is no reliable way to tell a path the list manages from one you added, so pulling them would reorder the whole VFS."
-msgstr "Sortuj także wtyczki content= JUŻ obecne w openmw.cfg, którymi nic nie zarządza -- ani lista wyselekcjonowana (plugin-order.yml), ani twój customizations.toml. Ich bieżąca kolejność cfg jest zachowywana jako początkowa, dopóki sortowanie ich nie przestawi. Bazowe pliki nadrzędne (Morrowind/Tribunal/Bloodmoon) nigdy nie są dotykane. Działa samodzielnie (plik podzbioru niepotrzebny) lub razem z nim.\n\nŚcieżki data= pozostawiane są dokładnie takie, jakie są w openmw.cfg: są już we własnej kolejności data= z cfg, i nie ma niezawodnego sposobu odróżnienia ścieżki zarządzanej listą od dodanej przez ciebie, więc ich pobranie zmieniłoby kolejność całego VFS."
+msgid "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data-path-order.yml and list name are set (that yml is how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order."
+msgstr "Przechwytuje także to, co JUŻ jest w openmw.cfg, a czym nic nie zarządza -- ani lista kuratorska (plugin-order.yml), ani Twój customizations.toml -- aby przetrwało następną przebudowę momw-configurator. Wtyczki content= są sortowane; ich obecna kolejność w cfg jest kolejnością początkową, dopóki sortowanie ich nie przestawi. Podstawowe pliki master (Morrowind/Tribunal/Bloodmoon) nigdy nie są ruszane. Działa samodzielnie (bez pliku podzbioru) lub razem z nim.\n\nŚcieżki data= też są przechwytywane, gdy ustawiono data-path-order.yml i nazwę listy (ten yml pozwala odróżnić ścieżkę zarządzaną przez listę od dodanej przez Ciebie). Niezarządzane ścieżki data= są tu podświetlane i przy eksporcie zapisywane w customizations.toml jako wstawki zakotwiczone do ścieżek kuratorskich -- nigdy nie są przestawiane w miejscu, ponieważ już znajdują się w kolejności data= z cfg."
 
 msgid "Exclude from conflict / cell scans:"
 msgstr "Wyklucz ze skanów konfliktów / komórek:"

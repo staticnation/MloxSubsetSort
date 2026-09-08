@@ -3,6 +3,7 @@
   "\n  Already in cfg, will be repositioned within it: %(names)s": "\n  Déjà dans cfg, sera repositionné à l'intérieur : %(names)s",
   "\n  DRY RUN: would write %(path)s\n%(toml)s": "\n  SIMULATION : écrirait %(path)s\n%(toml)s",
   "\n  No [Conflict]/[Requires]/[Note] warnings triggered.": "\n  Aucun avertissement [Conflict]/[Requires]/[Note] déclenché.",
+  "\n  No data-path-order.yml warnings.": "\n  Aucun avertissement data-path-order.yml.",
   "\n  No lint findings.": "\n  Aucun constat d'analyse.",
   "\n  No lint findings. Clean bill of health.": "\n  Aucun constat d'analyse. Tout est en ordre.",
   "\n  No plugin-order.yml warnings.": "\n  Aucun avertissement plugin-order.yml.",
@@ -17,6 +18,10 @@
   "  %(count)d mesh conflict changes what the asset does; those lines are marked below.": [
     "  %(count)d conflit de maillage change ce que fait l'asset ; ces lignes sont marquées ci-dessous.",
     "  %(count)d conflits de maillage changent ce que fait l'asset ; ces lignes sont marquées ci-dessous."
+  ],
+  "  %(count)d orphan data= path found in openmw.cfg": [
+    "  %(count)d chemin data= orphelin trouvé dans openmw.cfg",
+    "  %(count)d chemins data= orphelins trouvés dans openmw.cfg"
   ],
   "  %(count)d orphan plugin pulled from openmw.cfg": [
     "  %(count)d plugin orphelin récupéré de openmw.cfg",
@@ -64,6 +69,7 @@
     "  NOTE : insertions de chemins de données trouvées mais non triées (passez --sort-data-paths pour les inclure) : %(count)d chemins"
   ],
   "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(paths)s": "  NOTE : insertions de chemins de données trouvées mais non triées (passez --sort-data-paths pour les inclure) : %(paths)s",
+  "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations.": "  Aucun chemin data= non géré trouvé -- chaque chemin data= de la cfg figure dans l'ordre data= de la liste '%(list)s' ou dans vos personnalisations.",
   "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations.": "  Aucun plugin non géré trouvé -- chaque plugin content= de la cfg est sur la liste ou dans vos personnalisations.",
   "  Not in cfg yet, will be inserted: %(names)s": "  Pas encore dans cfg, sera inséré : %(names)s",
   "  Pass --sort-data-paths to enable:": "  Passez --sort-data-paths pour activer :",
@@ -88,6 +94,7 @@
   "  Wrote corrected customizations: %(path)s": "  Personnalisations corrigées écrites : %(path)s",
   "  cleaned: %(before)d -> %(after)d bytes (backup: %(backup)s)": "  nettoyé : %(before)d -> %(after)d octets (sauvegarde : %(backup)s)",
   "  customizations.toml written: %(answer)s": "  customizations.toml écrit : %(answer)s",
+  "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too.": "  chemins data= non classés -- définissez une data-path-order.yml et un nom de liste pour faire apparaître aussi les chemins data= non gérés (orphelins).",
   "  in-memory scan: %(plugins)d plugin(s), %(paths)d data path(s)": "  analyse en mémoire : %(plugins)d plugin(s), %(paths)d chemin(s) de données",
   "  no changes -- already clean": "  aucune modification -- déjà propre",
   "  openmw.cfg left untouched (pass --write-cfg to patch it directly)": "  openmw.cfg laissé intact (passez --write-cfg pour le patcher directement)",
@@ -223,9 +230,9 @@
   "All cells (worst first)": "Toutes les cellules (les pires d'abord)",
   "All files": "Tous les fichiers",
   "Already added": "Déjà ajouté",
+  "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data-path-order.yml and list name are set (that yml is how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order.": "Capture aussi ce qui est DÉJÀ dans openmw.cfg et que rien ne gère -- ni la liste curée (plugin-order.yml) ni votre customizations.toml -- afin que cela survive à la prochaine reconstruction par momw-configurator. Les plugins content= sont triés ; leur ordre actuel dans la cfg est l'ordre de départ jusqu'à ce que le tri les repositionne. Les masters de base (Morrowind/Tribunal/Bloodmoon) ne sont jamais touchés. Fonctionne seul (aucun fichier de sous-ensemble requis) ou en complément d'un autre.\n\nLes chemins data= sont également capturés lorsqu'une data-path-order.yml et un nom de liste sont définis (ce yml permet de distinguer un chemin géré par la liste d'un que vous avez ajouté). Les chemins data= non gérés sont surlignés ici et, à l'export, écrits dans la customizations.toml comme des inserts ancrés aux chemins curés -- ils ne sont jamais réordonnés sur place, puisqu'ils figurent déjà dans l'ordre data= de la cfg.",
   "Also happens": "Se produit aussi",
   "Also sets": "Définit aussi",
-  "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml. Their current cfg order is kept as the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are left exactly as openmw.cfg has them: they are already in the cfg's own data= order, and there is no reliable way to tell a path the list manages from one you added, so pulling them would reorder the whole VFS.": "Trier aussi les plugins content= DÉJÀ dans openmw.cfg que rien ne gère -- ni la liste curée (plugin-order.yml) ni votre customizations.toml. Leur ordre cfg actuel est gardé comme ordre de départ jusqu'à ce que le tri les repositionne. Les masters de base (Morrowind/Tribunal/Bloodmoon) ne sont jamais touchés. Fonctionne seul (pas de fichier de sous-ensemble requis) ou avec un.\n\nLes chemins data= restent exactement tels que openmw.cfg les a : ils sont déjà dans l'ordre data= propre de la cfg, et il n'y a aucun moyen fiable de distinguer un chemin géré par la liste d'un que vous avez ajouté, les récupérer réordonnerait donc tout le VFS.",
   "Append or replace?": "Ajouter ou remplacer ?",
   "Append rule": "Ajouter la règle",
   "Auto = later plugin wins for entries it changed Â· Overwrite = this plugin wins collisions Â· Ignore = keep the earlier edit Â· Resolve = blend conflicting numbers Â· Curvature = structure-weighted blend (ours).": "Auto = le plugin ultérieur gagne pour les entrées qu'il a changées · Overwrite = ce plugin gagne les collisions · Ignore = garder la modification antérieure · Resolve = mélanger les nombres en conflit · Curvature = mélange pondéré par la structure (le nôtre).",
@@ -449,6 +456,7 @@
   "Log syntax highlighting: %(name)s": "Coloration syntaxique du journal : %(name)s",
   "Loses": "Perd",
   "MOMW needs-cleaning": "MOMW à nettoyer",
+  "MOMW's data-path-order.yml (the per-list order in which each mod's data directories should be added). Used to build a mod's expected data paths -- its folder is fuzzy-matched by name, then its extra_dirs appended in order. PyYAML used if installed, else a built-in parser.": "Le data-path-order.yml de MOMW (l'ordre, par liste, dans lequel les répertoires de données de chaque mod doivent être ajoutés). Sert à construire les chemins de données attendus d'un mod -- son dossier est apparié par nom de façon approximative, puis ses extra_dirs sont ajoutés dans l'ordre. PyYAML est utilisé s'il est installé, sinon un analyseur intégré.",
   "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser.": "Le plugin-order.yml de MOMW (la source de vérité indiquant quels plugins appartiennent à quelle liste curée). Avec le nom de liste ci-dessus défini, les plugins curés de cette liste sont exclus du tri (jamais réordonnés) pour que seuls vos ajouts personnalisés soient touchés, et des avertissements en lecture seule sont émis : redondant, orphelin, needs-cleaning et une vérification de dérive de l'ordre de base. PyYAML utilisé si installé, sinon un analyseur intégré.",
   "Merge failed -- see log.": "Échec de la fusion -- voir le journal.",
   "Merge field...": "Fusionner le champ…",
@@ -562,7 +570,7 @@
   "Preview": "Aperçu",
   "Preview:": "Aperçu :",
   "Program documentation": "Documentation du programme",
-  "Pull unmanaged (orphan) plugins from openmw.cfg": "Récupérer les plugins non gérés (orphelins) de openmw.cfg",
+  "Pull unmanaged (orphan) plugins & data paths from openmw.cfg": "Récupérer les plugins et chemins de données non gérés (orphelins) de openmw.cfg",
   "Quest / stage / call": "Quête / étape / appel",
   "Quest state": "État de la quête",
   "Queue just this field from a plugin you pick -- the rest of the record keeps the load-order winner. For when one mod fixed the script and another retextured the mesh.": "Mettre en file uniquement ce champ d'un plugin de votre choix -- le reste de l'enregistrement garde le gagnant de l'ordre de chargement. Pour le cas où un mod a corrigé le script et un autre retexturé le maillage.",

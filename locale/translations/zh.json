@@ -3,6 +3,7 @@
   "\n  Already in cfg, will be repositioned within it: %(names)s": "\n  已在 cfg 中, 将在其中重新定位: %(names)s",
   "\n  DRY RUN: would write %(path)s\n%(toml)s": "\n  试运行: 将写入 %(path)s\n%(toml)s",
   "\n  No [Conflict]/[Requires]/[Note] warnings triggered.": "\n  未触发 [Conflict]/[Requires]/[Note] 警告。",
+  "\n  No data-path-order.yml warnings.": "\n  没有 data-path-order.yml 警告。",
   "\n  No lint findings.": "\n  无 lint 发现。",
   "\n  No lint findings. Clean bill of health.": "\n  无 lint 发现。一切正常。",
   "\n  No plugin-order.yml warnings.": "\n  无 plugin-order.yml 警告。",
@@ -15,6 +16,9 @@
   "    - mlox wanted '%(first)s' before '%(second)s', but your load order already has '%(second)s' before '%(first)s'": "    - mlox 想将「%(first)s」放在「%(second)s」之前, 但在你的加载顺序中「%(second)s」已在「%(first)s」之前",
   "  %(count)d mesh conflict changes what the asset does; those lines are marked below.": [
     "  %(count)d 个网格冲突改变了资源的行为; 那些行在下方已标记。"
+  ],
+  "  %(count)d orphan data= path found in openmw.cfg": [
+    "  在 openmw.cfg 中找到 %(count)d 个孤立的 data= 路径"
   ],
   "  %(count)d orphan plugin pulled from openmw.cfg": [
     "  已从 openmw.cfg 拉取孤立插件 %(count)d 个"
@@ -56,6 +60,7 @@
     "  注意: 找到数据路径插入但未排序 (传入 --sort-data-paths 以包含它): 路径 %(count)d 个"
   ],
   "  NOTE: data path insertions found but not sorted (pass --sort-data-paths to include them): %(paths)s": "  注意: 找到数据路径插入但未排序 (传入 --sort-data-paths 以包含它们): %(paths)s",
+  "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations.": "  未找到未管理的 data= 路径 -- cfg 中的每个 data= 路径都在 '%(list)s' 的 data= 顺序中或在你的自定义中。",
   "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations.": "  未找到未管理的插件 -- cfg 中的每个 content= 插件都在列表或你的设置中。",
   "  Not in cfg yet, will be inserted: %(names)s": "  尚未在 cfg 中，将被插入: %(names)s",
   "  Pass --sort-data-paths to enable:": "  传入 --sort-data-paths 以启用:",
@@ -80,6 +85,7 @@
   "  Wrote corrected customizations: %(path)s": "  已写入更正后的 customizations: %(path)s",
   "  cleaned: %(before)d -> %(after)d bytes (backup: %(backup)s)": "  已清理: %(before)d -> %(after)d 字节 (备份: %(backup)s)",
   "  customizations.toml written: %(answer)s": "  已写入 customizations.toml: %(answer)s",
+  "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too.": "  data= 路径未分类 -- 设置 data-path-order.yml 和列表名称，即可同时显示未管理 (孤立) 的 data= 路径。",
   "  in-memory scan: %(plugins)d plugin(s), %(paths)d data path(s)": "  内存扫描: 插件 %(plugins)d 个, 数据路径 %(paths)d 个",
   "  no changes -- already clean": "  无更改 -- 已是干净的",
   "  openmw.cfg left untouched (pass --write-cfg to patch it directly)": "  openmw.cfg 未被改动 (传入 --write-cfg 以直接为其打补丁)",
@@ -207,9 +213,9 @@
   "All cells (worst first)": "所有单元格 (最差优先)",
   "All files": "所有文件",
   "Already added": "已添加",
+  "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data-path-order.yml and list name are set (that yml is how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order.": "同时收录 openmw.cfg 中已存在但无人管理的内容 -- 既不在精选列表 (plugin-order.yml) 中，也不在你的 customizations.toml 中 -- 使其在下次 momw-configurator 重建后依然保留。content= 插件会被排序纳入；在排序重新定位它们之前，其当前的 cfg 顺序即为起始顺序。基础主文件 (Morrowind/Tribunal/Bloodmoon) 绝不会被改动。可单独使用 (无需子集文件)，也可与其配合使用。\n\n当设置了 data-path-order.yml 和列表名称时，data= 路径也会被收录 (该 yml 用于区分由列表管理的路径与你自己添加的路径)。未管理的 data= 路径会在此处高亮显示，并在导出时作为锚定到精选路径的 insert 写入 customizations.toml -- 它们绝不会被原地重新排序，因为它们已经处于 cfg 的 data= 顺序中。",
   "Also happens": "也会发生于",
   "Also sets": "也设置",
-  "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml. Their current cfg order is kept as the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are left exactly as openmw.cfg has them: they are already in the cfg's own data= order, and there is no reliable way to tell a path the list manages from one you added, so pulling them would reorder the whole VFS.": "还排序 openmw.cfg 中「已」存在且无任何东西管理的 content= 插件 -- 既不属于精选列表 (plugin-order.yml) 也不属于你的 customizations.toml。它们当前的 cfg 顺序被保留为起点, 直到排序将其移动。基础主文件 (Morrowind/Tribunal/Bloodmoon) 永远不会被触及。可单独 (无需子集文件) 或与之一起工作。\n\ndata= 路径保持它们在 openmw.cfg 中的原样: 它们已在 cfg 自己的 data= 顺序中, 且没有可靠方法区分列表管理的路径和你添加的路径, 因此拉取它们会重排整个 VFS。",
   "Append or replace?": "追加还是替换?",
   "Append rule": "追加规则",
   "Auto = later plugin wins for entries it changed Â· Overwrite = this plugin wins collisions Â· Ignore = keep the earlier edit Â· Resolve = blend conflicting numbers Â· Curvature = structure-weighted blend (ours).": "Auto = 对于它更改的条目, 后面的插件胜出 · Overwrite = 冲突中此插件胜出 · Ignore = 保留较早的编辑 · Resolve = 混合冲突的数值 · Curvature = 按结构加权的混合 (本工具方式)。",
@@ -428,6 +434,7 @@
   "Log syntax highlighting: %(name)s": "日志语法高亮: %(name)s",
   "Loses": "丢失",
   "MOMW needs-cleaning": "MOMW 需要清理",
+  "MOMW's data-path-order.yml (the per-list order in which each mod's data directories should be added). Used to build a mod's expected data paths -- its folder is fuzzy-matched by name, then its extra_dirs appended in order. PyYAML used if installed, else a built-in parser.": "MOMW 的 data-path-order.yml (每个列表中应添加各模组数据目录的顺序)。用于构建模组的预期数据路径 -- 先按名称对其文件夹进行模糊匹配，然后按顺序追加其 extra_dirs。如已安装则使用 PyYAML，否则使用内置解析器。",
   "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser.": "MOMW 的 plugin-order.yml (关于哪些插件属于哪个精选列表的可信来源)。在上方指定列表名称后, 该列表的精选插件会被排除在排序之外 (永不重排), 以便只影响你自己的添加, 并发出只读警告: 冗余、孤立、needs-cleaning 以及基础顺序拒绝检查。若安装了 PyYAML 则使用它, 否则使用内置解析器。",
   "Merge failed -- see log.": "合并失败 -- 请查看日志。",
   "Merge field...": "合并字段…",
@@ -539,7 +546,7 @@
   "Preview": "预览",
   "Preview:": "预览:",
   "Program documentation": "程序文档",
-  "Pull unmanaged (orphan) plugins from openmw.cfg": "从 openmw.cfg 拉取未管理 (孤立) 插件",
+  "Pull unmanaged (orphan) plugins & data paths from openmw.cfg": "从 openmw.cfg 拉取未管理 (孤立) 插件和数据路径",
   "Quest / stage / call": "任务 / 阶段 / 调用",
   "Quest state": "任务状态",
   "Queue just this field from a plugin you pick -- the rest of the record keeps the load-order winner. For when one mod fixed the script and another retextured the mesh.": "从你选择的插件仅将此字段加入队列 -- 记录的其余部分保留加载顺序的胜者。适用于一个模组修复了脚本而另一个重新贴图了网格的情况。",

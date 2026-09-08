@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import io
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog, font as tkfont, ttk
 from typing import TYPE_CHECKING, Any, cast
 
 from wraithguard.gui import (
@@ -161,6 +161,253 @@ def group_separator(parent: tk.Misc, *, pad: int = 10) -> ttk.Separator:
     sep = ttk.Separator(parent, orient="vertical")
     sep.pack(side="left", fill="y", padx=pad, pady=2)
     return sep
+
+
+class ToggleSwitch(tk.Canvas):
+    """A pill on/off toggle drawn on a canvas -- our own switch, no library.
+
+    A drop-in for a boolean ``ttk.Checkbutton``: the same
+    ``(parent, text=, variable=, command=)`` shape, packs/grids like any widget,
+    takes an :func:`add_tooltip`, and re-themes on a live theme switch via
+    :meth:`refresh_theme` (the theme walk finds it by the ``_is_toggle_switch``
+    marker, exactly as it finds pane-divider grips). Drawing it ourselves keeps
+    the CTk-style look under our own code and colours.
+    """
+
+    _TRACK_W = 34
+    _TRACK_H = 18
+    _PAD = 3
+    _GAP = 8
+
+    def __init__(
+        self,
+        parent: tk.Misc,
+        *,
+        text: str = "",
+        variable: tk.BooleanVar | None = None,
+        command: Callable[[], None] | None = None,
+        state: str = "normal",
+        bg: str | None = None,
+    ) -> None:
+        """Build the switch.
+
+        Args:
+            parent: The container to place it in.
+            text: The label drawn to the right of the pill.
+            variable: The boolean the switch reflects and drives; a private one
+                is made when omitted.
+            command: Called after a user toggle (not on a programmatic set).
+            state: ``"normal"`` or ``"disabled"`` (dimmed, ignores clicks).
+            bg: Canvas fill; defaults to the chrome background so it blends.
+        """
+        self._var = variable if variable is not None else tk.BooleanVar(value=False)
+        self._command = command
+        self._text = text
+        self._state = state
+        self._font = tkfont.nametofont("TkDefaultFont")
+        fill = bg or DARK["bg"]
+        text_w = self._font.measure(text) if text else 0
+        height = max(self._TRACK_H + 2 * self._PAD, self._font.metrics("linespace") + 4)
+        width = self._PAD + self._TRACK_W + ((self._GAP + text_w) if text else 0) + self._PAD
+        super().__init__(
+            parent,
+            width=width,
+            height=height,
+            highlightthickness=0,
+            borderwidth=0,
+            bg=fill,
+            takefocus=1,
+            cursor="" if state == "disabled" else "hand2",
+        )
+        #: marks this canvas for the theme restyle walk (see _restyle_plain_live)
+        self._is_toggle_switch = True
+        for sequence in ("<Button-1>", "<Return>", "<space>"):
+            self.bind(sequence, self._on_click)
+        self._var.trace_add("write", lambda *_: self._redraw())
+        self._redraw()
+
+    def get(self) -> bool:
+        """The current on/off value."""
+        return bool(self._var.get())
+
+    def set_state(self, state: str) -> None:
+        """Enable (``"normal"``) or disable (``"disabled"``) the switch."""
+        self._state = state
+        self.configure(cursor="" if state == "disabled" else "hand2")
+        self._redraw()
+
+    def refresh_theme(self) -> None:
+        """Repaint with the active palette after a live theme switch."""
+        self.configure(bg=DARK["bg"])
+        self._redraw()
+
+    def _on_click(self, _event: tk.Event | None = None) -> None:
+        """Toggle on a click/keypress, unless disabled; then fire the command."""
+        if self._state == "disabled":
+            return
+        self._var.set(not self._var.get())  # trace -> _redraw
+        if self._command is not None:
+            self._command()
+
+    def _redraw(self) -> None:
+        """Draw the pill, knob and label for the current value and state."""
+        try:
+            self.delete("all")
+        except tk.TclError:
+            return  # a shared variable's trace can fire after we're destroyed
+        on = bool(self._var.get())
+        disabled = self._state == "disabled"
+        pad, tw, th = self._PAD, self._TRACK_W, self._TRACK_H
+        y0 = (int(self["height"]) - th) // 2
+        y1 = y0 + th
+        x0, x1 = pad, pad + tw
+        r = th // 2
+        if disabled:
+            track = DARK["bg2"]
+        elif on:
+            track = DARK["accent"]
+        else:
+            track = DARK["bg2"]
+        # pill = two round caps + the rectangle between them, no outline
+        self.create_oval(x0, y0, x0 + th, y1, fill=track, outline=track)
+        self.create_oval(x1 - th, y0, x1, y1, fill=track, outline=track)
+        self.create_rectangle(x0 + r, y0, x1 - r, y1, fill=track, outline=track)
+        cy = (y0 + y1) // 2
+        knob = DARK["fg_dim"] if disabled else "#e8eaed"
+        k = r - 2
+        cx = (x1 - r) if on else (x0 + r)
+        self.create_oval(cx - k, cy - k, cx + k, cy + k, fill=knob, outline=knob)
+        if self._text:
+            fg = DARK["fg_dim"] if disabled else DARK["fg"]
+            self.create_text(
+                x1 + self._GAP, cy, text=self._text, anchor="w", fill=fg, font=self._font
+            )
+
+
+class RadioButton(tk.Canvas):
+    """A ring-style radio drawn on a canvas -- our own, no library.
+
+    A drop-in for ``ttk.Radiobutton``: the same
+    ``(parent, text=, value=, variable=, command=)`` shape, where a set of them
+    share one ``variable`` and each is selected when the variable equals its
+    ``value``. Selecting one draws an accent ring with a filled centre dot; the
+    rest show a plain outline ring -- the CTk look, in our palette. Re-themes on
+    a live theme switch via :meth:`refresh_theme` (found by the
+    ``_is_radio_button`` marker, like the pill switch and the pane grips).
+    """
+
+    _DIAM = 15
+    _PAD = 3
+    _GAP = 8
+
+    def __init__(
+        self,
+        parent: tk.Misc,
+        *,
+        text: str = "",
+        value: object = None,
+        variable: tk.Variable | None = None,
+        command: Callable[[], None] | None = None,
+        state: str = "normal",
+        bg: str | None = None,
+    ) -> None:
+        """Build one radio in a group.
+
+        Args:
+            parent: The container to place it in.
+            text: The label drawn to the right of the ring.
+            value: The value this radio writes to ``variable`` when picked, and
+                the value it is "selected" for.
+            variable: The shared group variable (``StringVar``/``IntVar``); a
+                private one is made when omitted.
+            command: Called after a user pick (not on a programmatic change).
+            state: ``"normal"`` or ``"disabled"`` (dimmed, ignores clicks).
+            bg: Canvas fill; defaults to the chrome background so it blends.
+        """
+        self._value = value
+        self._variable: tk.Variable = variable if variable is not None else tk.StringVar()
+        self._command = command
+        self._text = text
+        self._state = state
+        self._font = tkfont.nametofont("TkDefaultFont")
+        fill = bg or DARK["bg"]
+        text_w = self._font.measure(text) if text else 0
+        height = max(self._DIAM + 2 * self._PAD, self._font.metrics("linespace") + 4)
+        width = self._PAD + self._DIAM + ((self._GAP + text_w) if text else 0) + self._PAD
+        super().__init__(
+            parent,
+            width=width,
+            height=height,
+            highlightthickness=0,
+            borderwidth=0,
+            bg=fill,
+            takefocus=1,
+            cursor="" if state == "disabled" else "hand2",
+        )
+        #: marks this canvas for the theme restyle walk (see _restyle_plain_live)
+        self._is_radio_button = True
+        for sequence in ("<Button-1>", "<Return>", "<space>"):
+            self.bind(sequence, self._on_click)
+        self._variable.trace_add("write", lambda *_: self._redraw())
+        self._redraw()
+
+    def selected(self) -> bool:
+        """Whether this radio's value is the one currently chosen."""
+        return self._variable.get() == self._value
+
+    def set_state(self, state: str) -> None:
+        """Enable (``"normal"``) or disable (``"disabled"``) the radio."""
+        self._state = state
+        self.configure(cursor="" if state == "disabled" else "hand2")
+        self._redraw()
+
+    def refresh_theme(self) -> None:
+        """Repaint with the active palette after a live theme switch."""
+        self.configure(bg=DARK["bg"])
+        self._redraw()
+
+    def _on_click(self, _event: tk.Event | None = None) -> None:
+        """Pick this radio (unless disabled), then fire the command."""
+        if self._state == "disabled":
+            return
+        self._variable.set(self._value)  # traces -> every group member redraws
+        if self._command is not None:
+            self._command()
+
+    def _redraw(self) -> None:
+        """Draw the ring, centre dot (when picked) and label."""
+        try:
+            self.delete("all")
+        except tk.TclError:
+            return  # the shared variable's trace can fire after we're destroyed
+        on = self.selected()
+        disabled = self._state == "disabled"
+        pad, d = self._PAD, self._DIAM
+        y0 = (int(self["height"]) - d) // 2
+        x0 = pad
+        if disabled:
+            ring = DARK["fg_dim"]
+        elif on:
+            ring = DARK["accent"]
+        else:
+            ring = DARK["border"]
+        # the outline ring -- unfilled, so the panel shows through its centre
+        self.create_oval(x0, y0, x0 + d, y0 + d, outline=ring, width=2, fill=DARK["bg"])
+        if on:
+            dot = DARK["fg_dim"] if disabled else DARK["accent"]
+            cx, cy = x0 + d // 2, y0 + d // 2
+            k = d // 2 - 4
+            self.create_oval(cx - k, cy - k, cx + k, cy + k, fill=dot, outline=dot)
+        if self._text:
+            fg = DARK["fg_dim"] if disabled else DARK["fg"]
+            self.create_text(
+                x0 + d + self._GAP,
+                y0 + d // 2,
+                text=self._text,
+                anchor="w",
+                fill=fg,
+                font=self._font,
+            )
 
 
 # ---------------------------------------------------------------------------

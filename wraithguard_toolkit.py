@@ -3568,6 +3568,11 @@ from wraithguard.momw import (
     needs_cleaning_set,
     parse_plugin_order_yml,
 )
+from wraithguard.momw_datapaths import (
+    managed_cfg_data_path_norms,
+    parse_data_path_order_yml,
+    reconcile_list_against_cfg,
+)
 from wraithguard.plugins import PLUGIN_EXTS, PluginFileIndex
 from wraithguard.rules import (
     check_predicates,
@@ -4306,8 +4311,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "order (until the sort repositions them). Base masters (Morrowind/Tribunal/"
         "Bloodmoon.esm) and the base game's Data Files folder are never pulled. Can be "
         "the only subset source, or combined with --customizations/--subset/--subset-file "
-        "to sort those plus the orphans. data= orphans are only positioned with "
-        "--sort-data-paths; otherwise they are just listed.",
+        "to sort those plus the orphans. data= orphans are classified only when a "
+        "--data-path-order-yml and --list-name are given (that yml is the 'managed' "
+        "signal a folder can match); they are reported, not reordered, since they already "
+        "sit in the cfg's data= order.",
     )
     ap.add_argument("--dry-run", action="store_true", help="Print the plan, write nothing")
     ap.add_argument(
@@ -4349,6 +4356,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "list nor in your customizations), needs-cleaning (TES3CMD), and a base-order "
         "drift check against the list's canonical order. Optional; PyYAML is used if "
         "installed, else a built-in parser.",
+    )
+    ap.add_argument(
+        "--data-path-order-yml",
+        type=Path,
+        help="MOMW's data-path-order.yml (the per-list order each mod's data directories "
+        "should be added in). With --list-name, read-only warnings are emitted: mods on "
+        "the list whose data= path is missing from openmw.cfg, and data= paths whose cfg "
+        "order contradicts the curated one. Optional; PyYAML used if installed, else a "
+        "built-in parser.",
     )
     ap.add_argument(
         "--write-cfg",
@@ -4607,6 +4623,7 @@ def _read_subset_inputs(
         and not args.subset_file
         and not getattr(args, "subset_lines", None)
         and not getattr(args, "subset_from_cfg", False)
+        and not getattr(args, "allow_empty_sort", False)
     ):
         raise SystemExit(
             "Provide --customizations, --subset, --subset-file, --scan-dir, or "
@@ -4731,10 +4748,13 @@ def _read_subset_inputs(
         and not data_inserts
         and not raw_toml_data_inserts
         and not getattr(args, "subset_from_cfg", False)
+        and not getattr(args, "allow_empty_sort", False)
     ):
         # With --subset-from-cfg the subset is filled later, in compute_plan, from
         # the cfg's own orphaned entries -- so an otherwise-empty set is not "nothing
-        # to do" here.
+        # to do" here. allow_empty_sort is the GUI's opt-out: it wants the run to
+        # proceed and hand back the cfg's current order so the user can edit it
+        # (remove entries) even with nothing to sort.
         raise SystemExit("No subset plugins or data paths found -- nothing to do.")
 
     return (
@@ -4875,6 +4895,14 @@ def _sort_subset(
     """
     final_order = None
     predicate_warnings = []
+    if not subset and getattr(args, "allow_empty_sort", False):
+        _section("NOTHING TO SORT")
+        print(
+            _(
+                "  No plugins to sort. The current openmw.cfg load order is shown above "
+                "for editing -- remove entries and Export, or add plugins and Sort again."
+            )
+        )
     if subset:
         _section(f"SORTING {len(subset)} PLUGIN(S)")
         print(f"  {', '.join(subset)}")
@@ -5051,6 +5079,48 @@ def _yml_post_sort_warnings(
                 print(f"\n{w}")
         else:
             print(_("\n  No plugin-order.yml warnings."))
+
+
+def _data_path_order_warnings(
+    args: argparse.Namespace,
+    list_name: str | None,
+    data_order: Sequence[str],
+) -> None:
+    """Emit data-path-order.yml reconcile warnings (read-only).
+
+    When ``--data-path-order-yml`` and a list name are given, check the mods
+    that list expects against the ``data=`` paths already in ``openmw.cfg``:
+    which are missing, and whether their cfg order contradicts the curated
+    data-path order. Reports only; never rewrites the cfg. A parse failure is
+    surfaced as one line rather than aborting the run.
+
+    Args:
+        args: The run arguments; ``data_path_order_yml`` is read from it.
+        list_name: The MOMW list name, or ``None`` when not given.
+        data_order: The cfg's raw ``data=`` lines.
+    """
+    dpo = getattr(args, "data_path_order_yml", None)
+    if not dpo or not list_name:
+        return
+    try:
+        entries = parse_data_path_order_yml(Path(dpo))
+    except (OSError, ValueError) as exc:
+        _section("1 DATA-PATH-ORDER.YML WARNING(S) -- read-only, not enforced")
+        print(f"\n[DATA PATH] could not read {Path(dpo).name}: {exc}")
+        return
+    cfg_paths = [v for v in (extract_data_path_value(line) for line in data_order) if v]
+    warnings = reconcile_list_against_cfg(
+        entries,
+        list_name,
+        cfg_paths,
+        report_missing=bool(getattr(args, "verbose", 0)),
+    )
+    if warnings:
+        _section(f"{len(warnings)} DATA-PATH-ORDER.YML WARNING(S) -- read-only, not enforced")
+        for w in warnings:
+            print(f"\n{w}")
+    else:
+        print(_("\n  No data-path-order.yml warnings."))
 
 
 def _check_masters(
@@ -5419,8 +5489,8 @@ def _pull_cfg_orphans(
     needs_cleaning_lower: Collection[str],
     declared_lower: Collection[str],
     groundcover_lower: Collection[str],
-) -> list[str]:
-    """Add the cfg's own orphaned ``content=`` plugins to the subset.
+) -> tuple[list[str], list[str]]:
+    """Add the cfg's own orphaned ``content=`` plugins (and surface data paths).
 
     No-op unless ``--subset-from-cfg`` is set. Otherwise pulls every ``content=``
     plugin already in openmw.cfg that is neither curated (``plugin-order.yml``)
@@ -5428,19 +5498,23 @@ def _pull_cfg_orphans(
     sorter as ``already_present`` entries it repositions within the frozen order.
     Base masters and any plugin the cfg declares as groundcover are excluded.
 
-    ``data=`` paths are deliberately *not* pulled. A data path is already in the
-    cfg's own ``data=`` order (which OpenMW / momw-configurator arranges), and
-    there is no reliable signal for which of those a curated list manages versus
-    which the user added by hand. Re-feeding them as inserts repositioned the
-    whole VFS and marked every path as touched, so this stage now leaves ``data=``
-    exactly as the cfg has it.
+    ``data=`` orphans are also identified, but only when a ``data-path-order.yml``
+    and a list name are given -- that yml is the "managed" signal a data folder
+    can match. Before it, a data path was already in the cfg's own ``data=`` order
+    with no way to tell a curated folder from a hand-added one, so none were
+    surfaced. :func:`~wraithguard.momw_datapaths.managed_cfg_data_path_norms`
+    now says which cfg ``data=`` paths the list accounts for; anything else (and
+    not declared, not the base game) is an orphan. They are *reported and
+    returned* so the caller/GUI can highlight them; they are not re-inserted,
+    since they already sit in ``data=`` and :func:`insert_data_paths` never
+    reorders an existing line.
 
     Args:
         args: The parsed CLI/GUI arguments.
         subset: The subset so far. **Appended to** with the orphan plugins.
-        data_inserts: Unused (kept for the call signature); ``data=`` is not
-            pulled -- see above.
-        raw_toml_data_inserts: Unused (kept for the call signature).
+        data_inserts: This run's data-path inserts, read to skip already-declared
+            folders when classifying data orphans.
+        raw_toml_data_inserts: The TOML data-path inserts, read for the same.
         original_content_values: ``{name: cfg spelling}``. **Updated** for the
             orphan plugins.
         subset_origins: ``{plugin_lower: source}``. **Updated** for the orphans.
@@ -5453,28 +5527,54 @@ def _pull_cfg_orphans(
         groundcover_lower: Lower-cased plugins the cfg declares as groundcover.
 
     Returns:
-        The subset with the orphan plugins appended, in cfg order.
+        ``(subset, orphan_data_paths)`` -- the subset with orphan plugins
+        appended (in cfg order), and the orphaned ``data=`` path values (empty
+        unless a data-path-order.yml + list name let them be classified).
     """
     if not getattr(args, "subset_from_cfg", False):
-        return subset
+        return subset, []
 
     _section(_("UNMANAGED (ORPHAN) ENTRIES FROM openmw.cfg"))
 
-    # Only content= plugins are pulled. A data= path is a different case: it is
-    # already in the cfg's own data= order, which OpenMW (via momw-configurator)
-    # arranges, and there is no reliable signal for which of those a curated list
-    # manages versus which the user added by hand -- plugin-order.yml has no
-    # data-path concept. Treating them as orphans re-fed every path already in
-    # data= back in as a *new* insert, so the whole VFS was repositioned and
-    # every row marked "touched by this sort". Content plugins are safe: the
-    # curated set tells a loose plugin from a listed one.
-    orphan_plugins, _orphan_data = orphan_cfg_entries(
+    # data= orphans need a filter to tell a curated folder from a hand-added one.
+    # data-path-order.yml + a list name are that filter: managed_cfg_data_path_
+    # norms() reports the cfg data= paths the list accounts for. With no yml we
+    # can't classify data paths, so declared_data_norms stays "everything is
+    # managed" (an empty orphan set) -- the pre-filter behavior.
+    list_name = getattr(args, "list_name", None)
+    dpo = getattr(args, "data_path_order_yml", None)
+    pull_data = bool(dpo and list_name)
+    managed_data_norms: set[str] = set()
+    if pull_data:
+        cfg_data_values = [v for v in (extract_data_path_value(x) for x in data_order) if v]
+        try:
+            dp_entries = parse_data_path_order_yml(Path(dpo))
+        except (OSError, ValueError):
+            dp_entries = []
+        managed_data_norms = managed_cfg_data_path_norms(dp_entries, list_name, cfg_data_values)
+        declared_data_norms = {
+            normalize_data_path(d["value"]) for d in (*data_inserts, *raw_toml_data_inserts)
+        }
+        declared_data_norms.discard("")
+        managed_data_norms |= declared_data_norms
+
+    orphan_plugins, orphan_data = orphan_cfg_entries(
         base_order_names,
         data_order,
         curated_lower={str(c).lower() for c in curated_set},
         needs_cleaning_lower={str(c).lower() for c in needs_cleaning_lower},
         declared_plugins_lower={str(d).lower() for d in declared_lower},
-        declared_data_norms=set(),  # data paths are never pulled; see above
+        # Without the yml filter every cfg data= path looks unmanaged, so treat
+        # them all as "managed" (no orphans) rather than flooding the report.
+        declared_data_norms=(
+            managed_data_norms
+            if pull_data
+            else {
+                normalize_data_path(extract_data_path_value(x) or "")
+                for x in data_order
+                if extract_data_path_value(x)
+            }
+        ),
     )
 
     # A plugin the cfg also declares as groundcover belongs on a groundcover=
@@ -5509,7 +5609,37 @@ def _pull_cfg_orphans(
                 "the list or in your customizations."
             )
         )
-    return subset
+
+    # data= orphans: reported and returned (for GUI highlighting), not
+    # re-inserted -- they already sit in the cfg's data= order.
+    if pull_data:
+        print(
+            ngettext(
+                "  %(count)d orphan data= path found in openmw.cfg",
+                "  %(count)d orphan data= paths found in openmw.cfg",
+                len(orphan_data),
+            )
+            % {"count": len(orphan_data)}
+        )
+        for value in orphan_data:
+            print(f"    data={value}")
+        if not orphan_data:
+            print(
+                _(
+                    "  No unmanaged data= paths found -- every data= path in the cfg is on "
+                    "the '%(list)s' data-path order or in your customizations."
+                )
+                % {"list": list_name}
+            )
+    else:
+        orphan_data = []
+        print(
+            _(
+                "  data= paths not classified -- set a data-path-order.yml and list name to "
+                "surface unmanaged (orphan) data= paths too."
+            )
+        )
+    return subset, orphan_data
 
 
 def compute_plan(args: argparse.Namespace) -> dict:
@@ -5596,7 +5726,7 @@ def compute_plan(args: argparse.Namespace) -> dict:
     # subset, in cfg order, so they get sorted too. Runs after the yml stage so
     # the curated set is known and after groundcover detection so a grass plugin
     # is never pulled into content=.
-    subset = _pull_cfg_orphans(
+    subset, orphan_data_paths = _pull_cfg_orphans(
         args,
         subset,
         data_inserts,
@@ -5632,6 +5762,8 @@ def compute_plan(args: argparse.Namespace) -> dict:
         declared_lower,
         list_name,
     )
+
+    _data_path_order_warnings(args, list_name, data_order)
 
     master_warnings, master_problem_plugins = _check_masters(
         final_order,
@@ -5676,6 +5808,10 @@ def compute_plan(args: argparse.Namespace) -> dict:
         "replace_dest_names": replace_dest_names,
         "raw_toml_data_inserts": raw_toml_data_inserts,
         "data_inserts": data_inserts,
+        # Unmanaged data= paths pulled from the cfg (values, cfg order). Empty
+        # unless --subset-from-cfg ran with a data-path-order.yml + list name.
+        # Reported, not re-inserted; the GUI highlights them in the data panel.
+        "orphan_data_paths": orphan_data_paths,
         "base_order_names": base_order_names,
         # Which plugins the curated list owns. Empty when no plugin-order.yml
         # was given -- and "empty" must be read as "unknown", not "none".
@@ -5815,15 +5951,59 @@ def write_plan(
 
     wrote_toml = False
     if args.emit_toml:
+        # Decide what data= inserts the TOML carries. The goal of --subset-from-cfg
+        # is that everything unmanaged in the cfg lands in the customizations so a
+        # momw-configurator rebuild re-creates it; a data= path only reaches the
+        # emitted TOML if it is classified "ours" (in user_data_values) against a
+        # data_result of the cfg's data= lines. Three cases:
+        #   * --sort-data-paths on: data_result already holds the (re)anchored
+        #     order; ours = this run's declared inserts + the cfg orphans.
+        #   * orphans present, sort off: build a data_result from the existing cfg
+        #     data= order so the orphan (and any already-applied TOML) paths are
+        #     there to re-emit, anchored to the curated (frozen) neighbours. Any
+        #     brand-new TOML insert not yet in the cfg is folded in with its own
+        #     anchor so switching off the raw passthrough loses nothing.
+        #   * neither: unchanged -- pass the raw TOML inserts through verbatim.
+        orphan_data = list(plan.get("orphan_data_paths") or [])
+        declared_vals = [d["value"] for d in (plan["data_inserts"] or [])]
+        raw_inserts = list(plan["raw_toml_data_inserts"] or [])
+        if args.sort_data_paths and data_result is not None:
+            # Data paths were sorted: data_result holds the (re)anchored order.
+            emit_data_result = data_result
+            emit_raw = None
+            emit_user_vals = declared_vals + orphan_data
+        elif orphan_data:
+            # Orphans to capture but no sorted data_result (e.g. --subset-from-cfg
+            # with no data inserts, whether or not --sort-data-paths was passed).
+            # Build a data_result from the existing cfg data= order so the orphan
+            # (and any already-applied TOML) paths are present to re-emit, anchored
+            # to the curated (frozen) neighbours; fold in any brand-new TOML insert
+            # not yet in the cfg so nothing the raw passthrough carried is lost.
+            src_lines = data_order if data_order is not None else list(plan.get("data_order") or [])
+            src_norms = {
+                normalize_data_path(extract_data_path_value(line) or "") for line in src_lines
+            }
+            src_norms.discard("")
+            brand_new = [
+                d for d in raw_inserts if normalize_data_path(d.get("value", "")) not in src_norms
+            ]
+            emit_data_result = insert_data_paths(list(src_lines), brand_new)
+            emit_raw = None
+            emit_user_vals = orphan_data + [d["value"] for d in raw_inserts]
+        else:
+            # No orphans: unchanged either/or -- sorted result, or raw passthrough.
+            emit_data_result = data_result if args.sort_data_paths else None
+            emit_raw = raw_inserts if not args.sort_data_paths else None
+            emit_user_vals = declared_vals
         toml_text = generate_customizations_toml(
             plan["original_toml_data"],
             final_order or [],
             set(subset),
             plan["original_content_values"],
-            data_result if args.sort_data_paths else None,
-            plan["raw_toml_data_inserts"] if not args.sort_data_paths else None,
+            emit_data_result,
+            emit_raw,
             plan["replace_dest_names"],
-            user_data_values=[d["value"] for d in (plan["data_inserts"] or [])],
+            user_data_values=emit_user_vals,
             list_name=getattr(args, "list_name", None),
             remove_content=remove_content,
             new_groundcover=new_groundcover,
@@ -5834,11 +6014,7 @@ def write_plan(
         # apply logic and verify the result reproduces the sorted order.
         _subsection("configurator preview (simulated apply)")
         try:
-            _user_norms = [
-                normalize_data_path(d["value"])
-                for d in (plan["data_inserts"] or [])
-                if d.get("value")
-            ]
+            _user_norms = [normalize_data_path(v) for v in emit_user_vals if v]
             _ok, _rep = preview_configurator_result(
                 plan_lines,
                 toml_text,

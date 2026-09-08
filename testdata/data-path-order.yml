@@ -208,14 +208,21 @@
     - "morrowind-starter-pack"
 
 - for_mod: Bethesda Official Plugins Naturalized
+  extra_dirs:
+    - "00 Core"
   on_lists:
     - "just-good-morrowind"
     - "just-beautiful-morrowind"
 
 - for_mod: Bethesda Official Plugins Naturalized
   extra_dirs:
-    - "Optional"
-    - "High Resolution Textures"
+    - "01 High Resolution Textures"
+
+- for_mod: Bethesda Official Plugins Naturalized
+  extra_dirs:
+    - "02 UMOPP Compatibility"
+  on_lists:
+    - "just-good-morrowind"
 
 - for_mod: "Beautiful Cities of Morrowind"
   manual: true
@@ -326,21 +333,15 @@
 - for_mod: FMI - Sane Ordinators
 
 - for_mod: "(OpenMW) Vaults Restricted"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: Indoril and Her Hand Armor Privileges - OpenMW
-  on_lists:
-    - "total-overhaul"
-    - "total-overhaul-wip"
-    - "expanded-vanilla"
 
 - for_mod: Indoril and Her Hand Armor Privileges - OpenMW
   manual: true
   extra_dirs:
     - "TR"
-  on_lists:
-    - "total-overhaul"
-    - "total-overhaul-wip"
-    - "expanded-vanilla"
 
 - for_mod: Cutting Room Floor
   extra_dirs:
@@ -440,13 +441,7 @@
   extra_dirs:
     - "Building up Nchagalelft"
 
-- for_mod: "MOMW Patches"
-  extra_dirs:
-    - "53 Mages Guild Stronghold Nchagalelft OpenMW Patch"
-
 - for_mod: The Tea Shop in Old Ebonheart
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Indarys Improved
   on_lists:
@@ -479,10 +474,6 @@
 - for_mod: Dwemer Legacy Reforged - Arkngthunch-Sturdumz
   extra_dirs:
     - "Data Files"
-  on_lists:
-    - "total-overhaul"
-    - "total-overhaul-wip"
-    - "expanded-vanilla"
 
 - for_mod: Dwemer Legacy Reforged - Bthungthumz and Druscashti
   extra_dirs:
@@ -728,6 +719,10 @@
     - "morrowind-starter-pack"
 
 - for_mod: Tamriel Data Texture Upscale
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
 
 - for_mod: "Sophie's Skooma Sweetshoppe"
   extra_dirs:
@@ -746,6 +741,15 @@
 - for_mod: "Sophie's Skooma Sweetshoppe"
   extra_dirs:
     - "08 Hi-Rez Armors TR Oridnator Greaves Upscale and Color Match"
+
+- for_mod: "More Glowing Mods"
+  manual: true
+  extra_dirs:
+    - "GraspingFortuneCharacterGlow"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
 
 - for_mod: "Distant Ebon Tower for OpenMW"
   on_lists:
@@ -768,7 +772,6 @@
 - for_mod: Signpost Fast Travel
   on_lists:
     - "total-overhaul"
-    - "total-overhaul-wip"
     - "expanded-vanilla"
     - "just-good-morrowind"
     - "just-beautiful-morrowind"
@@ -790,10 +793,6 @@
     - "00 Core"
   on_lists:
     - "of-ash-and-blight-wip"
-
-- for_mod: "MOMW Patches"
-  extra_dirs:
-    - "38 PPL Negative Light Fix"
 
 - for_mod: Remove Negative Lights for OpenMW
   extra_dirs:
@@ -1016,8 +1015,6 @@
     - "total-overhaul"
     - "total-overhaul-wip"
     - "graphics-overhaul"
-    - "expanded-vanilla"
-    - "morrowind-starter-pack"
     - "arktwend-enhanced-wip"
 
 - for_mod: "Properly Smoothed Meshes"
@@ -1419,6 +1416,17 @@
 - for_mod: Solstheim Tomb of the Snow Prince
   extra_dirs:
     - "202 Addon - Hide-Like Animal Pelts"
+
+- for_mod: Cybvep's Jester Stash of Tweaks and Patches
+  manual: true
+  extra_dirs:
+    - "BetterBloodmoonDirections"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+    - "just-beautiful-morrowind"
 
 - for_mod: Morrowind VanillaPlus textures
 
@@ -1995,8 +2003,6 @@
     - "expanded-vanilla"
 
 - for_mod: Blue Ghastly Glowyfence
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "RR Mod Series - Morrowind Statues Replacer"
   extra_dirs:
@@ -2320,6 +2326,15 @@
     - "total-overhaul-wip"
     - "graphics-overhaul"
 
+- for_mod: "More Glowing Mods"
+  manual: true
+  extra_dirs:
+    - "WFRTRGlassGlow"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+
 - for_mod: "Westly's Faces Refurbished TR_Data patch"
   extra_dirs:
     - "WFR TR Fix"
@@ -2474,10 +2489,6 @@
     - "graphics-overhaul"
     - "morrowind-starter-pack"
 
-- for_mod: "OpenMW Dynamic Animations"
-  on_lists:
-    - "total-overhaul-wip"
-
 - for_mod: "ReAnimation v2 - Rogue - first-person animation pack"
   on_lists:
     - "total-overhaul"
@@ -2492,11 +2503,27 @@
     - "expanded-vanilla"
     - "graphics-overhaul"
 
+- for_mod: "first-person hand to hand combat animation replacer (openmw)"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "OpenMW Dynamic Animations"
+  manual: true
+  extra_dirs:
+    - "main"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "OpenMW Dynamic Animations"
+  manual: true
+  extra_dirs:
+    - "3rdPersonPatch"
+  on_lists:
+    - "total-overhaul-wip"
+
 - for_mod: "First-person view dynamics - Experimental - OpenMW"
 
 - for_mod: "One-handed animations and idle fixes"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Flight Animated for OpenMW
 
@@ -4437,10 +4464,6 @@
   extra_dirs:
     - "TR"
 
-- for_mod: MOMW Patches
-  extra_dirs:
-    - "39 Signposts Retextured TR Updated"
-
 - for_mod: Signposts Replacer for Tamriel Rebuilt and Vvardenfell
   for_cfg: false
   manual: true
@@ -5112,8 +5135,6 @@
     - "of-ash-and-blight-wip"
 
 - for_mod: Selfishness of the Sea
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: The Vestige of Bethaleft
   on_lists:
@@ -5148,21 +5169,17 @@
   extra_dirs:
     - "00 Core"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: Salt Gems of Bensamsi
   extra_dirs:
     - "01 OpenMW SSQN Addon"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: Salt Gems of Bensamsi
   extra_dirs:
     - "02 HD Textures"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "OAAB - Hawia Egg Mine"
   extra_dirs:
@@ -5219,6 +5236,8 @@
 - for_mod: "Same Hat"
   extra_dirs:
     - "ErnSameHat-main"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "Talking Matters Remastered (Speechcraft Overhaul - OpenMW and MWSE)"
   extra_dirs:
@@ -5231,6 +5250,7 @@
     - "Speechcraft Rebalance"
   on_lists:
     - "total-overhaul"
+    - "total-overhaul-wip"
     - "expanded-vanilla"
     - "just-good-morrowind"
     - "just-beautiful-morrowind"
@@ -5241,9 +5261,14 @@
     - "02 Speechcraft Rebalance Rebalanced"
   on_lists:
     - "total-overhaul"
+    - "total-overhaul-wip"
     - "expanded-vanilla"
     - "just-good-morrowind"
     - "just-beautiful-morrowind"
+
+- for_mod: "Better Balanced Taunt and Persuasion (BBTaP)"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "Talking Trains Speechcraft-openmw lua"
   extra_dirs:
@@ -5285,18 +5310,13 @@
   extra_dirs:
     - "00 Core"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: Gray North - Ruined Redaynia
   extra_dirs:
     - "01 GITD Patch"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Gray North - Ruined Redaynia - Dungeon Only
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Properly cluttered Ald Velothi
 
@@ -5978,6 +5998,15 @@
   - "expanded-vanilla"
   - "total-overhaul-wip"
 
+- for_mod: Cybvep's Jester Stash of Tweaks and Patches
+  manual: true
+  extra_dirs:
+    - "SoullessSummonsforTamrielData"
+  on_lists:
+  - "total-overhaul"
+  - "expanded-vanilla"
+  - "total-overhaul-wip"
+
 - for_mod: Daedra Use Bound Equipment for OpenMW
   on_lists:
     - "total-overhaul"
@@ -5987,8 +6016,13 @@
 
 - for_mod: "Repopulated Creatures"
   extra_dirs:
-    - "TR Dialogue Edits"
-    - "Data Files"
+    - "00 Repopulated Creatures Core"
+  on_lists:
+    - "just-beautiful-morrowind"
+
+- for_mod: "Repopulated Creatures"
+  extra_dirs:
+    - "02 Vvardenfell and Mainland Dialogue Edits"
   on_lists:
     - "just-beautiful-morrowind"
 
@@ -6085,8 +6119,6 @@
 - for_mod: Concept Art Sixth House
   extra_dirs:
     - "Concept Art Sixth House"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "Fear The Golden Saint - Resource by Articus"
   extra_dirs:
@@ -6146,6 +6178,8 @@
     - "graphics-overhaul"
 
 - for_mod: "Natural Wildlife"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: Better Almalexia
   on_lists:
@@ -6458,12 +6492,12 @@
   extra_dirs:
     - "Great Service"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: FMBP - Greet Service
   on_lists:
     - "total-overhaul"
+    - "total-overhaul-wip"
     - "expanded-vanilla"
     - "morrowind-starter-pack"
 
@@ -6520,10 +6554,6 @@
 - for_mod: Attend Me
   extra_dirs:
     - "AttendMe_1.9"
-
-- for_mod: "MOMW Patches"
-  extra_dirs:
-    - "45 Attend Me Patch"
 
 - for_mod: Follower Detection Util (OpenMW)
   on_lists:
@@ -6642,7 +6672,6 @@
     - "Medium Armor"
     - "Data Files"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: Memento Mori
@@ -6778,8 +6807,6 @@
 - for_mod: Ashlander Dombrists
   extra_dirs:
     - "Ashlander Dombrists"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Shady Sam
   extra_dirs:
@@ -6817,14 +6844,11 @@
   extra_dirs:
     - "00 Core"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: Justice for Shulki Ashunbabi
   extra_dirs:
     - "01 BCoM Patch"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Saucy old Selvil
   extra_dirs:
@@ -6949,8 +6973,6 @@
 - for_mod: Guar stables of Balmora
   extra_dirs:
     - "01 BCoM - WaterWorks"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Balmora Outskirts - Stoneflower trading post
   on_lists:
@@ -7439,15 +7461,11 @@
     - "graphics-overhaul"
 
 - for_mod: Unique Velothi Interiors
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Unique Velothi Interiors
   manual: true
   extra_dirs:
     - "spec"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Vivec Normal Mapped for OpenMW
 
@@ -8872,10 +8890,6 @@
     - "total-overhaul-wip"
     - "expanded-vanilla"
 
-- for_mod: "MOMW Patches"
-  extra_dirs:
-    - "28 Morrowind Anti-Cheese+Quest Voice Greetings Patch"
-
 - for_mod: For the Right Price
   extra_dirs:
     - "For the Right Price"
@@ -8924,7 +8938,6 @@
     - "Data Files"
   on_lists:
     - "total-overhaul"
-    - "total-overhaul-wip"
     - "expanded-vanilla"
 
 - for_mod: Stats Potions Training Limits (OpenMW) (Oblivion Style Included)
@@ -8997,11 +9010,17 @@
     - "expanded-vanilla"
     - "of-ash-and-blight-wip"
 
+- for_mod: "Loafy's Necromancy - Reanimate Dead(OpenMW .51)"
+  on_lists:
+    - "total-overhaul-wip"
+
 - for_mod: Better Bound Items
 
 - for_mod: "State-Based Magicka Regen (SBMR)"
   extra_dirs:
     - "00 Core"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: Pharis' Magicka Regeneration
   on_lists:
@@ -9014,9 +9033,26 @@
 - for_mod: Spell Effects Rebalance
   on_lists:
     - "total-overhaul"
-    - "total-overhaul-wip"
     - "expanded-vanilla"
     - "of-ash-and-blight-wip"
+
+- for_mod: "Magic Rebalance and Fixes (MRF)"
+  extra_dirs:
+    - "00 Core"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "Magic Rebalance and Fixes (MRF)"
+  extra_dirs:
+    - "01 Patches"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "Magic Rebalance and Fixes (MRF)"
+  extra_dirs:
+    - "02 OpenMW Lua"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: Detect All Keys
   extra_dirs:
@@ -9065,14 +9101,10 @@
     - "total-overhaul-wip"
 
 - for_mod: "Devilish Alcohol Overhaul (for OpenMW)"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "Devilish Magic Mushrooms (OpenMW 0.49)"
   extra_dirs:
     - "Data Files"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Guards' Hounds
   extra_dirs:
@@ -9391,6 +9423,30 @@
     - "just-good-morrowind"
     - "just-beautiful-morrowind"
 
+- for_mod: Skill Framework (OpenMW)
+
+- for_mod: Magic Window Extender (OpenMW)
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "Spell Trader (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: Inventory Extender (OpenMW)
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: Inventory Extender Tweaks
+  extra_dirs:
+    - "inventoryextender-public-tweaks"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: Inventory Camera (OpenMW)
+  on_lists:
+    - "total-overhaul-wip"
+
 - for_mod: NCGDMW Lua Edition
   extra_dirs:
     - "00 Core"
@@ -9441,6 +9497,14 @@
     - "just-good-morrowind"
     - "just-beautiful-morrowind"
 
+- for_mod: Better Armor Training (OpenMW)
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: Toxicology - Custom Poisoning Skill (OpenMW)
+  extra_dirs:
+    - "Toxicology!"
+
 - for_mod: Dayspassed Bug Fix (OpenMW)
   on_lists:
     - "total-overhaul"
@@ -9474,27 +9538,115 @@
 
 - for_mod: "(OpenMW) Gothic Style Knockout"
 
+- for_mod: "Bullseye - Marksman Overhaul (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "Ammo Count HUD (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "SPELL FRAMEWORK PLUS ( OpenMW )"
+  extra_dirs:
+    - "Spell Framework Plus 3.11"
+
+- for_mod: "Oblivion Style Spellcasting Quickcasting OSSC ( OpenMW )"
+  extra_dirs:
+    - "OSSC - Oblivion-Style Spell Casting"
+
+- for_mod: "Iron Fist for OpenMW"
+  extra_dirs:
+    - "Ironfist for OpenMW"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "Move-Like-This - Directional Attacks (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
+
 - for_mod: "N'Garde - Active Block and Parry (OpenMW)"
   extra_dirs:
     - "NGarde"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "first-person hand to hand combat animation replacer (openmw)"
+  extra_dirs:
+    - "H2h Ngarde Replacer"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "first-person hand to hand combat animation replacer (openmw)"
+  manual: True
+  for_cfg: false
+  extra_dirs:
+    - "H2h Ngarde Replacer"
+    - "Animations"
+    - "xbase_anim.1st"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "Can't Touch This - Combat Miss Feedback (OpenMW)"
+  extra_dirs:
+    - "CantTouchThis"
 
 - for_mod: "(OpenMW) Disarm em All"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "(OpenMW) Don't Drop Your Loot"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "(OpenMW) Thieves Pickpocket"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "(OpenMW) Player On Fire"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "Arrow Stick (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "Riposte (OpenMW 0.51)"
   extra_dirs:
     - "Riposte"
 
 - for_mod: "Interesting (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "Keychain"
+
+- for_mod: "Sneak is Good Now. -- OpenMW"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "Sneak Fatigue Drain (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "Dubious Concoctions (OpenMW)"
+  extra_dirs:
+    - "Dubious Concoctions"
+
+- for_mod: "Reading Overhaul (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: Set Bonus
+  extra_dirs:
+    - "OpenMW_SetBonus"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: Set Bonus
+  extra_dirs:
+    - "OpenMW_SetBonusRebalance"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "Phi's Carefree Leveling"
   extra_dirs:
@@ -9561,21 +9713,16 @@
     - "SevenSprint"
 
 - for_mod: OpenMW Dynamic Actors
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Quick Spell Casting
   extra_dirs:
     - "QuickSpellCasting_0.5"
-
-- for_mod: "Bullseye - Marksman Overhaul (OpenMW)"
 
 - for_mod: Marksman Overhaul
 
 - for_mod: Projectile Overhaul - Modular
   on_lists:
     - "total-overhaul"
-    - "total-overhaul-wip"
     - "expanded-vanilla"
     - "of-ash-and-blight-wip"
 
@@ -9610,6 +9757,7 @@
   extra_dirs:
     - "DynamicTimescale"
   on_lists:
+    - "total-overhaul-wip"
     - "just-beautiful-morrowind"
 
 - for_mod: Quill of Feyfolken - Scroll Enchanting
@@ -9702,8 +9850,13 @@
 - for_mod: No more Dr. Nerevarine
   on_lists:
     - "total-overhaul"
-    - "total-overhaul-wip"
     - "expanded-vanilla"
+
+- for_mod: "Magic Rebalance and Fixes (MRF)"
+  extra_dirs:
+    - "03 No more Dr Nerevarine"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: Nerevarine Service Refusal
   extra_dirs:
@@ -9730,23 +9883,8 @@
     - "Pursuit - OpenMW"
 
 - for_mod: Protective Guards (OpenMW)
-  extra_dirs:
-    - "Protective Guards for OpenMW"
-  on_lists:
-    - "total-overhaul"
-    - "expanded-vanilla"
 
 - for_mod: "Protective Guards - Factions and NPCs Protections (OpenMW)"
-  on_lists:
-    - "total-overhaul"
-    - "expanded-vanilla"
-
-- for_mod: "MOMW Patches"
-  extra_dirs:
-    - "59 Protective Guards Blacklist Patch"
-  on_lists:
-    - "total-overhaul"
-    - "expanded-vanilla"
 
 - for_mod: Creatures Open Doors
 
@@ -9780,8 +9918,6 @@
 - for_mod: "Soul Gems at Ghostgate"
 
 - for_mod: Pickpocket Rebalance (OpenMW)
-  extra_dirs:
-    - "Pickpocket Rebalance"
   on_lists:
     - "total-overhaul"
     - "expanded-vanilla"
@@ -9790,8 +9926,6 @@
     - "of-ash-and-blight-wip"
 
 - for_mod: Behaviour Tree Lua 2nd Edition
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "Mercy - Combat AI Overhaul"
 
@@ -9831,10 +9965,6 @@
   extra_dirs:
     - "Darknut's HD Retexture"
 
-- for_mod: MOMW Patches
-  extra_dirs:
-    - "29 Better Clothes Complete Mara's Blouse Fix"
-
 - for_mod: Better Clothes Definitive Edition
   extra_dirs:
     - "Better Clothes Definitive Edition"
@@ -9849,7 +9979,6 @@
     - "AlchemicalHustleIngredientsPatch"
   on_lists:
     - "total-overhaul"
-    - "total-overhaul-wip"
     - "expanded-vanilla"
 
 - for_mod: Various Mods and Patches
@@ -10489,10 +10618,6 @@
   manual: true
   extra_dirs:
     - "SummersetGlassGlow"
-  on_lists:
-    - "total-overhaul"
-    - "total-overhaul-wip"
-    - "graphics-overhaul"
 
 - for_mod: "More Glowing Mods"
   extra_dirs:
@@ -10583,6 +10708,8 @@
     - "total-overhaul-wip"
 
 - for_mod: "Unrestricted Beasts (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: Protected Beasts
   extra_dirs:
@@ -11124,8 +11251,6 @@
     - "graphics-overhaul"
 
 - for_mod: "Goldbrand Reforged - The Quest for Eltonbrand"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "SWJ's Weapon Sheathing Patches"
   manual: true
@@ -11308,8 +11433,6 @@
     - "expanded-vanilla"
 
 - for_mod: Sea of Sound
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "Maxar's Dynamic Footsteps Sounds (OpenMw 0.49)"
 
@@ -11859,6 +11982,27 @@
     - "expanded-vanilla"
     - "of-ash-and-blight-wip"
 
+- for_mod: Roaring Arena - Betting and Bloodletting
+  manual: true
+  for_cfg: false
+  extra_dirs:
+    - "noVO"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "of-ash-and-blight-wip"
+
+- for_mod: Roaring Arena - Betting and Bloodletting
+  extra_dirs:
+    - "noVO"
+    - "Data Files"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "expanded-vanilla"
+    - "of-ash-and-blight-wip"
+
 - for_mod: Wealth Within Measure
   extra_dirs:
     - "Data Files"
@@ -11948,7 +12092,6 @@
 - for_mod: Sorcerer of Alteration
   on_lists:
     - "total-overhaul"
-    - "total-overhaul-wip"
     - "expanded-vanilla"
 
 - for_mod: Aspect of Azura
@@ -11984,20 +12127,11 @@
   extra_dirs:
     - "Of Justice and Innocence 1.31"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: Quest Voice Greetings
   extra_dirs:
     - "Quest Voice Greetings 3.82"
-
-- for_mod: MOMW Patches
-  extra_dirs:
-    - "55 Quest Voice Greetings+Quests for Clans and Vampire Legends Patch"
-
-- for_mod: MOMW Patches
-  extra_dirs:
-    - "56 Quest Voice Greetings+Tamriel Data Patch"
 
 - for_mod: "Immersive Morrowind"
   extra_dirs:
@@ -12132,8 +12266,6 @@
     - "expanded-vanilla"
 
 - for_mod: Balmora Arches and a Waterfall
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "Red Wisdom - An Ashlander Prophecy"
   extra_dirs:
@@ -12271,7 +12403,6 @@
     - "03 HD Textures"
   on_lists:
     - "total-overhaul"
-    - "total-overhaul-wip"
     - "expanded-vanilla"
 
 - for_mod: Voice Overhaul
@@ -12329,10 +12460,6 @@
     - "total-overhaul"
     - "total-overhaul-wip"
     - "expanded-vanilla"
-
-- for_mod: "MOMW Patches"
-  extra_dirs:
-    - "83 Daedric Shrine Overhaul Fixes"
 
 - for_mod: "MOMW Patches"
   extra_dirs:
@@ -12473,14 +12600,12 @@
   extra_dirs:
     - "00 Core"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: "The Vanishing Ash-chirps - A Quest Mod"
   extra_dirs:
     - "01 SSQN Addon"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: "Maren's Misfit Mabrigash"
@@ -12494,38 +12619,29 @@
   extra_dirs:
     - "00 Core"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: The Curse of The Silent Siren
   extra_dirs:
     - "01 HD Textures"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: The Curse of The Silent Siren
   extra_dirs:
     - "02b OpenMW SSQN"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: The Song of the Grazelands
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Baal Duun - Cursed Isle of the Four Corners
   extra_dirs:
     - "Baal Duun"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: A Familiar Song
   extra_dirs:
     - "Data Files"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: The Devil's Doorstep
   extra_dirs:
@@ -12545,46 +12661,35 @@
 
 - for_mod: The Pearl Divers
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: The Professionals
   extra_dirs:
     - "Data Files"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: The Professionals
   manual: true
   extra_dirs:
     - "SiltStriderAnimationPatch"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: The Professionals Volume 2
   extra_dirs:
     - "Data Files"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "Under Masser's Gaze"
   extra_dirs:
     - "00 Core"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: "Under Masser's Gaze"
   extra_dirs:
     - "01 Normal Maps for OpenMW"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "Under Masser's Gaze"
   extra_dirs:
     - "04 Patch SSQN OpenMw"
   on_lists:
-    - "total-overhaul-wip"
     - "of-ash-and-blight-wip"
 
 - for_mod: Beyond the Firmament
@@ -12627,8 +12732,6 @@
 - for_mod: "One Side of the Coin (OpenMW-Only)"
   extra_dirs:
     - "00 Core"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "One Side of the Coin (OpenMW-Only)"
   extra_dirs:
@@ -12637,8 +12740,6 @@
 - for_mod: "One Side of the Coin (OpenMW-Only)"
   extra_dirs:
     - "05 BCoM Balmora Waterworks"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: A Family Lost
   extra_dirs:
@@ -13037,25 +13138,6 @@
     - "total-overhaul-wip"
     - "graphics-overhaul"
 
-- for_mod: "Westly's Faces Refurbished"
-  manual: true
-  for_cfg: false
-  extra_dirs:
-    - "normals"
-  on_lists:
-    - "total-overhaul"
-    - "total-overhaul-wip"
-    - "graphics-overhaul"
-
-- for_mod: "Westly's Faces Refurbished"
-  extra_dirs:
-    - "normals"
-    - "Data Files"
-  on_lists:
-    - "total-overhaul"
-    - "total-overhaul-wip"
-    - "graphics-overhaul"
-
 - for_mod: Terror of Tel Amur
   extra_dirs:
     - "00 Core"
@@ -13157,12 +13239,8 @@
     - "Tribunal Main Quest Reforged 2.4"
 
 - for_mod: Walkable Sotha Sil
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Splendor of Stars
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Clone
 
@@ -13232,6 +13310,8 @@
     - "of-ash-and-blight-wip"
 
 - for_mod: Balmora Temple Questline
+
+- for_mod: Caldera Fighters Guild
   on_lists:
     - "total-overhaul-wip"
 
@@ -13243,8 +13323,6 @@
     - "of-ash-and-blight-wip"
 
 - for_mod: "Lost Redoran Relics"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Web of Mephala Morag Tong Headquarters
   on_lists:
@@ -13253,17 +13331,25 @@
 
 - for_mod: Morag Tong Polished
   extra_dirs:
-    - "00 Content (Required)"
+    - "00 Core (Required)"
   on_lists:
     - "total-overhaul-wip"
 
 - for_mod: Morag Tong Polished
   extra_dirs:
-    - "01 Vanilla (Choose One)"
+    - "01 Tamriel Rebuilt Patch (Optional)"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: Morag Tong Polished
   extra_dirs:
-    - "02 Web of Mephala (Choose One + Load After)"
+    - "02 Normals for OpenMW (Optional)"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: Morag Tong Polished
+  extra_dirs:
+    - "03 Web of Mephala Patch (Optional)"
   on_lists:
     - "total-overhaul-wip"
 
@@ -13316,53 +13402,44 @@
 - for_mod: Join the Dark Brotherhood - Dark Brotherhood Faction Mod
   on_lists:
     - "total-overhaul"
+    - "total-overhaul-wip"
     - "expanded-vanilla"
 
 - for_mod: The War for the Vvardenfell Brotherhood
   extra_dirs:
     - "00 Content (Required)"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: The War for the Vvardenfell Brotherhood
   extra_dirs:
     - "04 BCoM + DSO (Choose One)"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: The War for the Vvardenfell Brotherhood
   extra_dirs:
     - "05 TR Patch (Optional)"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: The War for the Vvardenfell Brotherhood
   extra_dirs:
     - "06 Morag Tong Polished Integration (Optional)"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: The War for the Vvardenfell Brotherhood
   extra_dirs:
     - "07 Maar Gan - ToP Patch (Optional)"
+
+- for_mod: Camonna Tong - Puppet Master
+  extra_dirs:
+    - "00 Core (Required)"
   on_lists:
     - "total-overhaul-wip"
 
 - for_mod: Camonna Tong - Puppet Master
   extra_dirs:
-    - "00 Content (Required)"
+    - "01 Tamriel Rebuilt Patch (Optional)"
   on_lists:
     - "total-overhaul-wip"
 
 - for_mod: Camonna Tong - Puppet Master
   extra_dirs:
-    - "02 BCoM (Choose One)"
-  on_lists:
-    - "total-overhaul-wip"
-
-- for_mod: Camonna Tong - Puppet Master
-  extra_dirs:
-    - "03 Tamriel Rebuilt Patch (Optional + Load After All)"
+    - "02 Normals for OpenMW (Optional)"
   on_lists:
     - "total-overhaul-wip"
 
@@ -13580,6 +13657,8 @@
 - for_mod: Inherit the House
   extra_dirs:
     - "ErnInheritTheHouse-main"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: Draggle-Tail Shack
   on_lists:
@@ -13596,8 +13675,6 @@
     - "expanded-vanilla"
 
 - for_mod: "Magical Mainland Homes"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: mtrPermanentQuestCorpsesRandomizer OpenMW omwaddon - Randomizer for Location of Permanent Corpses of Imperial Taxman Processus Vitellius and Skooma Dealer Ernil Omoran Associated with Quests
 
@@ -13878,6 +13955,7 @@
     - "total-overhaul-wip"
     - "graphics-overhaul"
     - "expanded-vanilla"
+    - "morrowind-starter-pack"
     - "just-good-morrowind"
     - "just-beautiful-morrowind"
 
@@ -13895,6 +13973,18 @@
     - "graphics-overhaul"
     - "expanded-vanilla"
     - "just-good-morrowind"
+    - "just-beautiful-morrowind"
+
+- for_mod: "Fantasia Grass Mod - Lush Synthesis TR Update"
+  extra_dirs:
+    - "Lush Synthesis - TR"
+    - "Data files"
+  on_lists:
+    - "total-overhaul"
+    - "total-overhaul-wip"
+    - "graphics-overhaul"
+    - "expanded-vanilla"
+    - "morrowind-starter-pack"
     - "just-beautiful-morrowind"
 
 - for_mod: Vurt's Groundcover
@@ -14579,10 +14669,6 @@
     - "graphics-overhaul"
     - "expanded-vanilla"
 
-- for_mod: "MOMW Patches"
-  extra_dirs:
-    - "34 MOMW Logs On Fire Patch"
-
 - for_mod: "Beautiful Cities of Morrowind"
   extra_dirs:
     - "Patches"
@@ -14636,7 +14722,6 @@
     - "HQ"
   on_lists:
     - "total-overhaul"
-    - "total-overhaul-wip"
     - "graphics-overhaul"
 
 - for_mod: "Ashlander Lanterns Retexture - Aestetika of Vvardenfell"
@@ -14884,6 +14969,8 @@
 - for_mod: "(OpenMW) Immersive FPV"
 
 - for_mod: "(OpenMW) Consuming Animated"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: Marksman's Eye
 
@@ -14978,8 +15065,6 @@
     - "total-overhaul-wip"
 
 - for_mod: OpenMW Animated Pickup and Shop Around
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "Better Merchants Skills (OpenMW)"
   extra_dirs:
@@ -14989,6 +15074,12 @@
     - "total-overhaul-wip"
     - "expanded-vanilla"
     - "of-ash-and-blight-wip"
+
+- for_mod: "Commercium - Fair Trade (OpenMW)"
+  extra_dirs:
+    - "Commercium - Fair Trade"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "navigation autosave"
 
@@ -15320,6 +15411,16 @@
   extra_dirs:
     - "01 JMUIR [Classic Theme] - Crosshair (dot)"
 
+- for_mod: "(OpenMW) Alchemy Redone"
+  extra_dirs:
+    - "TPA_Alchemy_Redone"
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: "Sane Custom Potions (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
+
 - for_mod: Wayfarer's Atlas (OpenMW)
 
 - for_mod: Map and Compass
@@ -15417,6 +15518,7 @@
     - "graphics-overhaul"
     - "just-good-morrowind"
     - "just-beautiful-morrowind"
+    - "expanded-vanilla"
 
 - for_mod: Less ugly enchantment menu icon
 
@@ -15433,6 +15535,7 @@
     - "graphics-overhaul"
     - "just-good-morrowind"
     - "just-beautiful-morrowind"
+    - "expanded-vanilla"
 
 - for_mod: Starburst Crosshairs
 
@@ -15578,8 +15681,6 @@
 - for_mod: "Modernized HUD for OpenMW"
   extra_dirs:
     - "Modernized UI"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: "(OpenMW 0.49) Better Bars"
   extra_dirs:
@@ -15592,6 +15693,12 @@
 - for_mod: "(OpenMW 0.49) Floating Healthbars"
   extra_dirs:
     - "FloatingHealthbars"
+
+- for_mod: "(OpenMW) HUDMarkers - Detect spells"
+  extra_dirs:
+    - "HUDMarkers"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: "Vanilla Style HD Icons for Attributes and Skills"
   on_lists:
@@ -15609,6 +15716,8 @@
 - for_mod: "Pretty Loot (OpenMW)"
 
 - for_mod: "Questman - Modern Quest Journal (OpenMW)"
+  on_lists:
+    - "total-overhaul-wip"
 
 - for_mod: Weapon Refinement Lua
   extra_dirs:
@@ -15728,8 +15837,6 @@
     - "of-ash-and-blight-wip"
 
 - for_mod: "trav's OpenMW Books Enhanced"
-  on_lists:
-    - "total-overhaul-wip"
 
 - for_mod: Mono's Minor Moddities
   manual: true
@@ -15763,7 +15870,6 @@
 - for_mod: Alternative TrueType Fonts
   on_lists:
     - "total-overhaul"
-    - "total-overhaul-wip"
     - "graphics-overhaul"
     - "morrowind-pbr"
     - "expanded-vanilla"
@@ -15864,6 +15970,16 @@
 
 - for_mod: Vtastek's Light Shaders
 
+- for_mod: OpenMW Dancing Capo Error Marker Replacer
+  on_lists:
+    - "total-overhaul-wip"
+
+- for_mod: (OpenMW) Shared Ray (Library)
+  extra_dirs:
+    - "SharedRay"
+  on_lists:
+    - "total-overhaul-wip"
+
 - for_mod: Delta Plugin
 
 - for_mod: Groundcoverify
@@ -15933,8 +16049,6 @@
 - for_mod: "Nifty Spell Pack (OpenMW)"
   extra_dirs:
     - "8X Textured"
-
-- for_mod: "Spell Trader (OpenMW)"
 
 - for_mod: "Boons and Burdens - OpenMW Background Pack"
 

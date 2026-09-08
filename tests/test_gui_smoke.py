@@ -3265,3 +3265,213 @@ class TestPacedRecolour:
             assert coloured == RECOLOUR_CHUNK, "a superseded pass kept painting"
         finally:
             tree.destroy()
+
+
+class TestEmptySortReturnsTheList:
+    """An empty sort still hands back the current load order so it can be edited.
+
+    Running Sort with nothing in the subset used to leave the order panel blank,
+    with nothing to act on. It now loads the cfg's existing order so the user can
+    prune it (remove rows) and Export the result.
+    """
+
+    _BASE = ["Morrowind.esm", "Tribunal.esm", "Alpha.esp", "Beta.esp"]
+    _DATA = ['data="C:/mods/A/Data Files"', 'data="C:/mods/B/Data Files"']
+
+    def _plan(
+        self,
+        final_order: Any,
+        base: list[str],
+        data_order: list[str] | None = None,
+        orphan_data_paths: list[str] | None = None,
+    ) -> dict:
+        return {
+            "final_order": final_order,
+            "base_order_names": base,
+            "data_order": data_order or [],
+            "subset": [],
+            "data_result": [],
+            "data_inserts": [],
+            "orphan_data_paths": orphan_data_paths or [],
+            "master_problem_plugins": [],
+        }
+
+    _ANALYSIS = (
+        "export_button",
+        "conflicts_button",
+        "cellmap_button",
+        "mergedlands_button",
+        "resource_button",
+        "lint_button",
+    )
+
+    def test_empty_sort_loads_the_current_order_for_editing(self, fresh_app: Any) -> None:
+        fresh_app._sort_finished(self._plan(None, self._BASE, self._DATA), "done")
+        assert fresh_app.order_panel.get_enabled() == self._BASE
+        # the data= paths come back too, so they can be pruned
+        assert fresh_app.data_order_panel.get_enabled() == self._DATA
+        # loaded data means analysis is allowed, not just Export
+        for name in self._ANALYSIS:
+            assert str(getattr(fresh_app, name).cget("state")) == "normal", name
+
+    def test_a_real_sort_still_loads_its_own_result(self, fresh_app: Any) -> None:
+        sorted_order = ["Morrowind.esm", "Beta.esp", "Alpha.esp"]
+        # a real sort must NOT get the empty-sort data fallback
+        fresh_app._sort_finished(self._plan(sorted_order, self._BASE, self._DATA), "done")
+        assert fresh_app.order_panel.get_enabled() == sorted_order
+        assert fresh_app.data_order_panel.get_enabled() == []
+
+    def test_orphan_data_paths_are_highlighted_in_the_data_panel(self, fresh_app: Any) -> None:
+        # An orphan data= path pulled from the cfg is ours to manage, so it's
+        # highlighted in the data panel -- even on an empty sort where it comes
+        # back via the data_order fallback (not data_result).
+        plan = self._plan(None, self._BASE, self._DATA, orphan_data_paths=["C:/mods/A/Data Files"])
+        fresh_app._sort_finished(plan, "done")
+        highlighted = fresh_app.data_order_panel._highlight_lower
+        assert 'data="c:/mods/a/data files"' in highlighted
+        assert 'data="c:/mods/b/data files"' not in highlighted
+
+    def test_a_truly_empty_plan_leaves_the_panel_and_actions_disabled(self, fresh_app: Any) -> None:
+        fresh_app._sort_finished(self._plan(None, [], []), "done")
+        assert fresh_app.order_panel.get_enabled() == []
+        assert fresh_app.data_order_panel.get_enabled() == []
+        for name in self._ANALYSIS:
+            assert str(getattr(fresh_app, name).cget("state")) == "disabled", name
+
+
+class TestAccentPolish:
+    """The native (no-library) accent polish: primary actions use Accent.TButton,
+    and the style is actually configured by apply_dark_theme."""
+
+    def test_sort_and_export_use_the_accent_style(self, app: Any) -> None:
+        assert str(app.sort_button.cget("style")) == "Accent.TButton"
+        assert str(app.export_button.cget("style")) == "Accent.TButton"
+
+    def test_the_accent_style_is_configured(self, app: Any) -> None:
+        # a real background was set on the style (non-empty => configured)
+        assert app.style.configure("Accent.TButton", "background")
+
+    def test_the_accent_button_uses_dark_text_on_the_default_blue(self, app: Any) -> None:
+        # WCAG contrast picks dark text on the default #3794ff accent (5.6:1 vs
+        # white's 3.1:1), matching the dark-on-colour look of the lighter themes.
+        assert str(app.style.lookup("Accent.TButton", "foreground")) == "#1b1b1b"
+
+    def test_the_scrollbar_lost_its_arrow_buttons(self, app: Any) -> None:
+        # The modern thumb-only layout: neither arrow element remains.
+        flat = str(app.style.layout("Vertical.TScrollbar"))
+        assert "uparrow" not in flat and "downarrow" not in flat
+
+
+class TestToggleSwitch:
+    """Our canvas pill switch: behaves like a boolean Checkbutton and re-themes."""
+
+    def _make(self, app: Any, **kw: Any) -> Any:
+        from wraithguard.gui.widgets import ToggleSwitch
+
+        return ToggleSwitch(app.root, **kw)
+
+    def test_a_click_toggles_the_variable_and_fires_the_command(self, app: Any) -> None:
+        var = tkinter.BooleanVar(value=False)
+        fired: list[bool] = []
+        sw = self._make(app, text="X", variable=var, command=lambda: fired.append(True))
+        sw._on_click()
+        assert var.get() is True
+        assert sw.get() is True
+        assert fired == [True]
+        sw._on_click()
+        assert var.get() is False
+
+    def test_a_disabled_switch_ignores_clicks(self, app: Any) -> None:
+        var = tkinter.BooleanVar(value=False)
+        fired: list[bool] = []
+        sw = self._make(app, variable=var, command=lambda: fired.append(True), state="disabled")
+        sw._on_click()
+        assert var.get() is False
+        assert fired == []
+        sw.set_state("normal")
+        sw._on_click()
+        assert var.get() is True
+
+    def test_an_external_variable_change_is_reflected(self, app: Any) -> None:
+        var = tkinter.BooleanVar(value=False)
+        sw = self._make(app, variable=var)
+        var.set(True)  # trace -> redraw, no command
+        assert sw.get() is True
+
+    def test_refresh_theme_repaints_without_error(self, app: Any) -> None:
+        from wraithguard.gui.theme import DARK
+
+        sw = self._make(app, text="Y", variable=tkinter.BooleanVar(value=True))
+        sw.refresh_theme()
+        assert str(sw.cget("bg")) == DARK["bg"]
+
+    def test_the_options_panel_uses_switches(self, app: Any) -> None:
+        from wraithguard.gui.widgets import ToggleSwitch
+
+        switches = [w for w in _all_widgets(app.root) if isinstance(w, ToggleSwitch)]
+        # the write + scan option toggles were converted (dry run, write cfg,
+        # sort data, orphans, backups, warnings, doc, keep json, cleanup, verbose)
+        assert len(switches) >= 8
+
+
+class TestRadioButton:
+    """Our canvas ring radio: a shared-variable group like ttk.Radiobutton."""
+
+    def _group(self, app: Any, values: list[Any], var: Any, command: Any = None) -> list[Any]:
+        from wraithguard.gui.widgets import RadioButton
+
+        return [
+            RadioButton(app.root, text=str(v), value=v, variable=var, command=command)
+            for v in values
+        ]
+
+    def test_picking_one_selects_it_and_deselects_the_others(self, app: Any) -> None:
+        var = tkinter.StringVar(value="a")
+        a, b, c = self._group(app, ["a", "b", "c"], var)
+        assert (a.selected(), b.selected(), c.selected()) == (True, False, False)
+        b._on_click()
+        assert var.get() == "b"
+        assert (a.selected(), b.selected(), c.selected()) == (False, True, False)
+
+    def test_the_command_fires_on_a_pick(self, app: Any) -> None:
+        var = tkinter.StringVar(value="a")
+        fired: list[int] = []
+        _a, b = self._group(app, ["a", "b"], var, command=lambda: fired.append(1))
+        b._on_click()
+        assert fired == [1]
+
+    def test_it_works_with_an_int_variable(self, app: Any) -> None:
+        from wraithguard.gui.widgets import RadioButton
+
+        var = tkinter.IntVar(value=0)
+        r0 = RadioButton(app.root, text="0", value=0, variable=var)
+        r2 = RadioButton(app.root, text="2", value=2, variable=var)
+        assert r0.selected() and not r2.selected()
+        r2._on_click()
+        assert var.get() == 2 and r2.selected()
+
+    def test_a_disabled_radio_ignores_clicks(self, app: Any) -> None:
+        var = tkinter.StringVar(value="a")
+        from wraithguard.gui.widgets import RadioButton
+
+        r = RadioButton(app.root, text="b", value="b", variable=var, state="disabled")
+        r._on_click()
+        assert var.get() == "a"
+
+    def test_refresh_theme_repaints_without_error(self, app: Any) -> None:
+        from wraithguard.gui.theme import DARK
+        from wraithguard.gui.widgets import RadioButton
+
+        r = RadioButton(app.root, text="x", value="x", variable=tkinter.StringVar(value="x"))
+        r.refresh_theme()
+        assert str(r.cget("bg")) == DARK["bg"]
+
+    def test_the_lead_button_columns_share_a_width_so_dividers_line_up(self, app: Any) -> None:
+        # Row 1 (Sort/Export) and row 2 (Merge Lands/Merge Settings) each open
+        # with two buttons then a group divider. Matching each column's width
+        # across the rows is what makes that first divider line up vertically.
+        assert app.sort_button.cget("width") == app.mergedlands_button.cget("width")
+        assert app.export_button.cget("width") == app.merge_settings_button.cget("width")
+        # and both are actually fixed (non-zero), not label-sized
+        assert int(app.sort_button.cget("width")) > 0
+        assert int(app.export_button.cget("width")) > 0

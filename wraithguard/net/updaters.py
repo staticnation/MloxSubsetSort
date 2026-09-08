@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from wraithguard.momw import parse_plugin_order_yml
+from wraithguard.momw_datapaths import parse_data_path_order_yml
 
 if TYPE_CHECKING:
     import ssl
@@ -40,6 +41,15 @@ PLUGIN_ORDER_URLS: Final = (
     "data_seeds/data/plugin-order.yml?ref_type=heads&inline=false",
     "https://gitlab.com/api/v4/projects/modding-openmw%2Fmodding-openmw.com/repository/files/"
     "momw%2Fmomw%2Fdata_seeds%2Fdata%2Fplugin-order.yml/raw?ref=master",
+)
+
+#: Where MOMW publishes ``data-path-order.yml`` -- the per-list data-directory
+#: order. Same two-URL raw/API pattern as ``plugin-order.yml`` beside it.
+DATA_PATH_ORDER_URLS: Final = (
+    "https://gitlab.com/modding-openmw/modding-openmw.com/-/raw/master/momw/momw/"
+    "data_seeds/data/data-path-order.yml?ref_type=heads&inline=false",
+    "https://gitlab.com/api/v4/projects/modding-openmw%2Fmodding-openmw.com/repository/files/"
+    "momw%2Fmomw%2Fdata_seeds%2Fdata%2Fdata-path-order.yml/raw?ref=master",
 )
 
 #: Schemes we are willing to download from. Anything else -- notably ``file:``
@@ -231,6 +241,79 @@ def update_plugin_order_yml(
         return report
     report.insert(0, "FAILED: no source produced a valid plugin-order.yml:")
     report.append("  (set $MLOX_PLUGIN_ORDER_URL if MOMW moved the file)")
+    return report
+
+
+def update_data_path_order_yml(
+    path: str | Path,
+    urls: Sequence[str] | None = None,
+    timeout: int = 45,
+) -> list[str]:
+    """Download the current MOMW ``data-path-order.yml`` over the configured file.
+
+    The sibling of :func:`update_plugin_order_yml`, and validated the same way:
+    the download must carry the file's own markers and parse with
+    :func:`~wraithguard.momw_datapaths.parse_data_path_order_yml` into a
+    plausible number of entries *before* anything on disk is touched, so a wrong
+    URL or an HTML error page can never overwrite the real file. The previous
+    file is kept as a timestamped ``.bak``.
+
+    Args:
+        path: Destination ``data-path-order.yml``.
+        urls: Source URLs to try in order. Defaults to
+            :data:`DATA_PATH_ORDER_URLS`.
+        timeout: Per-request timeout in seconds.
+
+    Returns:
+        Human-readable report lines; failures are reported here, not raised.
+    """
+    import tempfile as _tf
+
+    p = Path(path)
+    env = os.environ.get("MLOX_DATA_PATH_ORDER_URL")
+    cand = list(urls) if urls else ([env] if env else list(DATA_PATH_ORDER_URLS))
+    report = []
+    for url in cand:
+        try:
+            data = fetch_url_bytes(url, timeout=timeout)
+        except (OSError, ValueError) as e:
+            report.append(f"  {url}: {e}")
+            continue
+        # for_mod + extra_dirs are this file's shape; file_name would mean we
+        # were handed plugin-order.yml by mistake, so both markers are required.
+        if b"for_mod" not in data or b"extra_dirs" not in data:
+            report.append(f"  {url}: response doesn't look like data-path-order.yml")
+            continue
+        tmp = None
+        try:
+            with _tf.NamedTemporaryFile("wb", suffix=".yml", delete=False) as tf:
+                tf.write(data)
+                tmp = Path(tf.name)
+            entries = parse_data_path_order_yml(tmp)
+        except Exception as e:  # noqa: BLE001 -- validating untrusted download
+            report.append(f"  {url}: downloaded but failed to parse ({e})")
+            continue
+        finally:
+            if tmp is not None:  # pragma: no branch
+                tmp.unlink(missing_ok=True)
+        if len(entries) < 50:
+            report.append(f"  {url}: parsed but only {len(entries)} entries -- refusing")
+            continue
+        old = p.read_bytes() if p.exists() else b""
+        if old == data:
+            report.append(f"{p.name}: already up to date ({len(entries)} entries).")
+            return report
+        if p.exists():
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")  # noqa: DTZ005
+            p.with_name(p.name + f".bak-{stamp}").write_bytes(old)
+        p.write_bytes(data)
+        report.append(
+            f"{p.name}: updated from {url} ({len(entries)} entries; "
+            f"previous version kept as .bak)."
+        )
+        return report
+    report.insert(0, "FAILED: no source produced a valid data-path-order.yml:")
+    report.append("  (set $MLOX_DATA_PATH_ORDER_URL if MOMW moved the file)")
     return report
 
 

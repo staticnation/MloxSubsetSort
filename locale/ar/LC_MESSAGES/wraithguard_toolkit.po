@@ -1601,6 +1601,9 @@ msgstr[3] "  تم استبعاد %(count)d إضافات منسّقة من الت
 msgstr[4] "  تم استبعاد %(count)d إضافة منسّقة من الترتيب: %(names)s"
 msgstr[5] "  تم استبعاد %(count)d إضافة منسّقة من الترتيب: %(names)s"
 
+msgid "  No plugins to sort. The current openmw.cfg load order is shown above for editing -- remove entries and Export, or add plugins and Sort again."
+msgstr ""
+
 msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
 msgstr "\n  موجود بالفعل في cfg، ستُعاد مواضعتها داخله: %(names)s"
 
@@ -1615,6 +1618,9 @@ msgstr "\n  لم تُثَر تحذيرات [Conflict]/[Requires]/[Note]."
 
 msgid "\n  No plugin-order.yml warnings."
 msgstr "\n  لا توجد تحذيرات plugin-order.yml."
+
+msgid "\n  No data-path-order.yml warnings."
+msgstr "\n  لا توجد تحذيرات data-path-order.yml."
 
 msgid "  (plugin files not reachable from the data folders; can't read headers)"
 msgstr "  (ملفات الإضافات غير قابلة للوصول من مجلدات البيانات؛ لا يمكن قراءة الترويسة)"
@@ -1679,9 +1685,6 @@ msgstr "\n  تمت كتابة تقرير الموارد: %(path)s"
 msgid "could not write resource CSV: %(error)s"
 msgstr "تعذّرت كتابة CSV الموارد: %(error)s"
 
-msgid "  Pass --sort-data-paths to enable:"
-msgstr "  مرّر --sort-data-paths للتمكين:"
-
 msgid "  <-- inserted"
 msgstr "  <-- تم الإدراج"
 
@@ -1699,6 +1702,21 @@ msgstr[5] "  سُحبت %(count)d إضافة يتيمة من openmw.cfg"
 
 msgid "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations."
 msgstr "  لم يُعثر على إضافات غير مُدارة -- كل إضافة content= في cfg موجودة في القائمة أو في إعداداتك."
+
+msgid "  %(count)d orphan data= path found in openmw.cfg"
+msgid_plural "  %(count)d orphan data= paths found in openmw.cfg"
+msgstr[0] "  عُثر على %(count)d مسار data= يتيم في openmw.cfg"
+msgstr[1] "  عُثر على %(count)d مسار data= يتيم في openmw.cfg"
+msgstr[2] "  عُثر على %(count)d مسارَي data= يتيمين في openmw.cfg"
+msgstr[3] "  عُثر على %(count)d مسارات data= يتيمة في openmw.cfg"
+msgstr[4] "  عُثر على %(count)d مسارًا data= يتيمًا في openmw.cfg"
+msgstr[5] "  عُثر على %(count)d مسار data= يتيم في openmw.cfg"
+
+msgid "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations."
+msgstr "  لم يُعثر على مسارات data= غير مُدارة -- كل مسار data= في cfg موجود في ترتيب data= للقائمة '%(list)s' أو في تخصيصاتك."
+
+msgid "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too."
+msgstr "  مسارات data= غير مُصنَّفة -- عيّن data-path-order.yml واسم قائمة لإظهار مسارات data= غير المُدارة (اليتيمة) أيضًا."
 
 msgid "groundcover declared by this run"
 msgstr "groundcover المُعلن بواسطة هذا التشغيل"
@@ -1862,6 +1880,9 @@ msgstr "اسم القائمة (اختياري):"
 msgid "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser."
 msgstr "ملف plugin-order.yml الخاص بـ MOMW (مصدر الحقيقة لأي الإضافات تنتمي إلى أي قائمة منسّقة). مع تحديد اسم قائمة أعلاه، تُستبعد الإضافات المنسّقة لتلك القائمة من الترتيب (لا يُعاد ترتيبها أبدًا) بحيث تتأثر إضافاتك الخاصة فقط، وتصدر تحذيرات للقراءة فقط: زائد، يتيم، needs-cleaning، وفحص رفض الترتيب الأساسي. يُستخدم PyYAML إذا كان مثبتًا، وإلا فالمحلّل المضمّن."
 
+msgid "MOMW's data-path-order.yml (the per-list order in which each mod's data directories should be added). Used to build a mod's expected data paths -- its folder is fuzzy-matched by name, then its extra_dirs appended in order. PyYAML used if installed, else a built-in parser."
+msgstr "ملف data-path-order.yml الخاص بـ MOMW (الترتيب، لكل قائمة، الذي يجب أن تُضاف به أدلة بيانات كل تعديل). يُستخدم لبناء مسارات البيانات المتوقعة للتعديل -- يُطابَق مجلده بالاسم بشكل تقريبي، ثم تُلحق extra_dirs الخاصة به بالترتيب. يُستخدم PyYAML إن كان مثبتًا، وإلا فمحلل مدمج."
+
 msgid "Write directly back to customizations.toml (overwrite in place; a .bak-<timestamp> copy is made first unless backups are disabled below)"
 msgstr "الكتابة مباشرة إلى customizations.toml (الكتابة فوقه في مكانه؛ تُنشأ نسخة .bak-<طابع زمني> أولًا ما لم تكن النسخ الاحتياطية معطّلة أدناه)"
 
@@ -1907,11 +1928,11 @@ msgstr "إنشاء مستند نصي للمجموعة الفرعية (عند ا�
 msgid "Controls what 'Scan...' does with its result. Checked: write the scanned list to a .txt subset file you choose, and load it (the file stays on disk for reuse). Unchecked: keep the scanned list in memory just for this session and feed it straight to the sort -- nothing is written to disk."
 msgstr "يتحكم فيما يفعله «مسح…» بنتيجته. مُحدد: اكتب القائمة الممسوحة إلى ملف المجموعة الفرعية .txt الذي تختاره وحمّلها (يبقى الملف على القرص لإعادة الاستخدام). غير محدد: احتفظ بالقائمة الممسوحة في الذاكرة لهذه الجلسة فقط ومرّرها مباشرة إلى الترتيب -- لا يُكتب شيء على القرص."
 
-msgid "Pull unmanaged (orphan) plugins from openmw.cfg"
-msgstr "سحب الإضافات غير المُدارة (اليتيمة) من openmw.cfg"
+msgid "Pull unmanaged (orphan) plugins & data paths from openmw.cfg"
+msgstr "سحب الإضافات ومسارات البيانات غير المُدارة (اليتيمة) من openmw.cfg"
 
-msgid "Also sort the content= plugins ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml. Their current cfg order is kept as the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are left exactly as openmw.cfg has them: they are already in the cfg's own data= order, and there is no reliable way to tell a path the list manages from one you added, so pulling them would reorder the whole VFS."
-msgstr "رتّب أيضًا إضافات content= الموجودة «بالفعل» في openmw.cfg والتي لا يديرها شيء -- لا القائمة المنسّقة (plugin-order.yml) ولا customizations.toml الخاص بك. يُحفظ ترتيب cfg الحالي لها كنقطة بداية حتى ينقلها الترتيب. الملفات الرئيسية الأساسية (Morrowind/Tribunal/Bloodmoon) لا تُمس أبدًا. يعمل بمفرده (لا حاجة لملف مجموعة فرعية) أو معه.\n\nتُترك مسارات data= تمامًا كما هي في openmw.cfg: هي بالفعل في ترتيب data= الخاص بـ cfg، ولا توجد طريقة موثوقة للتمييز بين مسار تديره قائمة ومسار أضفته، لذا سحبها سيعيد ترتيب VFS بأكمله."
+msgid "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data-path-order.yml and list name are set (that yml is how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order."
+msgstr "يلتقط أيضًا ما هو موجود بالفعل في openmw.cfg ولا يديره شيء -- لا القائمة المنسّقة (plugin-order.yml) ولا ملف customizations.toml الخاص بك -- كي يبقى بعد إعادة بناء momw-configurator التالية. تُرتَّب إضافات content=؛ ويظل ترتيبها الحالي في cfg هو ترتيب البداية حتى يعيد الفرز وضعها. لا تُمسّ الملفات الرئيسية الأساسية (Morrowind/Tribunal/Bloodmoon) أبدًا. يعمل وحده (دون الحاجة إلى ملف مجموعة فرعية) أو إلى جانب واحد.\n\nتُلتقط مسارات data= أيضًا عند تعيين data-path-order.yml واسم قائمة (فذلك الـ yml هو ما يميّز مسارًا تديره القائمة عن مسار أضفته أنت). تُميَّز مسارات data= غير المُدارة هنا، وتُكتب عند التصدير في customizations.toml كإدراجات مثبّتة إلى المسارات المنسّقة -- ولا يُعاد ترتيبها في مكانها أبدًا، لأنها موجودة بالفعل في ترتيب data= الخاص بـ cfg."
 
 msgid "Exclude from conflict / cell scans:"
 msgstr "استبعاد من فحوص التعارض / الخلايا:"

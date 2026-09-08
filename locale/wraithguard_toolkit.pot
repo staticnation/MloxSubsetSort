@@ -13,7 +13,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Wraithguard Toolkit 4.0.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-07 23:27\n"
+"POT-Creation-Date: 2026-09-07 23:40\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2242,103 +2242,103 @@ msgstr ""
 msgid "UNMANAGED (ORPHAN) ENTRIES FROM openmw.cfg"
 msgstr ""
 
-#: wraithguard_toolkit.py:5595
+#: wraithguard_toolkit.py:5597
 msgid "  %(count)d orphan plugin pulled from openmw.cfg"
 msgid_plural "  %(count)d orphan plugins pulled from openmw.cfg"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:5607
+#: wraithguard_toolkit.py:5609
 msgid "  No unmanaged plugins found -- every content= plugin in the cfg is on the list or in your customizations."
 msgstr ""
 
-#: wraithguard_toolkit.py:5617
+#: wraithguard_toolkit.py:5619
 msgid "  %(count)d orphan data= path found in openmw.cfg"
 msgid_plural "  %(count)d orphan data= paths found in openmw.cfg"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:5628
+#: wraithguard_toolkit.py:5630
 msgid "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations."
 msgstr ""
 
-#: wraithguard_toolkit.py:5637
+#: wraithguard_toolkit.py:5639
 msgid "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too."
 msgstr ""
 
-#: wraithguard_toolkit.py:5688
+#: wraithguard_toolkit.py:5690
 msgid "groundcover declared by this run"
 msgstr ""
 
-#: wraithguard_toolkit.py:5692
+#: wraithguard_toolkit.py:5694
 msgid "  These are written as groundcover= rather than content=. Their data= folders are inserted normally -- OpenMW has to find the file."
 msgstr ""
 
-#: wraithguard_toolkit.py:5698
+#: wraithguard_toolkit.py:5700
 msgid "groundcover plugins held back"
 msgstr ""
 
-#: wraithguard_toolkit.py:5700
+#: wraithguard_toolkit.py:5702
 msgid "%(count)d plugin in your subset is already declared as groundcover in openmw.cfg, so it was NOT added to content=:"
 msgid_plural "%(count)d plugins in your subset are already declared as groundcover in openmw.cfg, so they were NOT added to content=:"
 msgstr[0] ""
 msgstr[1] ""
 
-#: wraithguard_toolkit.py:5712
+#: wraithguard_toolkit.py:5714
 msgid "  Their groundcover= lines are untouched and their data= paths are still written, so the grass stays enabled -- as grass. Loading one as content= too would spawn every blade as a real object."
 msgstr ""
 
-#: wraithguard_toolkit.py:5950
+#: wraithguard_toolkit.py:5952
 msgid "  openmw.cfg left untouched (pass --write-cfg to patch it directly)"
 msgstr ""
 
-#: wraithguard_toolkit.py:6032
+#: wraithguard_toolkit.py:6034
 msgid "  WARNING: configurator preview failed: %(error)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:6035
+#: wraithguard_toolkit.py:6037
 msgid "\n  DRY RUN: would write %(path)s\n%(toml)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:6041
+#: wraithguard_toolkit.py:6043
 msgid "  Wrote corrected customizations: %(path)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:6051
+#: wraithguard_toolkit.py:6053
 msgid "  Plugins sorted:        %(count)d"
 msgstr ""
 
-#: wraithguard_toolkit.py:6053
+#: wraithguard_toolkit.py:6055
 msgid "  Data paths inserted:   %(count)d"
 msgstr ""
 
-#: wraithguard_toolkit.py:6056
+#: wraithguard_toolkit.py:6058
 msgid "  Rule warnings raised:  %(count)d"
 msgstr ""
 
-#: wraithguard_toolkit.py:6058
+#: wraithguard_toolkit.py:6060
 msgid "  plugin-order.yml warnings: %(count)d"
 msgstr ""
 
-#: wraithguard_toolkit.py:6060
+#: wraithguard_toolkit.py:6062
 msgid "  openmw.cfg written:    %(answer)s"
 msgstr ""
 
-#: wraithguard_toolkit.py:6060
-#: wraithguard_toolkit.py:6063
+#: wraithguard_toolkit.py:6062
+#: wraithguard_toolkit.py:6065
 #: wraithguard_toolkit_gui.py:3150
 #: wraithguard_toolkit_gui.py:3151
 msgid "yes"
 msgstr ""
 
-#: wraithguard_toolkit.py:6060
-#: wraithguard_toolkit.py:6063
+#: wraithguard_toolkit.py:6062
+#: wraithguard_toolkit.py:6065
 #: wraithguard_toolkit_gui.py:3150
 #: wraithguard_toolkit_gui.py:3151
 msgid "no"
 msgstr ""
 
-#: wraithguard_toolkit.py:6062
+#: wraithguard_toolkit.py:6064
 msgid "  customizations.toml written: %(answer)s"
 msgstr ""
 

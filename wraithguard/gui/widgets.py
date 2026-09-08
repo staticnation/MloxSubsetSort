@@ -351,6 +351,11 @@ class RadioButton(tk.Canvas):
         self._variable.trace_add("write", lambda *_: self._redraw())
         self._redraw()
 
+    @property
+    def value(self) -> object:
+        """The value this radio writes to its variable when picked."""
+        return self._value
+
     def selected(self) -> bool:
         """Whether this radio's value is the one currently chosen."""
         return self._variable.get() == self._value

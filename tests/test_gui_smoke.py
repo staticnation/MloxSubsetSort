@@ -1964,14 +1964,15 @@ class TestRuleMakerWindow:
         Args:
             app: The application.
         """
+        from wraithguard.gui.widgets import RadioButton
         from wraithguard.rules.authoring import RULE_KINDS
 
         app.on_rule_maker()
         try:
             offered = {
-                str(child.cget("value"))
+                str(child.value)
                 for child in _all_widgets(app._rm_win)
-                if child.winfo_class() == "TRadiobutton"
+                if isinstance(child, RadioButton)
             }
             assert set(RULE_KINDS) <= offered, f"missing: {set(RULE_KINDS) - offered}"
         finally:

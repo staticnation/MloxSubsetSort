@@ -5548,10 +5548,12 @@ def _pull_cfg_orphans(
     if pull_data:
         cfg_data_values = [v for v in (extract_data_path_value(x) for x in data_order) if v]
         try:
-            dp_entries = parse_data_path_order_yml(Path(dpo))
+            dp_entries = parse_data_path_order_yml(Path(str(dpo)))
         except (OSError, ValueError):
             dp_entries = []
-        managed_data_norms = managed_cfg_data_path_norms(dp_entries, list_name, cfg_data_values)
+        managed_data_norms = managed_cfg_data_path_norms(
+            dp_entries, str(list_name), cfg_data_values
+        )
         declared_data_norms = {
             normalize_data_path(d["value"]) for d in (*data_inserts, *raw_toml_data_inserts)
         }

@@ -14,7 +14,7 @@ import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from wraithguard.tracing import trace
 
@@ -352,24 +352,19 @@ def apply_dark_theme(root: tk.Tk) -> ttk.Style:
     # scrollbar. Wrapped because the element names are clam-specific -- on any
     # theme that lacks them we simply keep the default arrowed layout.
     for _orient, _side in (("Vertical", "ns"), ("Horizontal", "ew")):
-        try:
-            style.layout(
-                f"{_orient}.TScrollbar",
-                [
-                    (
-                        f"{_orient}.Scrollbar.trough",
-                        {
-                            "sticky": _side,
-                            "children": [
-                                (
-                                    f"{_orient}.Scrollbar.thumb",
-                                    {"expand": "1", "sticky": "nswe"},
-                                )
-                            ],
-                        },
-                    )
-                ],
+        # Typed Any: ttk's layout signature is a shallow nested-tuple/dict shape
+        # mypy can't infer from a literal, and this is exactly its documented form.
+        thumb_only: Any = [
+            (
+                f"{_orient}.Scrollbar.trough",
+                {
+                    "sticky": _side,
+                    "children": [(f"{_orient}.Scrollbar.thumb", {"expand": "1", "sticky": "nswe"})],
+                },
             )
+        ]
+        try:
+            style.layout(f"{_orient}.TScrollbar", thumb_only)
         except tk.TclError:
             pass  # theme without these elements -- keep its own arrowed layout
     apply_titlebar_theme(root)
@@ -1672,7 +1667,7 @@ def _restyle_plain_live(w: tk.Misc) -> bool:
             # palette-aware repaint, so just ask them to redo it rather than poke
             # their canvas items directly
             try:
-                w.refresh_theme()
+                cast("Any", w).refresh_theme()  # our themed canvas widgets, not plain Canvas
             except tk.TclError:
                 pass  # vanished mid-switch; cosmetic, never fatal
         elif getattr(w, "_is_paned_grip", False):

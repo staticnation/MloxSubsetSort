@@ -13,7 +13,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Wraithguard Toolkit 4.0.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-07 23:45\n"
+"POT-Creation-Date: 2026-09-07 23:51\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1275,8 +1275,8 @@ msgid "Locate tes3cmd"
 msgstr ""
 
 #: wraithguard/gui/t3.py:118
-#: wraithguard/gui/widgets.py:714
-#: wraithguard/gui/widgets.py:730
+#: wraithguard/gui/widgets.py:719
+#: wraithguard/gui/widgets.py:735
 #: wraithguard_toolkit_gui.py:4433
 msgid "Browse..."
 msgstr ""

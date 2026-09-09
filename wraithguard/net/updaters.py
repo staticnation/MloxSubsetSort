@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from wraithguard.momw import parse_plugin_order_yml
-from wraithguard.momw_datapaths import parse_data_path_order_yml
+from wraithguard.momw_datapaths import relative_tail
 
 if TYPE_CHECKING:
     import ssl
@@ -43,14 +43,14 @@ PLUGIN_ORDER_URLS: Final = (
     "momw%2Fmomw%2Fdata_seeds%2Fdata%2Fplugin-order.yml/raw?ref=master",
 )
 
-#: Where MOMW publishes ``data-path-order.yml`` -- the per-list data-directory
-#: order. Same two-URL raw/API pattern as ``plugin-order.yml`` beside it.
-DATA_PATH_ORDER_URLS: Final = (
-    "https://gitlab.com/modding-openmw/modding-openmw.com/-/raw/master/momw/momw/"
-    "data_seeds/data/data-path-order.yml?ref_type=heads&inline=false",
-    "https://gitlab.com/api/v4/projects/modding-openmw%2Fmodding-openmw.com/repository/files/"
-    "momw%2Fmomw%2Fdata_seeds%2Fdata%2Fdata-path-order.yml/raw?ref=master",
-)
+#: MOMW's per-list cfg-generator API. It renders the finished ``data=`` (and
+#: ``content=``/groundcover) block for a curated list -- the same data the
+#: official configurator consumes -- so we fetch a list's exact, ordered data
+#: paths from it rather than reverse-engineering the ``data-path-order.yml`` seed.
+#: ``{host}`` and ``{list}`` are filled per request; override the host with
+#: ``$MOMW_API_HOST`` (e.g. a mirror) if the default ever moves.
+API_CFG_GENERATOR_URL: Final = "{host}/api/cfg-generator/{list}"
+DEFAULT_MOMW_HOST: Final = "https://modding-openmw.com"
 
 #: Schemes we are willing to download from. Anything else -- notably ``file:``
 #: -- is refused, because these URLs come from user-editable configuration.
@@ -244,77 +244,122 @@ def update_plugin_order_yml(
     return report
 
 
-def update_data_path_order_yml(
-    path: str | Path,
-    urls: Sequence[str] | None = None,
-    timeout: int = 45,
-) -> list[str]:
-    """Download the current MOMW ``data-path-order.yml`` over the configured file.
+def _data_path_tails_from_api(payload: bytes) -> list[str]:
+    """Extract the ordered relative data-path tails from a cfg-generator response.
 
-    The sibling of :func:`update_plugin_order_yml`, and validated the same way:
-    the download must carry the file's own markers and parse with
-    :func:`~wraithguard.momw_datapaths.parse_data_path_order_yml` into a
-    plausible number of entries *before* anything on disk is touched, so a wrong
-    URL or an HTML error page can never overwrite the real file. The previous
-    file is kept as a timestamped ``.bak``.
+    The API returns JSON whose ``openmw_cfg["data paths"]`` is the finished
+    ``data=`` block as one string, under the placeholder base
+    :data:`~wraithguard.momw_datapaths.DEFAULT_BASE_DIR`. We take each ``data=``
+    line's value and strip the base to the install-independent tail.
 
     Args:
-        path: Destination ``data-path-order.yml``.
-        urls: Source URLs to try in order. Defaults to
-            :data:`DATA_PATH_ORDER_URLS`.
+        payload: The raw API response bytes.
+
+    Returns:
+        The relative tails, in load order.
+
+    Raises:
+        ValueError: The JSON is malformed or lacks the ``data paths`` field.
+    """
+    import json
+
+    try:
+        obj = json.loads(payload.decode("utf-8"))
+        block = obj["openmw_cfg"]["data paths"]
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"not a cfg-generator response ({exc})") from exc
+    if not isinstance(block, str):
+        raise ValueError("'data paths' is not a string")
+    tails = []
+    for line in block.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("data="):
+            tails.append(relative_tail(stripped[len("data=") :]))
+    return tails
+
+
+def fetch_list_data_paths(
+    path: str | Path,
+    list_name: str,
+    host: str | None = None,
+    timeout: int = 45,
+) -> list[str]:
+    """Cache a curated list's data-path order from the MOMW cfg-generator API.
+
+    Fetches ``{host}/api/cfg-generator/<list_name>``, extracts the ordered
+    ``data=`` block, strips the placeholder base to install-independent tails
+    (see :func:`~wraithguard.momw_datapaths.relative_tail`) and writes them one
+    per line to ``path`` -- the offline cache the sort reads. Validated before
+    anything on disk is touched: the response must parse as a cfg-generator
+    payload and yield a plausible number of paths, so a 404 or an HTML error page
+    can never overwrite the cache. The previous cache is kept as a timestamped
+    ``.bak``.
+
+    Args:
+        path: Destination cache file.
+        list_name: The curated list slug (e.g. ``"total-overhaul"``).
+        host: API host; defaults to :data:`DEFAULT_MOMW_HOST` (or
+            ``$MOMW_API_HOST``).
         timeout: Per-request timeout in seconds.
 
     Returns:
         Human-readable report lines; failures are reported here, not raised.
     """
-    import tempfile as _tf
-
     p = Path(path)
-    env = os.environ.get("MLOX_DATA_PATH_ORDER_URL")
-    cand = list(urls) if urls else ([env] if env else list(DATA_PATH_ORDER_URLS))
-    report = []
-    for url in cand:
-        try:
-            data = fetch_url_bytes(url, timeout=timeout)
-        except (OSError, ValueError) as e:
-            report.append(f"  {url}: {e}")
-            continue
-        # for_mod + extra_dirs are this file's shape; file_name would mean we
-        # were handed plugin-order.yml by mistake, so both markers are required.
-        if b"for_mod" not in data or b"extra_dirs" not in data:
-            report.append(f"  {url}: response doesn't look like data-path-order.yml")
-            continue
-        tmp = None
-        try:
-            with _tf.NamedTemporaryFile("wb", suffix=".yml", delete=False) as tf:
-                tf.write(data)
-                tmp = Path(tf.name)
-            entries = parse_data_path_order_yml(tmp)
-        except Exception as e:  # noqa: BLE001 -- validating untrusted download
-            report.append(f"  {url}: downloaded but failed to parse ({e})")
-            continue
-        finally:
-            if tmp is not None:  # pragma: no branch
-                tmp.unlink(missing_ok=True)
-        if len(entries) < 50:
-            report.append(f"  {url}: parsed but only {len(entries)} entries -- refusing")
-            continue
-        old = p.read_bytes() if p.exists() else b""
-        if old == data:
-            report.append(f"{p.name}: already up to date ({len(entries)} entries).")
-            return report
-        if p.exists():
-            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")  # noqa: DTZ005
-            p.with_name(p.name + f".bak-{stamp}").write_bytes(old)
-        p.write_bytes(data)
-        report.append(
-            f"{p.name}: updated from {url} ({len(entries)} entries; "
-            f"previous version kept as .bak)."
-        )
-        return report
-    report.insert(0, "FAILED: no source produced a valid data-path-order.yml:")
-    report.append("  (set $MLOX_DATA_PATH_ORDER_URL if MOMW moved the file)")
-    return report
+    slug = (list_name or "").strip()
+    if not slug:
+        return ["FAILED: no list name -- set the list name field first."]
+    api_host = (host or os.environ.get("MOMW_API_HOST") or DEFAULT_MOMW_HOST).rstrip("/")
+    url = API_CFG_GENERATOR_URL.format(host=api_host, list=slug)
+    try:
+        payload = fetch_url_bytes(url, timeout=timeout)
+    except (OSError, ValueError) as exc:
+        return [f"FAILED: {url}: {exc}"]
+    try:
+        tails = _data_path_tails_from_api(payload)
+    except ValueError as exc:
+        return [f"FAILED: {url}: {exc} (is '{slug}' a real list?)"]
+    if len(tails) < 10:
+        return [f"FAILED: {url}: only {len(tails)} data path(s) -- refusing to cache."]
+
+    header = (
+        f"# MOMW data paths for list: {slug}\n"
+        f"# fetched from {url}\n"
+        f"# one relative data-path tail per line, in load order -- do not edit\n"
+    )
+    body = header + "\n".join(tails) + "\n"
+    data = body.encode("utf-8")
+    old = p.read_bytes() if p.exists() else b""
+    # Compare on the path lines only, so a changed header/date alone is not a
+    # spurious "updated".
+    if old and parse_cache_paths(old) == tails:
+        return [f"{p.name}: already up to date ({len(tails)} data paths)."]
+    if p.exists():
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")  # noqa: DTZ005
+        p.with_name(p.name + f".bak-{stamp}").write_bytes(old)
+    p.write_bytes(data)
+    return [f"{p.name}: cached {len(tails)} data paths for '{slug}' (previous kept as .bak)."]
+
+
+def parse_cache_paths(payload: bytes) -> list[str]:
+    """The tail lines of a cache file's bytes (comments/blanks dropped).
+
+    A tiny local reader used only to compare a fresh fetch against the existing
+    cache; the sort itself reads via
+    :func:`~wraithguard.momw_datapaths.parse_data_paths_cache`.
+
+    Args:
+        payload: Cache-file bytes.
+
+    Returns:
+        The relative tails.
+    """
+    out = []
+    for line in payload.decode("utf-8", "replace").splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            out.append(stripped.replace("\\", "/"))
+    return out
 
 
 def update_rule_files(

@@ -47,7 +47,7 @@ inside the program as well.
   theme (see [Theming the app](#theming-the-app)).
 - `CREDITS.md` - acknowledgements for the projects this tool ports, references,
   and depends on (mlox, plox, tes3conv, modmapper, OpenMW, MOMW, and more).
-- `CHANGELOG.md` - what changed between releases (current: **4.0.0**).
+- `CHANGELOG.md` - what changed between releases (current: **4.0.1**).
 - `CODE_REVIEW.md` - the running engineering log: defects found, and the
   reasoning behind decisions that look odd (including linter suggestions
   deliberately refused because following them would introduce bugs).

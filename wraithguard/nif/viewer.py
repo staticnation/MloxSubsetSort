@@ -41,7 +41,7 @@ import json
 import struct
 import zlib
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, cast
 
 from wraithguard.images import ImageError, browser_image
 from wraithguard.logging_setup import get_logger
@@ -307,6 +307,57 @@ def _mesh_payload(
     return payload
 
 
+#: The single-blob texture slots on a mesh payload (``decals`` is a list and
+#: ``extras`` a map, handled separately).
+_TEXTURE_SLOTS = ("image", "glow", "dark", "detail", "gloss", "bump")
+
+
+def _hoist_textures(scenes: list[dict[str, object]]) -> list[dict[str, str]]:
+    """Collapse texture blobs shared across meshes into one indexed table.
+
+    A decoded texture is a single dict object reused -- by identity -- for every
+    mesh that references it (see the cache in :func:`_mesh_payload`). Serialising
+    the mesh payloads as they stand writes that texture's bytes once *per mesh*,
+    which is fine for a single NIF but ruinous for a cell: hundreds of meshes
+    share a handful of wall and crate textures, and the inline copies balloon the
+    page to gigabytes. This walks every texture slot, replaces each blob with an
+    integer index into a de-duplicated table (keyed by object identity), and
+    returns the table for the page to rehydrate from -- so each unique texture is
+    carried exactly once no matter how many meshes draw it.
+
+    Args:
+        scenes: The scene payloads, mutated in place: every texture slot becomes
+            an ``int`` index, or is left ``None``.
+
+    Returns:
+        The unique texture blobs, in index order.
+    """
+    table: list[dict[str, str]] = []
+    by_id: dict[int, int] = {}
+
+    def index_of(blob: dict[str, str]) -> int:
+        """The blob's index in the table, appending it on first sight."""
+        found = by_id.get(id(blob))
+        if found is None:
+            found = len(table)
+            by_id[id(blob)] = found
+            table.append(blob)
+        return found
+
+    for scene in scenes:
+        meshes = cast("list[dict[str, object]]", scene.get("meshes") or [])
+        for mesh in meshes:
+            for slot in _TEXTURE_SLOTS:
+                blob = mesh.get(slot)
+                if blob is not None:
+                    mesh[slot] = index_of(cast("dict[str, str]", blob))
+            decals = cast("list[dict[str, str]]", mesh.get("decals") or [])
+            mesh["decals"] = [index_of(blob) for blob in decals]
+            extras = cast("dict[str, dict[str, str]]", mesh.get("extras") or {})
+            mesh["extras"] = {suffix: index_of(blob) for suffix, blob in extras.items()}
+    return table
+
+
 def _tree_payload(nodes: list[TreeNode]) -> list[dict[str, object]]:
     """Reduce a block tree to JSON the page can render.
 
@@ -378,7 +429,7 @@ def build_viewer_page(
     blob_sink = sink or inline_blob
     library = "" if library_url else three_source()
     shared_textures: dict[str, dict[str, str] | None] = {}
-    scenes = [
+    scenes: list[dict[str, object]] = [
         {
             "label": label,
             "color": _COLOURS[index % len(_COLOURS)],
@@ -390,10 +441,15 @@ def build_viewer_page(
     empty = all(not scene["meshes"] for scene in scenes)
     if empty:
         LOG.info("viewer built with no geometry: %s", title)
+    # Shared textures are carried once in a side table and referenced by index;
+    # without this a cell's meshes -- hundreds sharing a few wall textures --
+    # would each inline their own copy and the page would reach gigabytes.
+    textures = _hoist_textures(scenes)
     # json.dumps escapes nothing HTML-significant by default, and the payload
     # carries mod-authored names. "</script>" inside a string would end the
     # element early, so the sequence is broken up rather than trusted.
     data = json.dumps(scenes, separators=(",", ":")).replace("</", "<\\/")
+    textures_data = json.dumps(textures, separators=(",", ":")).replace("</", "<\\/")
     # The CommonJS build needs its two globals to exist *before* it runs and
     # the namespace pulled back out *after*, whether it arrives inline or over
     # the wire. Serving it without the shim was a real bug: the file ran
@@ -415,6 +471,7 @@ def build_viewer_page(
     return (
         _PAGE.replace("__TITLE__", html.escape(title))
         .replace("__LIBRARY_BLOCK__", library_block)
+        .replace("__TEXTURES__", textures_data)
         .replace("__DATA__", data)
         .replace("__EMPTY__", "true" if empty else "false")
         .replace("__EXTRA_SLOTS__", EXTRA_SLOTS_JS)
@@ -518,6 +575,24 @@ __LIBRARY_BLOCK__
 <script>
 (function () {
   var scenes = __DATA__;
+  // Textures are carried once in a side table and referenced by index (see
+  // _hoist_textures); put each blob back on the mesh so the render code below
+  // reads m.image/m.glow/... exactly as before. A null slot stays null; an
+  // index of 0 is a real entry, so the test is against null, not truthiness.
+  var textures = __TEXTURES__;
+  function tex(i) { return (i === null || i === undefined) ? null : textures[i]; }
+  scenes.forEach(function (spec) {
+    (spec.meshes || []).forEach(function (m) {
+      m.image = tex(m.image); m.glow = tex(m.glow); m.dark = tex(m.dark);
+      m.detail = tex(m.detail); m.gloss = tex(m.gloss); m.bump = tex(m.bump);
+      m.decals = (m.decals || []).map(tex);
+      if (m.extras) {
+        var rebuilt = {};
+        Object.keys(m.extras).forEach(function (s) { rebuilt[s] = tex(m.extras[s]); });
+        m.extras = rebuilt;
+      }
+    });
+  });
   var stage = document.getElementById("stage");
   var controls = document.getElementById("controls");
   if (__EMPTY__) {

@@ -1,6 +1,41 @@
 # Changelog
 
 
+## 4.0.1
+
+The data-path support added in 4.0.0 read MOMW's `data-path-order.yml` seed and
+fuzzy-matched each mod's folder by name. That only inspected the last two
+components of a `data=` path, so any mod whose data folder nests deeper than
+`ModName/Data Files` -- patch collections, numbered sub-directories -- was
+missed, and could be misclassified as an unmanaged orphan and swept into your
+customizations. This release replaces that guesswork with the authoritative
+source.
+
+### Changed
+
+- **Data paths now come from MOMW's cfg-generator API, not the yml seed.** The
+  `/api/cfg-generator/<list>` endpoint renders the exact, ordered `data=` block
+  for a curated list -- the same data the official configurator consumes. A new
+  **Fetch...** button (replacing the `data-path-order.yml` field and its
+  Update button) caches that list's paths, as install-independent relative
+  tails, to a local file that the sort reads offline. A cfg `data=` path is then
+  matched by exact compact *suffix*: correct regardless of your mod base
+  directory, umo's per-list sub-folder, slash style or case, and -- unlike the
+  old matcher -- correct at any nesting depth. Validated against the live
+  1,157-path total-overhaul render (every path matched, no false positives).
+  Set `$MOMW_API_HOST` to point at a mirror.
+
+- **CLI:** `--data-path-order-yml` is replaced by `--data-paths-cache`.
+
+- **Localization:** the new data-path strings are translated across all eleven
+  languages; every catalogue is now 100% complete.
+
+### Removed
+
+- The `data-path-order.yml` parser, its fuzzy name/`extra_dirs` matcher, and the
+  seed-download updater -- superseded by the API cache above.
+
+
 ## 4.0.0
 
 Two themes carry this release: making a *customized* openmw.cfg durable across a

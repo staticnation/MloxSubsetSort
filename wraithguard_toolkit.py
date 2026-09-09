@@ -3570,8 +3570,8 @@ from wraithguard.momw import (
 )
 from wraithguard.momw_datapaths import (
     managed_cfg_data_path_norms,
-    parse_data_path_order_yml,
-    reconcile_list_against_cfg,
+    parse_data_paths_cache,
+    reconcile_data_paths,
 )
 from wraithguard.plugins import PLUGIN_EXTS, PluginFileIndex
 from wraithguard.rules import (
@@ -4312,8 +4312,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "Bloodmoon.esm) and the base game's Data Files folder are never pulled. Can be "
         "the only subset source, or combined with --customizations/--subset/--subset-file "
         "to sort those plus the orphans. data= orphans are classified only when a "
-        "--data-path-order-yml and --list-name are given (that yml is the 'managed' "
-        "signal a folder can match); they are reported, not reordered, since they already "
+        "--data-paths-cache is given (that cached MOMW list order is the 'managed' signal "
+        "a folder can match); they are reported, not reordered, since they already "
         "sit in the cfg's data= order.",
     )
     ap.add_argument("--dry-run", action="store_true", help="Print the plan, write nothing")
@@ -4358,13 +4358,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "installed, else a built-in parser.",
     )
     ap.add_argument(
-        "--data-path-order-yml",
+        "--data-paths-cache",
         type=Path,
-        help="MOMW's data-path-order.yml (the per-list order each mod's data directories "
-        "should be added in). With --list-name, read-only warnings are emitted: mods on "
-        "the list whose data= path is missing from openmw.cfg, and data= paths whose cfg "
-        "order contradicts the curated one. Optional; PyYAML used if installed, else a "
-        "built-in parser.",
+        help="A cached MOMW list data-path order, fetched from the cfg-generator API "
+        "(one relative data-path tail per line; see the GUI's 'Fetch data paths' button "
+        "or wraithguard.net.fetch_list_data_paths). Read-only warnings are emitted: the "
+        "list's data= paths not present in openmw.cfg, and data= paths whose cfg order "
+        "contradicts the list's. Also the signal that tells a list-managed data= path "
+        "from an unmanaged (orphan) one for --subset-from-cfg. Optional.",
     )
     ap.add_argument(
         "--write-cfg",
@@ -5083,44 +5084,39 @@ def _yml_post_sort_warnings(
 
 def _data_path_order_warnings(
     args: argparse.Namespace,
-    list_name: str | None,
     data_order: Sequence[str],
 ) -> None:
-    """Emit data-path-order.yml reconcile warnings (read-only).
+    """Emit data-path reconcile warnings against the cached list order (read-only).
 
-    When ``--data-path-order-yml`` and a list name are given, check the mods
-    that list expects against the ``data=`` paths already in ``openmw.cfg``:
-    which are missing, and whether their cfg order contradicts the curated
-    data-path order. Reports only; never rewrites the cfg. A parse failure is
-    surfaced as one line rather than aborting the run.
+    When ``--data-paths-cache`` is given, check the list's cached data-path order
+    (fetched from the MOMW cfg-generator API) against the ``data=`` paths already
+    in ``openmw.cfg``: which of the list's paths are absent, and whether the cfg's
+    order contradicts the list's. Reports only; never rewrites the cfg. A read
+    failure is surfaced as one line rather than aborting the run.
 
     Args:
-        args: The run arguments; ``data_path_order_yml`` is read from it.
-        list_name: The MOMW list name, or ``None`` when not given.
+        args: The run arguments; ``data_paths_cache`` is read from it.
         data_order: The cfg's raw ``data=`` lines.
     """
-    dpo = getattr(args, "data_path_order_yml", None)
-    if not dpo or not list_name:
+    cache = getattr(args, "data_paths_cache", None)
+    if not cache:
         return
     try:
-        entries = parse_data_path_order_yml(Path(dpo))
-    except (OSError, ValueError) as exc:
-        _section("1 DATA-PATH-ORDER.YML WARNING(S) -- read-only, not enforced")
-        print(f"\n[DATA PATH] could not read {Path(dpo).name}: {exc}")
+        tails = parse_data_paths_cache(Path(cache))
+    except OSError as exc:
+        _section("1 DATA PATH WARNING(S) -- read-only, not enforced")
+        print(f"\n[DATA PATH] could not read {Path(cache).name}: {exc}")
         return
     cfg_paths = [v for v in (extract_data_path_value(line) for line in data_order) if v]
-    warnings = reconcile_list_against_cfg(
-        entries,
-        list_name,
-        cfg_paths,
-        report_missing=bool(getattr(args, "verbose", 0)),
+    warnings = reconcile_data_paths(
+        tails, cfg_paths, report_missing=bool(getattr(args, "verbose", 0))
     )
     if warnings:
-        _section(f"{len(warnings)} DATA-PATH-ORDER.YML WARNING(S) -- read-only, not enforced")
+        _section(f"{len(warnings)} DATA PATH WARNING(S) -- read-only, not enforced")
         for w in warnings:
             print(f"\n{w}")
     else:
-        print(_("\n  No data-path-order.yml warnings."))
+        print(_("\n  No data path warnings."))
 
 
 def _check_masters(
@@ -5498,16 +5494,15 @@ def _pull_cfg_orphans(
     sorter as ``already_present`` entries it repositions within the frozen order.
     Base masters and any plugin the cfg declares as groundcover are excluded.
 
-    ``data=`` orphans are also identified, but only when a ``data-path-order.yml``
-    and a list name are given -- that yml is the "managed" signal a data folder
-    can match. Before it, a data path was already in the cfg's own ``data=`` order
-    with no way to tell a curated folder from a hand-added one, so none were
+    ``data=`` orphans are also identified, but only when a ``--data-paths-cache``
+    is given -- that cached MOMW list order is the "managed" signal a data folder
+    can match. Without it a data path is already in the cfg's own ``data=`` order
+    with no way to tell a curated folder from a hand-added one, so none are
     surfaced. :func:`~wraithguard.momw_datapaths.managed_cfg_data_path_norms`
-    now says which cfg ``data=`` paths the list accounts for; anything else (and
-    not declared, not the base game) is an orphan. They are *reported and
-    returned* so the caller/GUI can highlight them; they are not re-inserted,
-    since they already sit in ``data=`` and :func:`insert_data_paths` never
-    reorders an existing line.
+    says which cfg ``data=`` paths the list accounts for; anything else (and not
+    declared, not the base game) is an orphan. They are *reported and returned* so
+    the caller/GUI can highlight them; they are not re-inserted, since they already
+    sit in ``data=`` and :func:`insert_data_paths` never reorders an existing line.
 
     Args:
         args: The parsed CLI/GUI arguments.
@@ -5529,7 +5524,7 @@ def _pull_cfg_orphans(
     Returns:
         ``(subset, orphan_data_paths)`` -- the subset with orphan plugins
         appended (in cfg order), and the orphaned ``data=`` path values (empty
-        unless a data-path-order.yml + list name let them be classified).
+        unless a --data-paths-cache lets them be classified).
     """
     if not getattr(args, "subset_from_cfg", False):
         return subset, []
@@ -5537,23 +5532,20 @@ def _pull_cfg_orphans(
     _section(_("UNMANAGED (ORPHAN) ENTRIES FROM openmw.cfg"))
 
     # data= orphans need a filter to tell a curated folder from a hand-added one.
-    # data-path-order.yml + a list name are that filter: managed_cfg_data_path_
-    # norms() reports the cfg data= paths the list accounts for. With no yml we
+    # The cached MOMW list data paths are that filter: managed_cfg_data_path_
+    # norms() reports the cfg data= paths the list accounts for. With no cache we
     # can't classify data paths, so declared_data_norms stays "everything is
     # managed" (an empty orphan set) -- the pre-filter behavior.
-    list_name = getattr(args, "list_name", None)
-    dpo = getattr(args, "data_path_order_yml", None)
-    pull_data = bool(dpo and list_name)
+    cache = getattr(args, "data_paths_cache", None)
+    pull_data = bool(cache)
     managed_data_norms: set[str] = set()
     if pull_data:
         cfg_data_values = [v for v in (extract_data_path_value(x) for x in data_order) if v]
         try:
-            dp_entries = parse_data_path_order_yml(Path(str(dpo)))
-        except (OSError, ValueError):
-            dp_entries = []
-        managed_data_norms = managed_cfg_data_path_norms(
-            dp_entries, str(list_name), cfg_data_values
-        )
+            tails = parse_data_paths_cache(Path(str(cache)))
+        except OSError:
+            tails = []
+        managed_data_norms = managed_cfg_data_path_norms(tails, cfg_data_values)
         declared_data_norms = {
             normalize_data_path(d["value"]) for d in (*data_inserts, *raw_toml_data_inserts)
         }
@@ -5566,7 +5558,7 @@ def _pull_cfg_orphans(
         curated_lower={str(c).lower() for c in curated_set},
         needs_cleaning_lower={str(c).lower() for c in needs_cleaning_lower},
         declared_plugins_lower={str(d).lower() for d in declared_lower},
-        # Without the yml filter every cfg data= path looks unmanaged, so treat
+        # Without the cache filter every cfg data= path looks unmanaged, so treat
         # them all as "managed" (no orphans) rather than flooding the report.
         declared_data_norms=(
             managed_data_norms
@@ -5629,15 +5621,14 @@ def _pull_cfg_orphans(
             print(
                 _(
                     "  No unmanaged data= paths found -- every data= path in the cfg is on "
-                    "the '%(list)s' data-path order or in your customizations."
+                    "the list's data-path order or in your customizations."
                 )
-                % {"list": list_name}
             )
     else:
         orphan_data = []
         print(
             _(
-                "  data= paths not classified -- set a data-path-order.yml and list name to "
+                "  data= paths not classified -- fetch a data-paths cache for this list to "
                 "surface unmanaged (orphan) data= paths too."
             )
         )
@@ -5765,7 +5756,7 @@ def compute_plan(args: argparse.Namespace) -> dict:
         list_name,
     )
 
-    _data_path_order_warnings(args, list_name, data_order)
+    _data_path_order_warnings(args, data_order)
 
     master_warnings, master_problem_plugins = _check_masters(
         final_order,
@@ -5811,7 +5802,7 @@ def compute_plan(args: argparse.Namespace) -> dict:
         "raw_toml_data_inserts": raw_toml_data_inserts,
         "data_inserts": data_inserts,
         # Unmanaged data= paths pulled from the cfg (values, cfg order). Empty
-        # unless --subset-from-cfg ran with a data-path-order.yml + list name.
+        # unless --subset-from-cfg ran with a --data-paths-cache.
         # Reported, not re-inserted; the GUI highlights them in the data panel.
         "orphan_data_paths": orphan_data_paths,
         "base_order_names": base_order_names,

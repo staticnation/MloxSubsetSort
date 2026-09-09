@@ -283,11 +283,9 @@ class TestSubsetFromCfgCapturesOrphanData:
         )
         rules = tmp_path / "mlox_base.txt"
         rules.write_text("", encoding="utf-8")
-        yml = tmp_path / "data-path-order.yml"
-        yml.write_text(
-            '- for_mod: "CuratedMod"\n  on_lists:\n    - "total-overhaul"\n',
-            encoding="utf-8",
-        )
+        cache = tmp_path / "data-paths.txt"
+        # the list manages CuratedMod; OrphanMod is not in the cache
+        cache.write_text("# list cache\nCuratedMod\n", encoding="utf-8")
         out = tmp_path / "customizations.toml"
         args = core.build_arg_parser().parse_args(
             [
@@ -296,10 +294,8 @@ class TestSubsetFromCfgCapturesOrphanData:
                 "--rules",
                 str(rules),
                 "--subset-from-cfg",
-                "--data-path-order-yml",
-                str(yml),
-                "--list-name",
-                "total-overhaul",
+                "--data-paths-cache",
+                str(cache),
                 "--emit-toml",
                 str(out),
                 *extra,

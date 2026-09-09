@@ -37,6 +37,7 @@ packages = [
     "wraithguard.patch",
     "wraithguard.plugins",
     "wraithguard.rules",
+    "wraithguard.scene",
     "wraithguard.sort",
     "wraithguard.tes3fields",
     "wraithguard.viz",
@@ -57,7 +58,7 @@ wraithguard = ["py.typed"]
 # below and wraithguard.__version__ never drift apart.
 [project]
 name = "wraithguard-toolkit"
-version = "4.0.0"
+version = "4.0.1"
 description = "Sort your own Morrowind mods into a frozen MOMW load order."
 readme = "README.md"
 requires-python = ">=3.10"

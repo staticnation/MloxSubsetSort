@@ -234,6 +234,7 @@ from wraithguard.gui import (  # noqa: E402
     rtl,
     trace_first_fire,
 )
+from wraithguard.gui.cellpreview import CellPreviewMixin  # noqa: E402
 from wraithguard.gui.conflicts import ConflictWindowsMixin  # noqa: E402
 from wraithguard.gui.journalview import JournalViewMixin  # noqa: E402
 from wraithguard.gui.patchwin import PatchBuilderMixin  # noqa: E402
@@ -267,8 +268,8 @@ from wraithguard.net import (  # noqa: E402
     MANAGED_RULE_FILES,
     PLUGIN_ORDER_URLS,
     RULES_URL_TEMPLATE,
+    fetch_list_data_paths,
     rule_file_ages,
-    update_data_path_order_yml,
     update_plugin_order_yml,
     update_rule_files,
 )
@@ -969,7 +970,14 @@ _LEAD_COL2_WIDTH = 15  # fits "Merge Settings"
 _LEAD_PAD = (0, 6)  # identical on all four so the divider lands at the same x
 
 
-class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixin, PluginViewMixin):
+class App(
+    Tes3cmdMixin,
+    ConflictWindowsMixin,
+    JournalViewMixin,
+    PatchBuilderMixin,
+    PluginViewMixin,
+    CellPreviewMixin,
+):
     """The main application window."""
 
     # Colors for the log panel's tags now come from the selected syntax
@@ -1185,7 +1193,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             "emit_toml": self.emit_toml_var.get(),
             "list_name": self.list_name_var.get(),
             "plugin_order_yml": self.plugin_order_yml_var.get(),
-            "data_path_order_yml": self.data_path_order_yml_var.get(),
+            "data_paths_cache": self.data_paths_cache_var.get(),
             "tes3conv": self._tes3conv_override or "",
             "merged_lands_out": self._merged_lands_out or "",
             "exclude": self.exclude_var.get(),
@@ -1222,7 +1230,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             "emit_toml": self.emit_toml_var,
             "list_name": self.list_name_var,
             "plugin_order_yml": self.plugin_order_yml_var,
-            "data_path_order_yml": self.data_path_order_yml_var,
+            "data_paths_cache": self.data_paths_cache_var,
             "exclude": self.exclude_var,
             "groundcover": self.groundcover_var,
             "plugin_order_url": self.plugin_order_url_var,
@@ -1656,7 +1664,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         self.emit_toml_var = tk.StringVar()
         self.list_name_var = tk.StringVar()
         self.plugin_order_yml_var = tk.StringVar()
-        self.data_path_order_yml_var = tk.StringVar()
+        self.data_paths_cache_var = tk.StringVar()
         self.write_toml_inplace_var = tk.BooleanVar(value=False)
 
         self.emit_toml_field = PathField(
@@ -1719,23 +1727,26 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
 
         PathField(
             top,
-            "data-path-order.yml (optional):",
+            "data paths cache (optional):",
             start_row + 3,
-            self.data_path_order_yml_var,
-            filetypes=(("YAML files", "*.yml *.yaml"), ("All files", "*.*")),
+            self.data_paths_cache_var,
+            filetypes=(("Text files", "*.txt"), ("All files", "*.*")),
+            browse_kind="save",
             tooltip=_(
-                "MOMW's data-path-order.yml (the per-list order in which each mod's data "
-                "directories should be added). Used to build a mod's expected data paths -- "
-                "its folder is fuzzy-matched by name, then its extra_dirs appended in order. "
-                "PyYAML used if installed, else a built-in parser."
+                "A cached MOMW list data-path order (one relative data-path tail per line). "
+                "Fetch it for the list named above with the button, then it's read offline: "
+                "the exact set/order of data= paths that list manages, used to tell a "
+                "list-managed data= folder from an unmanaged (orphan) one, and to warn on "
+                "data= paths whose cfg order contradicts the list's."
             ),
             extra_button=(
-                "Update...",
-                self.on_update_data_path_order_yml,
-                "Download the current data-path-order.yml from MOMW over this file. "
-                "The download is fully validated (must parse as data-path-order data) "
-                "before anything is written, and the old file is kept as a timestamped "
-                ".bak. Set $MLOX_DATA_PATH_ORDER_URL to use a mirror.",
+                "Fetch...",
+                self.on_fetch_data_paths,
+                "Fetch the current list's data-path order from MOMW's cfg-generator API "
+                "(the same data the official configurator uses) and cache it to the file "
+                "above for offline use. Needs the list name set. The response is validated "
+                "before anything is written, and any old cache is kept as a timestamped "
+                ".bak. Set $MOMW_API_HOST to use a mirror.",
             ),
         )
 
@@ -1899,8 +1910,8 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
                 "their current cfg order is the starting order until the sort repositions "
                 "them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works "
                 "on its own (no subset file needed) or alongside one.\n\n"
-                "data= paths are captured too when a data-path-order.yml and list name are "
-                "set (that yml is how a path the list manages is told from one you added). "
+                "data= paths are captured too when a data paths cache is set (fetch it for "
+                "the list above; it's how a path the list manages is told from one you added). "
                 "Unmanaged data= paths are highlighted here and, on Export, written into the "
                 "customizations.toml as inserts anchored to the curated paths -- they are "
                 "never reordered in place, since they already sit in the cfg's data= order."
@@ -2092,6 +2103,18 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             "to a timestamped cell_map file "
             "and shown in an in-app window if pywebview or tkinterweb is installed, otherwise "
             "in your browser. Read-only.",
+            state="disabled",
+        )
+        self.cellpreview_button = _action_button(
+            row1,
+            "Cell Preview",
+            self.on_cell_preview,
+            "PROTOTYPE: place a cell's objects in the 3D mesh viewer. Pick an interior cell "
+            "by name or an exterior cell by grid; every reference is resolved to its winning "
+            "object and world position across the sorted load order, the placed meshes are "
+            "drawn (textured), and an audit prints what the load order does to the "
+            "cell -- references a later plugin overrode, deleted or moved, and any meshes not "
+            "found. Read-only. Terrain, water and adjacent cells are not in yet.",
             state="disabled",
         )
 
@@ -2618,9 +2641,9 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
                 if self.plugin_order_yml_var.get().strip()
                 else None
             ),
-            data_path_order_yml=(
-                Path(self.data_path_order_yml_var.get().strip())
-                if self.data_path_order_yml_var.get().strip()
+            data_paths_cache=(
+                Path(self.data_paths_cache_var.get().strip())
+                if self.data_paths_cache_var.get().strip()
                 else None
             ),
             # An empty sort must not abort: the GUI wants the current load order
@@ -3063,6 +3086,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         self.export_button.configure(state="normal" if have_data else "disabled")
         self.conflicts_button.configure(state="normal" if have_data else "disabled")
         self.cellmap_button.configure(state="normal" if have_data else "disabled")
+        self.cellpreview_button.configure(state="normal" if have_data else "disabled")
         self.mergedlands_button.configure(state="normal" if have_data else "disabled")
         self.resource_button.configure(state="normal" if have_data else "disabled")
         self.lint_button.configure(state="normal" if have_data else "disabled")
@@ -3166,6 +3190,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
         self.export_button.configure(state="normal" if self._current_plan else "disabled")
         self.conflicts_button.configure(state="normal" if self._current_plan else "disabled")
         self.cellmap_button.configure(state="normal" if self._current_plan else "disabled")
+        self.cellpreview_button.configure(state="normal" if self._current_plan else "disabled")
         self.mergedlands_button.configure(state="normal" if self._current_plan else "disabled")
         self.resource_button.configure(state="normal" if self._current_plan else "disabled")
         self.status_var.set(status)
@@ -3319,6 +3344,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             self.export_button,
             self.conflicts_button,
             self.cellmap_button,
+            self.cellpreview_button,
             self.mergedlands_button,
             self.resource_button,
         ):
@@ -3392,6 +3418,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             self.export_button,
             self.conflicts_button,
             self.cellmap_button,
+            self.cellpreview_button,
             self.mergedlands_button,
             self.resource_button,
         ):
@@ -3587,6 +3614,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             self.export_button,
             self.conflicts_button,
             self.cellmap_button,
+            self.cellpreview_button,
             self.mergedlands_button,
             self.resource_button,
         ):
@@ -3953,6 +3981,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             self.export_button,
             self.conflicts_button,
             self.cellmap_button,
+            self.cellpreview_button,
             self.resource_button,
             self.lint_button,
         ):
@@ -4972,14 +5001,60 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             update_plugin_order_yml,
         )
 
-    def on_update_data_path_order_yml(self) -> None:
-        """Download a fresh data-path-order.yml, with confirmation."""
-        self._update_order_yml_dialog(
-            "data-path-order.yml",
-            self.data_path_order_yml_var,
-            None,
-            update_data_path_order_yml,
-        )
+    def on_fetch_data_paths(self) -> None:
+        """Fetch the current list's data paths from the MOMW API into the cache.
+
+        Needs the list name; picks a sensible cache filename on first use. Runs
+        the validated fetch off the UI thread and reports into a dialog.
+        """
+        list_name = self.list_name_var.get().strip()
+        if not list_name:
+            messagebox.showinfo(
+                _("Fetch data paths"),
+                _("Set the list name field first -- data paths are fetched per list."),
+            )
+            return
+        p = self.data_paths_cache_var.get().strip()
+        if not p:
+            chosen = filedialog.asksaveasfilename(
+                title=_("Save data paths cache as"),
+                initialfile=f"data-paths-{list_name}.txt",
+                defaultextension=".txt",
+                filetypes=case_insensitive_filetypes(
+                    (("Text files", "*.txt"), ("All files", "*.*"))
+                ),
+            )
+            if not chosen:
+                return
+            self.data_paths_cache_var.set(chosen)
+            p = chosen.strip()
+        if not messagebox.askyesno(
+            _("Fetch data paths"),
+            _(
+                "Fetch the data-path order for '%(list)s' from MOMW's cfg-generator "
+                "API and cache it to:\n%(path)s\n\nThe response is validated before "
+                "anything is written; any old cache is kept as a timestamped .bak."
+            )
+            % {"list": list_name, "path": p},
+        ):
+            return
+
+        def work() -> None:
+            """Worker thread: fetch + cache, then report into the dialog."""
+            try:
+                report = fetch_list_data_paths(p, list_name)
+            except Exception as exc:  # noqa: BLE001 -- must report, never vanish
+                report = [f"FAILED: {exc}"]
+            self._schedule_ui(
+                0,
+                lambda: (
+                    messagebox.showinfo(_("Fetch data paths"), "\n".join(report)),
+                    self.status_var.set(report[0] if report else ""),  # type: ignore[func-returns-value]
+                ),
+            )
+
+        self.status_var.set(_("Fetching data paths for '%(list)s'...") % {"list": list_name})
+        threading.Thread(target=work, daemon=True).start()
 
     # -- savegame dependency check -------------------------------------------
 
@@ -5323,6 +5398,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             self.export_button,
             self.conflicts_button,
             self.cellmap_button,
+            self.cellpreview_button,
             self.resource_button,
             self.lint_button,
         ):
@@ -5384,6 +5460,7 @@ class App(Tes3cmdMixin, ConflictWindowsMixin, JournalViewMixin, PatchBuilderMixi
             self.export_button,
             self.conflicts_button,
             self.cellmap_button,
+            self.cellpreview_button,
             self.resource_button,
             self.lint_button,
         ):

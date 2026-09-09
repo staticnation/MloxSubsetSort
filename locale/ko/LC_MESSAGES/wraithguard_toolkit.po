@@ -26,6 +26,75 @@ msgstr "경고: 생성된 TOML의 앵커 「%(anchor)s」이(가) openmw.cfg의 
 msgid "WARNING: remove entry '%(entry)s' matches %(count)d openmw.cfg lines -- momw-configurator removes ALL of them, silently. Colliding lines: %(lines)s%(more)s"
 msgstr "경고: 제거 항목 「%(entry)s」이(가) openmw.cfg의 %(count)d개 줄과 일치합니다 -- momw-configurator는 그것들을 조용히 「모두」 제거합니다. 충돌하는 줄: %(lines)s%(more)s"
 
+msgid "Building cell preview..."
+msgstr ""
+
+msgid "Cell to preview"
+msgstr ""
+
+msgid "Interior cell"
+msgstr ""
+
+msgid "Name:"
+msgstr ""
+
+msgid "Exterior cell"
+msgstr ""
+
+msgid "Grid X, Y:"
+msgstr ""
+
+msgid "Preview"
+msgstr "미리 보기"
+
+msgid "Cancel"
+msgstr "취소"
+
+msgid "  skipped %(name)s: %(error)s"
+msgstr ""
+
+msgid " CELL PREVIEW: %(label)s"
+msgstr ""
+
+msgid "\n  Nothing to draw -- no placed meshes were found for this cell."
+msgstr ""
+
+msgid "Cell preview ready (%(drawn)d object(s) drawn)."
+msgstr ""
+
+msgid "references"
+msgstr ""
+
+msgid "placed"
+msgstr ""
+
+msgid "no mesh record"
+msgstr ""
+
+msgid "editor markers"
+msgstr ""
+
+msgid "actors skipped"
+msgstr ""
+
+msgid "overridden by later"
+msgstr ""
+
+msgid "deleted by later"
+msgstr ""
+
+msgid "moved"
+msgstr ""
+
+msgid "meshes drawn"
+msgstr ""
+
+msgid "meshes not found"
+msgstr ""
+
+msgid "    missing mesh: %(model)s"
+msgstr ""
+
 msgid "Scanning for conflicts..."
 msgstr "충돌을 스캔하는 중…"
 
@@ -331,9 +400,6 @@ msgstr "이 필드 사용"
 
 msgid "Add to patch"
 msgstr "패치에 추가"
-
-msgid "Cancel"
-msgstr "취소"
 
 msgid "Cannot set this field"
 msgstr "이 필드를 설정할 수 없습니다"
@@ -1507,7 +1573,7 @@ msgid_plural "  Excluded %(count)d curated plugins from the sort: %(names)s"
 msgstr[0] "  정렬에서 큐레이트된 플러그인 %(count)d개를 제외했습니다: %(names)s"
 
 msgid "  No plugins to sort. The current openmw.cfg load order is shown above for editing -- remove entries and Export, or add plugins and Sort again."
-msgstr ""
+msgstr "  정렬할 플러그인이 없습니다. 현재 openmw.cfg 로드 순서가 편집용으로 위에 표시됩니다 -- 항목을 제거하고 내보내거나, 플러그인을 추가하고 다시 정렬하세요."
 
 msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
 msgstr "\n  이미 cfg에 있음, cfg 내에서 재배치됩니다: %(names)s"
@@ -1524,8 +1590,8 @@ msgstr "\n  [Conflict]/[Requires]/[Note] 경고가 발생하지 않았습니다.
 msgid "\n  No plugin-order.yml warnings."
 msgstr "\n  plugin-order.yml 경고 없음."
 
-msgid "\n  No data-path-order.yml warnings."
-msgstr "\n  data-path-order.yml 경고가 없습니다."
+msgid "\n  No data path warnings."
+msgstr "\n  데이터 경로 경고가 없습니다."
 
 msgid "  (plugin files not reachable from the data folders; can't read headers)"
 msgstr "  (플러그인 파일에 데이터 폴더에서 접근할 수 없습니다. 헤더를 읽을 수 없습니다)"
@@ -1597,11 +1663,11 @@ msgid "  %(count)d orphan data= path found in openmw.cfg"
 msgid_plural "  %(count)d orphan data= paths found in openmw.cfg"
 msgstr[0] "  openmw.cfg에서 고아 data= 경로 %(count)d개를 찾았습니다"
 
-msgid "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations."
-msgstr "  미관리 data= 경로를 찾지 못했습니다 -- cfg의 모든 data= 경로가 '%(list)s'의 data= 순서 또는 사용자 지정에 있습니다."
+msgid "  No unmanaged data= paths found -- every data= path in the cfg is on the list's data-path order or in your customizations."
+msgstr "  미관리 data= 경로를 찾지 못했습니다 -- cfg의 모든 data= 경로가 목록의 data= 순서 또는 사용자 지정에 있습니다."
 
-msgid "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too."
-msgstr "  data= 경로가 분류되지 않았습니다 -- data-path-order.yml과 목록 이름을 설정하면 미관리 (고아) data= 경로도 표시됩니다."
+msgid "  data= paths not classified -- fetch a data-paths cache for this list to surface unmanaged (orphan) data= paths too."
+msgstr "  data= 경로가 분류되지 않았습니다 -- 이 목록의 data= 캐시를 가져오면 미관리 (고아) data= 경로도 표시됩니다."
 
 msgid "groundcover declared by this run"
 msgstr "이 실행에서 선언된 groundcover"
@@ -1760,8 +1826,8 @@ msgstr "리스트 이름 (선택):"
 msgid "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser."
 msgstr "MOMW의 plugin-order.yml (어느 플러그인이 어느 큐레이트 목록에 속하는지에 대한 신뢰할 수 있는 출처). 위에서 목록 이름을 지정하면 그 목록의 큐레이트된 플러그인은 정렬에서 제외되어 (결코 재정렬되지 않음) 당신 자신의 추가만 영향을 받고, 읽기 전용 경고가 발행됩니다: 중복, 고아, needs-cleaning, 베이스 순서 거부 검사. PyYAML이 설치되어 있으면 사용되고, 없으면 내장 파서가 사용됩니다."
 
-msgid "MOMW's data-path-order.yml (the per-list order in which each mod's data directories should be added). Used to build a mod's expected data paths -- its folder is fuzzy-matched by name, then its extra_dirs appended in order. PyYAML used if installed, else a built-in parser."
-msgstr "MOMW의 data-path-order.yml (각 모드의 데이터 디렉터리를 추가해야 하는 목록별 순서). 모드의 예상 데이터 경로를 구성하는 데 사용됩니다 -- 폴더는 이름으로 유사 일치되고, 그다음 extra_dirs가 순서대로 추가됩니다. 설치되어 있으면 PyYAML을, 없으면 내장 파서를 사용합니다."
+msgid "A cached MOMW list data-path order (one relative data-path tail per line). Fetch it for the list named above with the button, then it's read offline: the exact set/order of data= paths that list manages, used to tell a list-managed data= folder from an unmanaged (orphan) one, and to warn on data= paths whose cfg order contradicts the list's."
+msgstr "캐시된 MOMW 목록 데이터 경로 순서 (한 줄에 하나의 상대 데이터 경로). 위의 목록에 대해 버튼으로 가져오면 오프라인으로 읽힙니다: 해당 목록이 관리하는 data= 경로의 정확한 집합/순서로, 목록이 관리하는 data= 폴더와 미관리 (고아) 폴더를 구분하고, cfg 순서가 목록과 모순되는 data= 경로를 경고하는 데 사용됩니다."
 
 msgid "Write directly back to customizations.toml (overwrite in place; a .bak-<timestamp> copy is made first unless backups are disabled below)"
 msgstr "customizations.toml에 직접 다시 씁니다 (제자리에서 덮어쓰기; 아래에서 백업이 비활성화되지 않는 한 먼저 .bak-<타임스탬프> 사본이 만들어집니다)"
@@ -1811,8 +1877,8 @@ msgstr "「스캔…」이 그 결과로 무엇을 하는지 제어합니다. �
 msgid "Pull unmanaged (orphan) plugins & data paths from openmw.cfg"
 msgstr "openmw.cfg에서 미관리 (고아) 플러그인 및 데이터 경로 가져오기"
 
-msgid "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data-path-order.yml and list name are set (that yml is how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order."
-msgstr "openmw.cfg에 이미 있으면서 아무것도 관리하지 않는 것 (큐레이트된 목록 plugin-order.yml도, 사용자 customizations.toml도 아님)도 함께 담아 다음 momw-configurator 재빌드에도 남도록 합니다. content= 플러그인은 정렬되어 들어갑니다. 정렬이 재배치하기 전까지는 현재 cfg 순서가 시작 순서입니다. 기본 마스터 (Morrowind/Tribunal/Bloodmoon)는 절대 건드리지 않습니다. 단독으로 (하위 집합 파일 없이) 또는 함께 작동합니다.\n\ndata= 경로도 data-path-order.yml과 목록 이름이 설정되면 함께 담깁니다 (그 yml이 목록이 관리하는 경로와 사용자가 추가한 경로를 구분하는 방법입니다). 미관리 data= 경로는 여기에서 강조 표시되고, 내보낼 때 큐레이트된 경로에 고정된 insert로 customizations.toml에 기록됩니다 -- 이미 cfg의 data= 순서에 있으므로 제자리에서 재정렬되지 않습니다."
+msgid "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data paths cache is set (fetch it for the list above; it's how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order."
+msgstr "openmw.cfg에 이미 있으면서 아무것도 관리하지 않는 것 (큐레이트된 목록 plugin-order.yml도, 사용자 customizations.toml도 아님)도 함께 담아 다음 momw-configurator 재빌드에도 남도록 합니다. content= 플러그인은 정렬되어 들어갑니다. 정렬이 재배치하기 전까지는 현재 cfg 순서가 시작 순서입니다. 기본 마스터 (Morrowind/Tribunal/Bloodmoon)는 절대 건드리지 않습니다. 단독으로 (하위 집합 파일 없이) 또는 함께 작동합니다.\n\ndata= 경로도 data= 캐시가 설정되면 함께 담깁니다 (위 목록에 대해 가져오세요. 목록이 관리하는 경로와 사용자가 추가한 경로를 구분하는 방법입니다). 미관리 data= 경로는 여기에서 강조 표시되고, 내보낼 때 큐레이트된 경로에 고정된 insert로 customizations.toml에 기록됩니다 -- 이미 cfg의 data= 순서에 있으므로 제자리에서 재정렬되지 않습니다."
 
 msgid "Exclude from conflict / cell scans:"
 msgstr "충돌 / 셀 스캔에서 제외:"
@@ -2276,9 +2342,6 @@ msgstr "; 주석:"
 msgid "A ';' comment written above the rule. mlox strips these before reading."
 msgstr "규칙 위에 쓰인 「;」 주석. mlox는 읽기 전에 이것을 제거합니다"
 
-msgid "Preview"
-msgstr "미리 보기"
-
 msgid "Append rule"
 msgstr "규칙 추가"
 
@@ -2335,6 +2398,21 @@ msgstr "MOMW에서 현재 %(name)s을(를) 다운로드하시겠습니까?\n\n%(
 
 msgid "Downloading %(name)s..."
 msgstr "%(name)s 다운로드 중…"
+
+msgid "Fetch data paths"
+msgstr "데이터 경로 가져오기"
+
+msgid "Set the list name field first -- data paths are fetched per list."
+msgstr "먼저 목록 이름 필드를 설정하세요 -- 데이터 경로는 목록별로 가져옵니다."
+
+msgid "Save data paths cache as"
+msgstr "데이터 경로 캐시 저장"
+
+msgid "Fetch the data-path order for '%(list)s' from MOMW's cfg-generator API and cache it to:\n%(path)s\n\nThe response is validated before anything is written; any old cache is kept as a timestamped .bak."
+msgstr "'%(list)s'의 데이터 경로 순서를 MOMW의 cfg-generator API에서 가져와 다음 위치에 캐시할까요:\n%(path)s\n\n기록 전에 응답을 검증하며, 기존 캐시는 타임스탬프가 붙은 .bak로 보관됩니다."
+
+msgid "Fetching data paths for '%(list)s'..."
+msgstr "'%(list)s'의 데이터 경로를 가져오는 중..."
 
 msgid "Run '1. Sort' first so there's a load order to check against."
 msgstr "대조할 로드 순서가 있도록 먼저 「1. 정렬」을 실행하세요."

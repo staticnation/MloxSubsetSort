@@ -26,6 +26,75 @@ msgstr "警告: 生成された TOML のアンカー「%(anchor)s」は openmw.c
 msgid "WARNING: remove entry '%(entry)s' matches %(count)d openmw.cfg lines -- momw-configurator removes ALL of them, silently. Colliding lines: %(lines)s%(more)s"
 msgstr "警告: 削除エントリ「%(entry)s」は openmw.cfg の %(count)d 行に一致します -- momw-configurator はそれらを黙って「すべて」削除します。競合する行: %(lines)s%(more)s"
 
+msgid "Building cell preview..."
+msgstr ""
+
+msgid "Cell to preview"
+msgstr ""
+
+msgid "Interior cell"
+msgstr ""
+
+msgid "Name:"
+msgstr ""
+
+msgid "Exterior cell"
+msgstr ""
+
+msgid "Grid X, Y:"
+msgstr ""
+
+msgid "Preview"
+msgstr "プレビュー"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "  skipped %(name)s: %(error)s"
+msgstr ""
+
+msgid " CELL PREVIEW: %(label)s"
+msgstr ""
+
+msgid "\n  Nothing to draw -- no placed meshes were found for this cell."
+msgstr ""
+
+msgid "Cell preview ready (%(drawn)d object(s) drawn)."
+msgstr ""
+
+msgid "references"
+msgstr ""
+
+msgid "placed"
+msgstr ""
+
+msgid "no mesh record"
+msgstr ""
+
+msgid "editor markers"
+msgstr ""
+
+msgid "actors skipped"
+msgstr ""
+
+msgid "overridden by later"
+msgstr ""
+
+msgid "deleted by later"
+msgstr ""
+
+msgid "moved"
+msgstr ""
+
+msgid "meshes drawn"
+msgstr ""
+
+msgid "meshes not found"
+msgstr ""
+
+msgid "    missing mesh: %(model)s"
+msgstr ""
+
 msgid "Scanning for conflicts..."
 msgstr "競合をスキャン中…"
 
@@ -331,9 +400,6 @@ msgstr "このフィールドを使用"
 
 msgid "Add to patch"
 msgstr "パッチに追加"
-
-msgid "Cancel"
-msgstr "キャンセル"
 
 msgid "Cannot set this field"
 msgstr "このフィールドは設定できません"
@@ -1507,7 +1573,7 @@ msgid_plural "  Excluded %(count)d curated plugins from the sort: %(names)s"
 msgstr[0] "  並べ替えからキュレート済みプラグイン %(count)d 件を除外しました: %(names)s"
 
 msgid "  No plugins to sort. The current openmw.cfg load order is shown above for editing -- remove entries and Export, or add plugins and Sort again."
-msgstr ""
+msgstr "  ソートするプラグインがありません。現在の openmw.cfg のロード順序が編集用に上に表示されています -- エントリを削除してエクスポートするか、プラグインを追加して再度ソートしてください。"
 
 msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
 msgstr "\n  すでに cfg にあります。cfg 内で再配置されます: %(names)s"
@@ -1524,8 +1590,8 @@ msgstr "\n  [Conflict]/[Requires]/[Note] の警告は発生しませんでした
 msgid "\n  No plugin-order.yml warnings."
 msgstr "\n  plugin-order.yml の警告はありません。"
 
-msgid "\n  No data-path-order.yml warnings."
-msgstr "\n  data-path-order.yml の警告はありません。"
+msgid "\n  No data path warnings."
+msgstr "\n  データパスの警告はありません。"
 
 msgid "  (plugin files not reachable from the data folders; can't read headers)"
 msgstr "  (プラグインファイルにデータフォルダから到達できません。ヘッダーを読み取れません)"
@@ -1597,11 +1663,11 @@ msgid "  %(count)d orphan data= path found in openmw.cfg"
 msgid_plural "  %(count)d orphan data= paths found in openmw.cfg"
 msgstr[0] "  openmw.cfg に孤立した data= パス %(count)d 件が見つかりました"
 
-msgid "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations."
-msgstr "  未管理の data= パスは見つかりませんでした -- cfg 内のすべての data= パスは '%(list)s' の data= 順序またはカスタマイズにあります。"
+msgid "  No unmanaged data= paths found -- every data= path in the cfg is on the list's data-path order or in your customizations."
+msgstr "  未管理の data= パスは見つかりませんでした -- cfg 内のすべての data= パスはリストの data= 順序またはカスタマイズにあります。"
 
-msgid "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too."
-msgstr "  data= パスは分類されていません -- data-path-order.yml とリスト名を設定すると、未管理 (孤立) の data= パスも表示されます。"
+msgid "  data= paths not classified -- fetch a data-paths cache for this list to surface unmanaged (orphan) data= paths too."
+msgstr "  data= パスは分類されていません -- このリストの data= キャッシュを取得すると、未管理 (孤立) の data= パスも表示されます。"
 
 msgid "groundcover declared by this run"
 msgstr "この実行で宣言された groundcover"
@@ -1760,8 +1826,8 @@ msgstr "リスト名 (任意):"
 msgid "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser."
 msgstr "MOMW の plugin-order.yml (どのプラグインがどのキュレートリストに属するかの信頼できる情報源)。上でリスト名を指定すると、そのリストのキュレート済みプラグインは並べ替えから除外され (決して並べ替えられません)、あなた自身の追加だけが影響を受けます。また読み取り専用の警告が出されます: 冗長、孤立、needs-cleaning、ベース順序の拒否チェック。PyYAML がインストールされていれば使われ、なければ組み込みパーサーが使われます。"
 
-msgid "MOMW's data-path-order.yml (the per-list order in which each mod's data directories should be added). Used to build a mod's expected data paths -- its folder is fuzzy-matched by name, then its extra_dirs appended in order. PyYAML used if installed, else a built-in parser."
-msgstr "MOMW の data-path-order.yml (各 MOD のデータディレクトリを追加すべきリストごとの順序)。MOD の想定データパスの構築に使用されます -- フォルダーは名前であいまいにマッチされ、その後 extra_dirs が順に追加されます。インストールされていれば PyYAML を、なければ組み込みパーサーを使用します。"
+msgid "A cached MOMW list data-path order (one relative data-path tail per line). Fetch it for the list named above with the button, then it's read offline: the exact set/order of data= paths that list manages, used to tell a list-managed data= folder from an unmanaged (orphan) one, and to warn on data= paths whose cfg order contradicts the list's."
+msgstr "キャッシュされた MOMW リストのデータパス順序 (1 行に 1 つの相対データパス)。上のリスト名についてボタンで取得すると、オフラインで読み込まれます: そのリストが管理する data= パスの正確な集合/順序で、リスト管理の data= フォルダーと未管理 (孤立) のものを区別し、cfg の順序がリストと矛盾する data= パスを警告するのに使われます。"
 
 msgid "Write directly back to customizations.toml (overwrite in place; a .bak-<timestamp> copy is made first unless backups are disabled below)"
 msgstr "customizations.toml に直接書き戻します (その場で上書き。下でバックアップが無効でない限り、最初に .bak-<タイムスタンプ> コピーが作成されます)"
@@ -1811,8 +1877,8 @@ msgstr "「スキャン…」がその結果をどうするかを制御します
 msgid "Pull unmanaged (orphan) plugins & data paths from openmw.cfg"
 msgstr "openmw.cfg から未管理 (孤立) のプラグインとデータパスを取り込む"
 
-msgid "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data-path-order.yml and list name are set (that yml is how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order."
-msgstr "openmw.cfg に既にあり、どこにも管理されていないもの (キュレーションされたリスト plugin-order.yml にも、あなたの customizations.toml にも) も取り込み、次回の momw-configurator の再構築後も残るようにします。content= プラグインは並べ替えられます。並べ替えで再配置されるまでは、現在の cfg の順序が開始順序になります。基本マスター (Morrowind/Tribunal/Bloodmoon) は決して変更されません。単独 (サブセットファイル不要) でも、併用でも動作します。\n\ndata= パスも、data-path-order.yml とリスト名が設定されている場合に取り込まれます (その yml が、リストが管理するパスとあなたが追加したパスを区別する手段です)。未管理の data= パスはここで強調表示され、エクスポート時にキュレーションされたパスにアンカーされた insert として customizations.toml に書き込まれます -- 既に cfg の data= 順序にあるため、その場で並べ替えられることはありません。"
+msgid "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data paths cache is set (fetch it for the list above; it's how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order."
+msgstr "openmw.cfg に既にあり、どこにも管理されていないもの (キュレーションされたリスト plugin-order.yml にも、あなたの customizations.toml にも) も取り込み、次回の momw-configurator の再構築後も残るようにします。content= プラグインは並べ替えられます。並べ替えで再配置されるまでは、現在の cfg の順序が開始順序になります。基本マスター (Morrowind/Tribunal/Bloodmoon) は決して変更されません。単独 (サブセットファイル不要) でも、併用でも動作します。\n\ndata= パスも、data= キャッシュが設定されている場合に取り込まれます (上のリストについて取得してください。リストが管理するパスとあなたが追加したパスを区別する手段です)。未管理の data= パスはここで強調表示され、エクスポート時にキュレーションされたパスにアンカーされた insert として customizations.toml に書き込まれます -- 既に cfg の data= 順序にあるため、その場で並べ替えられることはありません。"
 
 msgid "Exclude from conflict / cell scans:"
 msgstr "競合 / セルのスキャンから除外:"
@@ -2276,9 +2342,6 @@ msgstr "; コメント:"
 msgid "A ';' comment written above the rule. mlox strips these before reading."
 msgstr "ルールの上に書かれた「;」コメント。mlox は読み取り前にこれらを除去します"
 
-msgid "Preview"
-msgstr "プレビュー"
-
 msgid "Append rule"
 msgstr "ルールを追加"
 
@@ -2335,6 +2398,21 @@ msgstr "MOMW から現在の %(name)s をダウンロードしますか?\n\n%(ag
 
 msgid "Downloading %(name)s..."
 msgstr "%(name)s をダウンロード中…"
+
+msgid "Fetch data paths"
+msgstr "データパスを取得"
+
+msgid "Set the list name field first -- data paths are fetched per list."
+msgstr "先にリスト名フィールドを設定してください -- データパスはリストごとに取得されます。"
+
+msgid "Save data paths cache as"
+msgstr "データパスキャッシュを保存"
+
+msgid "Fetch the data-path order for '%(list)s' from MOMW's cfg-generator API and cache it to:\n%(path)s\n\nThe response is validated before anything is written; any old cache is kept as a timestamped .bak."
+msgstr "'%(list)s' のデータパス順序を MOMW の cfg-generator API から取得し、次の場所にキャッシュしますか:\n%(path)s\n\n書き込み前に応答を検証します。古いキャッシュはタイムスタンプ付き .bak として保持されます。"
+
+msgid "Fetching data paths for '%(list)s'..."
+msgstr "'%(list)s' のデータパスを取得中..."
 
 msgid "Run '1. Sort' first so there's a load order to check against."
 msgstr "照合するロード順があるように、まず「1. 並べ替え」を実行してください。"

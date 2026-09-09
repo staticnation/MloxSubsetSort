@@ -694,6 +694,7 @@ class TestActionButtons:
         "export_button": True,
         "conflicts_button": True,
         "cellmap_button": True,
+        "cellpreview_button": True,
         "resource_button": True,
         # Second row: plugin manipulation / file creation. Merge Lands needs a
         # sorted order (disabled until Sort); Merge Settings writes a
@@ -742,6 +743,29 @@ class TestActionButtons:
             if (str(getattr(app, name).cget("state")) == "disabled") is not should_be_disabled
         }
         assert not wrong, f"buttons in the wrong initial state: {wrong}"
+
+
+class TestCellPreviewWiring:
+    """The Cell Preview prototype is mixed into the app and its worker is wired."""
+
+    def test_the_app_is_a_cell_preview_host(self, app: Any) -> None:
+        """The mixin must be in the app's bases or the button does nothing.
+
+        Args:
+            app: The application.
+        """
+        from wraithguard.gui.cellpreview import CellPreviewMixin
+
+        assert isinstance(app, CellPreviewMixin)
+
+    def test_the_worker_methods_are_present(self, app: Any) -> None:
+        """The button's handler and its off-thread worker must exist and be callable.
+
+        Args:
+            app: The application.
+        """
+        for name in ("on_cell_preview", "_ask_cell", "_load_order_plugins", "_cellpreview_worker"):
+            assert callable(getattr(app, name)), f"missing cell-preview method: {name}"
 
 
 class TestControlsLayout:

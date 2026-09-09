@@ -16,8 +16,8 @@ import pytest
 
 from wraithguard.net import (
     ALLOWED_URL_SCHEMES,
+    fetch_list_data_paths,
     fetch_url_bytes,
-    update_data_path_order_yml,
     update_plugin_order_yml,
     update_rule_files,
 )
@@ -229,66 +229,71 @@ class TestPluginOrderUpdater:
         assert not leaked, f"leaked temp files: {leaked}"
 
 
-class TestDataPathOrderUpdater:
-    def _valid_yml(self, entries: int = 60) -> bytes:
-        rows = [
-            f'- for_mod: "Mod{i}"\n  extra_dirs:\n    - "Data Files"\n'
-            f'  on_lists:\n    - "total-overhaul"\n'
-            for i in range(entries)
-        ]
-        return "".join(rows).encode()
+class TestFetchListDataPaths:
+    _LIST = "total-overhaul"
+    _ROUTE = "/api/cfg-generator/total-overhaul"
 
-    def test_valid_download_replaces_and_backs_up(self, tmp_path, http_server):
+    def _api_json(self, n: int = 15) -> bytes:
+        import json
+
+        paths = "\n".join(f"data=C:/games/OpenMWMods/Cat/Mod{i}/Data Files" for i in range(n))
+        return json.dumps({"openmw_cfg": {"data paths": paths}}).encode()
+
+    def test_valid_fetch_caches_tails_and_backs_up(self, tmp_path, http_server):
         base, routes = http_server
-        routes["/dpo.yml"] = self._valid_yml()
-        target = tmp_path / "data-path-order.yml"
-        target.write_bytes(b'- for_mod: "Old"\n  extra_dirs:\n    - "x"\n  on_lists:\n    - "y"\n')
+        routes[self._ROUTE] = self._api_json()
+        target = tmp_path / "data-paths.txt"
+        target.write_text("# old cache\nOld/Thing\n", encoding="utf-8")
 
-        report = update_data_path_order_yml(target, urls=[f"{base}/dpo.yml"])
+        report = fetch_list_data_paths(target, self._LIST, host=base)
 
-        assert target.read_bytes() == routes["/dpo.yml"]
-        assert any("updated" in line for line in report)
-        assert list(tmp_path.glob("data-path-order.yml.bak-*"))
+        text = target.read_text(encoding="utf-8")
+        assert "Cat/Mod0/Data Files" in text  # base stripped to the relative tail
+        assert "C:/games/OpenMWMods" not in text
+        assert any("cached" in line for line in report)
+        assert list(tmp_path.glob("data-paths.txt.bak-*"))
 
-    def test_a_plugin_order_file_by_mistake_is_rejected(self, tmp_path, http_server):
-        """Handed plugin-order.yml (file_name, no extra_dirs) it must refuse."""
+    def test_a_non_api_response_is_rejected(self, tmp_path, http_server):
         base, routes = http_server
-        routes["/wrong.yml"] = b'- for_mod: "M"\n  file_name: "P.esp"\n  on_lists:\n    - "l"\n'
-        target = tmp_path / "data-path-order.yml"
-        target.write_bytes(b"original")
+        routes[self._ROUTE] = b"<html>not found</html>"
+        target = tmp_path / "data-paths.txt"
+        target.write_text("original", encoding="utf-8")
 
-        report = update_data_path_order_yml(target, urls=[f"{base}/wrong.yml"])
+        report = fetch_list_data_paths(target, self._LIST, host=base)
 
-        assert target.read_bytes() == b"original"
-        assert any("doesn't look like data-path-order.yml" in line for line in report)
+        assert target.read_text(encoding="utf-8") == "original"
+        assert report and report[0].startswith("FAILED")
 
-    def test_undersized_file_is_refused(self, tmp_path, http_server):
+    def test_too_few_paths_is_refused(self, tmp_path, http_server):
         base, routes = http_server
-        routes["/dpo.yml"] = self._valid_yml(entries=3)
-        target = tmp_path / "data-path-order.yml"
-        target.write_bytes(b"original")
+        routes[self._ROUTE] = self._api_json(n=3)
+        target = tmp_path / "data-paths.txt"
 
-        report = update_data_path_order_yml(target, urls=[f"{base}/dpo.yml"])
+        report = fetch_list_data_paths(target, self._LIST, host=base)
 
-        assert target.read_bytes() == b"original"
+        assert not target.exists()
         assert any("refusing" in line for line in report)
 
     def test_identical_content_is_a_no_op(self, tmp_path, http_server):
         base, routes = http_server
-        routes["/dpo.yml"] = self._valid_yml()
-        target = tmp_path / "data-path-order.yml"
-        target.write_bytes(routes["/dpo.yml"])
+        routes[self._ROUTE] = self._api_json()
+        target = tmp_path / "data-paths.txt"
+        fetch_list_data_paths(target, self._LIST, host=base)  # first write
 
-        report = update_data_path_order_yml(target, urls=[f"{base}/dpo.yml"])
+        report = fetch_list_data_paths(target, self._LIST, host=base)
 
         assert any("already up to date" in line for line in report)
         assert not list(tmp_path.glob("*.bak-*"))
 
-    def test_all_sources_failing_reports_failure(self, tmp_path, http_server):
-        base, _routes = http_server
-        target = tmp_path / "data-path-order.yml"
+    def test_missing_list_reports_failure(self, tmp_path, http_server):
+        base, _routes = http_server  # no route registered -> 404
+        target = tmp_path / "data-paths.txt"
 
-        report = update_data_path_order_yml(target, urls=[f"{base}/missing.yml"])
+        report = fetch_list_data_paths(target, self._LIST, host=base)
 
         assert report and report[0].startswith("FAILED")
         assert not target.exists()
+
+    def test_no_list_name_reports_failure(self, tmp_path):
+        report = fetch_list_data_paths(tmp_path / "c.txt", "")
+        assert report and report[0].startswith("FAILED")

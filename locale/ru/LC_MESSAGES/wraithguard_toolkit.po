@@ -26,6 +26,75 @@ msgstr "ПРЕДУПРЕЖДЕНИЕ: якорь «%(anchor)s» в сформи�
 msgid "WARNING: remove entry '%(entry)s' matches %(count)d openmw.cfg lines -- momw-configurator removes ALL of them, silently. Colliding lines: %(lines)s%(more)s"
 msgstr "ПРЕДУПРЕЖДЕНИЕ: запись на удаление «%(entry)s» совпадает с %(count)d строками openmw.cfg -- momw-configurator удаляет их ВСЕ, молча. Конфликтующие строки: %(lines)s%(more)s"
 
+msgid "Building cell preview..."
+msgstr ""
+
+msgid "Cell to preview"
+msgstr ""
+
+msgid "Interior cell"
+msgstr ""
+
+msgid "Name:"
+msgstr ""
+
+msgid "Exterior cell"
+msgstr ""
+
+msgid "Grid X, Y:"
+msgstr ""
+
+msgid "Preview"
+msgstr "Предпросмотр"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "  skipped %(name)s: %(error)s"
+msgstr ""
+
+msgid " CELL PREVIEW: %(label)s"
+msgstr ""
+
+msgid "\n  Nothing to draw -- no placed meshes were found for this cell."
+msgstr ""
+
+msgid "Cell preview ready (%(drawn)d object(s) drawn)."
+msgstr ""
+
+msgid "references"
+msgstr ""
+
+msgid "placed"
+msgstr ""
+
+msgid "no mesh record"
+msgstr ""
+
+msgid "editor markers"
+msgstr ""
+
+msgid "actors skipped"
+msgstr ""
+
+msgid "overridden by later"
+msgstr ""
+
+msgid "deleted by later"
+msgstr ""
+
+msgid "moved"
+msgstr ""
+
+msgid "meshes drawn"
+msgstr ""
+
+msgid "meshes not found"
+msgstr ""
+
+msgid "    missing mesh: %(model)s"
+msgstr ""
+
 msgid "Scanning for conflicts..."
 msgstr "Поиск конфликтов…"
 
@@ -331,9 +400,6 @@ msgstr "Использовать это поле"
 
 msgid "Add to patch"
 msgstr "Добавить в патч"
-
-msgid "Cancel"
-msgstr "Отмена"
 
 msgid "Cannot set this field"
 msgstr "Не удаётся задать это поле"
@@ -1545,7 +1611,7 @@ msgstr[1] "  Исключено %(count)d курируемых плагина и
 msgstr[2] "  Исключено %(count)d курируемых плагинов из сортировки: %(names)s"
 
 msgid "  No plugins to sort. The current openmw.cfg load order is shown above for editing -- remove entries and Export, or add plugins and Sort again."
-msgstr ""
+msgstr "  Нет плагинов для сортировки. Текущий порядок загрузки openmw.cfg показан выше для редактирования -- удалите записи и экспортируйте или добавьте плагины и отсортируйте снова."
 
 msgid "\n  Already in cfg, will be repositioned within it: %(names)s"
 msgstr "\n  Уже в cfg, будет переставлено внутри него: %(names)s"
@@ -1562,8 +1628,8 @@ msgstr "\n  Предупреждений [Conflict]/[Requires]/[Note] не ср�
 msgid "\n  No plugin-order.yml warnings."
 msgstr "\n  Предупреждений plugin-order.yml нет."
 
-msgid "\n  No data-path-order.yml warnings."
-msgstr "\n  Предупреждений data-path-order.yml нет."
+msgid "\n  No data path warnings."
+msgstr "\n  Нет предупреждений о путях данных."
 
 msgid "  (plugin files not reachable from the data folders; can't read headers)"
 msgstr "  (файлы плагинов недостижимы из папок данных; заголовки прочитать нельзя)"
@@ -1643,11 +1709,11 @@ msgstr[0] "  Найден %(count)d осиротевший путь data= в ope
 msgstr[1] "  Найдено %(count)d осиротевших пути data= в openmw.cfg"
 msgstr[2] "  Найдено %(count)d осиротевших путей data= в openmw.cfg"
 
-msgid "  No unmanaged data= paths found -- every data= path in the cfg is on the '%(list)s' data-path order or in your customizations."
-msgstr "  Неуправляемых путей data= не найдено -- каждый путь data= в cfg есть в порядке data= списка '%(list)s' или в ваших настройках."
+msgid "  No unmanaged data= paths found -- every data= path in the cfg is on the list's data-path order or in your customizations."
+msgstr "  Неуправляемых путей data= не найдено -- каждый путь data= в cfg есть в порядке data= списка или в ваших настройках."
 
-msgid "  data= paths not classified -- set a data-path-order.yml and list name to surface unmanaged (orphan) data= paths too."
-msgstr "  пути data= не классифицированы -- задайте data-path-order.yml и имя списка, чтобы также показать неуправляемые (осиротевшие) пути data=."
+msgid "  data= paths not classified -- fetch a data-paths cache for this list to surface unmanaged (orphan) data= paths too."
+msgstr "  пути data= не классифицированы -- получите кэш data= для этого списка, чтобы также показать неуправляемые (осиротевшие) пути data=."
 
 msgid "groundcover declared by this run"
 msgstr "groundcover, объявленный этим запуском"
@@ -1808,8 +1874,8 @@ msgstr "имя списка (необязательно):"
 msgid "MOMW's plugin-order.yml (source of truth for which plugins belong to which curated list). With the list name above set, curated plugins for that list are excluded from the sort (never reordered) so only your custom additions are touched, and read-only warnings are emitted: redundant, orphan, needs-cleaning, and a base-order drift check. PyYAML used if installed, else a built-in parser."
 msgstr "plugin-order.yml от MOMW (источник истины о том, какие плагины принадлежат какому курируемому списку). С заданным именем списка выше курируемые плагины этого списка исключаются из сортировки (никогда не переупорядочиваются), чтобы затрагивались только ваши пользовательские добавления, и выдаются предупреждения только для чтения: избыточный, осиротевший, needs-cleaning и проверка отклонения базового порядка. PyYAML используется, если установлен, иначе встроенный парсер."
 
-msgid "MOMW's data-path-order.yml (the per-list order in which each mod's data directories should be added). Used to build a mod's expected data paths -- its folder is fuzzy-matched by name, then its extra_dirs appended in order. PyYAML used if installed, else a built-in parser."
-msgstr "data-path-order.yml от MOMW (порядок для каждого списка, в котором нужно добавлять каталоги данных каждого мода). Используется для построения ожидаемых путей данных мода -- его папка сопоставляется по имени нечётко, затем его extra_dirs добавляются по порядку. Используется PyYAML, если установлен, иначе встроенный парсер."
+msgid "A cached MOMW list data-path order (one relative data-path tail per line). Fetch it for the list named above with the button, then it's read offline: the exact set/order of data= paths that list manages, used to tell a list-managed data= folder from an unmanaged (orphan) one, and to warn on data= paths whose cfg order contradicts the list's."
+msgstr "Кэшированный порядок путей данных списка MOMW (по одному относительному пути данных на строку). Получите его для указанного выше списка кнопкой, затем он читается офлайн: точный набор/порядок путей data=, которыми управляет этот список, чтобы отличать управляемую списком папку data= от неуправляемой (осиротевшей) и предупреждать о путях data=, порядок которых в cfg противоречит списку."
 
 msgid "Write directly back to customizations.toml (overwrite in place; a .bak-<timestamp> copy is made first unless backups are disabled below)"
 msgstr "Записывать напрямую обратно в customizations.toml (перезаписать на месте; сначала делается копия .bak-<метка времени>, если резервные копии не отключены ниже)"
@@ -1859,8 +1925,8 @@ msgstr "Управляет тем, что «Сканировать…» дела
 msgid "Pull unmanaged (orphan) plugins & data paths from openmw.cfg"
 msgstr "Забирать неуправляемые (осиротевшие) плагины и пути данных из openmw.cfg"
 
-msgid "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data-path-order.yml and list name are set (that yml is how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order."
-msgstr "Также захватывает то, что УЖЕ есть в openmw.cfg и чем ничто не управляет -- ни курируемый список (plugin-order.yml), ни ваш customizations.toml -- чтобы это пережило следующую пересборку momw-configurator. Плагины content= сортируются; их текущий порядок в cfg является начальным, пока сортировка не переставит их. Базовые мастера (Morrowind/Tribunal/Bloodmoon) никогда не затрагиваются. Работает сам по себе (файл подмножества не нужен) или вместе с ним.\n\nПути data= тоже захватываются, если заданы data-path-order.yml и имя списка (этот yml и позволяет отличить путь, которым управляет список, от добавленного вами). Неуправляемые пути data= подсвечиваются здесь и при экспорте записываются в customizations.toml как вставки, привязанные к курируемым путям -- они никогда не переупорядочиваются на месте, поскольку уже находятся в порядке data= из cfg."
+msgid "Also capture what's ALREADY in openmw.cfg that nothing manages -- neither the curated list (plugin-order.yml) nor your customizations.toml -- so it survives the next momw-configurator rebuild. content= plugins are sorted in; their current cfg order is the starting order until the sort repositions them. Base masters (Morrowind/Tribunal/Bloodmoon) are never touched. Works on its own (no subset file needed) or alongside one.\n\ndata= paths are captured too when a data paths cache is set (fetch it for the list above; it's how a path the list manages is told from one you added). Unmanaged data= paths are highlighted here and, on Export, written into the customizations.toml as inserts anchored to the curated paths -- they are never reordered in place, since they already sit in the cfg's data= order."
+msgstr "Также захватывает то, что УЖЕ есть в openmw.cfg и чем ничто не управляет -- ни курируемый список (plugin-order.yml), ни ваш customizations.toml -- чтобы это пережило следующую пересборку momw-configurator. Плагины content= сортируются; их текущий порядок в cfg является начальным, пока сортировка не переставит их. Базовые мастера (Morrowind/Tribunal/Bloodmoon) никогда не затрагиваются. Работает сам по себе (файл подмножества не нужен) или вместе с ним.\n\nПути data= тоже захватываются, когда задан кэш data= (получите его для списка выше; он позволяет отличить путь, которым управляет список, от добавленного вами). Неуправляемые пути data= подсвечиваются здесь и при экспорте записываются в customizations.toml как вставки, привязанные к курируемым путям -- они никогда не переупорядочиваются на месте, поскольку уже находятся в порядке data= из cfg."
 
 msgid "Exclude from conflict / cell scans:"
 msgstr "Исключить из сканирований конфликтов / ячеек:"
@@ -2324,9 +2390,6 @@ msgstr "; комментарий:"
 msgid "A ';' comment written above the rule. mlox strips these before reading."
 msgstr "Комментарий «;», написанный над правилом. mlox удаляет их перед чтением."
 
-msgid "Preview"
-msgstr "Предпросмотр"
-
 msgid "Append rule"
 msgstr "Добавить правило"
 
@@ -2383,6 +2446,21 @@ msgstr "Скачать текущий %(name)s с MOMW?\n\n%(age)s.\n\nЗагр�
 
 msgid "Downloading %(name)s..."
 msgstr "Скачивание %(name)s…"
+
+msgid "Fetch data paths"
+msgstr "Получить пути данных"
+
+msgid "Set the list name field first -- data paths are fetched per list."
+msgstr "Сначала заполните поле имени списка -- пути данных получаются по списку."
+
+msgid "Save data paths cache as"
+msgstr "Сохранить кэш путей данных как"
+
+msgid "Fetch the data-path order for '%(list)s' from MOMW's cfg-generator API and cache it to:\n%(path)s\n\nThe response is validated before anything is written; any old cache is kept as a timestamped .bak."
+msgstr "Получить порядок путей данных для '%(list)s' из API cfg-generator MOMW и сохранить в кэш:\n%(path)s\n\nОтвет проверяется до записи; старый кэш сохраняется как .bak с меткой времени."
+
+msgid "Fetching data paths for '%(list)s'..."
+msgstr "Получение путей данных для '%(list)s'..."
 
 msgid "Run '1. Sort' first so there's a load order to check against."
 msgstr "Сначала выполните «1. Сортировать», чтобы было с чем сверять порядок загрузки."

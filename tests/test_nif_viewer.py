@@ -40,15 +40,36 @@ TRIANGLE = Mesh(
 def payload(page: str) -> list[dict]:
     """Extract the scene data the page embeds.
 
+    Textures are carried once in a side table and referenced by index (see
+    ``_hoist_textures``); this rehydrates each mesh's texture slots back to their
+    blobs, so callers see the same shape the payload had before deduplication.
+
     Args:
         page: The generated document.
 
     Returns:
-        The decoded scene list.
+        The decoded scene list, with texture slots as blobs (or ``None``).
     """
     match = re.search(r"var scenes = (\[.*?\]);", page, re.S)
     assert match, "the page carries no scene data"
-    return json.loads(match.group(1).replace("<\\/", "</"))
+    scenes = json.loads(match.group(1).replace("<\\/", "</"))
+    tex_match = re.search(r"var textures = (\[.*?\]);", page, re.S)
+    textures = json.loads(tex_match.group(1).replace("<\\/", "</")) if tex_match else []
+
+    def blob(index: object) -> object:
+        """The table entry for an index, or ``None`` when the slot was empty."""
+        return None if index is None else textures[index]
+
+    for scene in scenes:
+        for mesh in scene.get("meshes", []):
+            for slot in ("image", "glow", "dark", "detail", "gloss", "bump"):
+                if slot in mesh:
+                    mesh[slot] = blob(mesh[slot])
+            if "decals" in mesh:
+                mesh["decals"] = [blob(index) for index in (mesh["decals"] or [])]
+            if "extras" in mesh:
+                mesh["extras"] = {s: blob(index) for s, index in (mesh["extras"] or {}).items()}
+    return scenes
 
 
 class TestTheLibraryIsThere:
@@ -467,6 +488,30 @@ class TestTexturesReachThePage:
             if entry["image"]
         }
         assert len(urls) == 1, "the same texture produced more than one payload"
+
+    def test_a_texture_shared_by_many_meshes_is_carried_once_in_the_page(
+        self, tmp_path: Path
+    ) -> None:
+        """A cell reuses a few textures across hundreds of meshes.
+
+        Inlining a copy per mesh would push the page into the gigabytes and hang
+        it; the shared table must carry each texture's bytes exactly once no
+        matter how many meshes reference it.
+        """
+        from tests.test_images import bc1_block, dds
+
+        folder = tmp_path / "Mod"
+        target = folder / "textures" / "tx_rock.dds"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(dds(b"DXT1", 4, 4, bc1_block(0xFFFF, 0xFFFF, 0)))
+        meshes = [self._uv_mesh() for _ in range(50)]
+        page = build_viewer_page([("cell", meshes)], resolver=TextureResolver([folder]))
+
+        image = payload(page)[0]["meshes"][0]["image"]
+        assert image is not None
+        # The PNG data URL is long and unique; it must appear exactly once in the
+        # whole document even though 50 meshes draw it.
+        assert page.count(image["url"]) == 1
 
 
 class TestMaterialsReachThePage:
